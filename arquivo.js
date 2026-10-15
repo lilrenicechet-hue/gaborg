@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.3.0';
+const VERSAO = '1.4.0';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -75,8 +75,11 @@ const CAMPOS = {
   setores: ['id','nome','sigla','tipo','paiId','ordem','status','responsavel','contato','competencias','entregas','orcamento','custoMensal','servidores','comissionados','impacto','impactoDescricao','positivos','negativos','layout','colunas','dx','dy','atualizadoEm','atualizadoPor'],
   validacoes: ['id','setorId','validadorId','status','parecer','solicitadoEm','solicitadoPor','respondidoEm','respondidoPor'],
   vinculos: ['id','origemId','destinoId','tipo','descricao'],
-  historico: ['id','setorId','data','usuario','acao']
+  historico: ['id','setorId','data','usuario','acao'],
+  rubricas: ['id','codigo','nome','categoria','valorMensal','encargos','meses','observacao','ativo','atualizadoEm','atualizadoPor'],
+  despesas: ['id','setorId','rubricaId','descricao','quantidade','valorUnitario','meses','cenario','observacao','atualizadoEm','atualizadoPor']
 };
+const TABS_DB = ['setores','validacoes','vinculos','historico','rubricas','despesas'];
 
 /* ===================== ESTRUTURA DO DECRETO Nº 2.236/2026 =====================
    Hierarquia montada a partir do anexo (organograma). Cada nível = 2 espaços.
@@ -297,7 +300,7 @@ function construirDecreto(){
     const nrc = add('Núcleo de Regime de Colaboração da Diretoria Regional de ' + cid, pol);
     V.push(novoReg('vinculos', { id:'dv'+String(++nv).padStart(3,'0'), origemId:nrc, destinoId:d, tipo:'Atuação regional', descricao:'Atua junto à DRE de ' + cid + ' no regime de colaboração com os municípios.' }));
   });
-  return { setores:L, vinculos:V, validacoes:[], historico:[] };
+  return { setores:L, vinculos:V, validacoes:[], historico:[], rubricas:[], despesas:[] };
 }
 
 /* ===================== UTILITÁRIOS ===================== */
@@ -343,7 +346,8 @@ function confirmar(titulo, texto, rotulo, perigo){
 }
 
 /* ===================== ESTADO ===================== */
-let DB = { setores:[], validacoes:[], vinculos:[], historico:[] };
+let DB = { setores:[], validacoes:[], vinculos:[], historico:[], rubricas:[], despesas:[] };
+let backendVersao = '';
 const URL_PADRAO = 'https://script.google.com/macros/s/AKfycbzZsM71FJARYYoqpRcFY4tHUAVBV-EdVW2NDL6eLaMId-iXY6Z-bnhuOkxA2nyfrdUz/exec';
 let cfg = Object.assign({ url:URL_PADRAO, login:'', usuario:'', perfil:'', modo:'' }, store.get('gaborg_cfg', {}));
 if (!cfg.url) cfg.url = URL_PADRAO;
@@ -431,8 +435,8 @@ async function lerNuvem(){
   if (r.status !== 'success') throw new Error(r.message || 'Falha ao ler a planilha.');
   if (r.usuario) aplicarUsuario(r.usuario);
   const d = r.dados || {};
-  ['setores','validacoes','vinculos','historico'].forEach(t => { DB[t] = (d[t] || []).map(x => novoReg(t, x)); });
-  versaoNuvem = String(r.versao || '');
+  TABS_DB.forEach(t => { DB[t] = (d[t] || []).map(x => novoReg(t, x)); });
+  versaoNuvem = String(r.versao || ''); backendVersao = String(r.backend || '');
   aplicarFilaNaMemoria();
   indexar(); salvarLocal();
 }
@@ -905,7 +909,7 @@ function alinharSel(modo){
 /* Teclado no mapa: setas movem a seleção (Shift = 10 px), Ctrl+Z desfaz, Esc limpa */
 let ultimaSeta = 0;
 document.addEventListener('keydown', e => {
-  if (vistaAtual !== 'mapa' || document.querySelector('.modal') || e.target.closest('input,textarea,select,[contenteditable]')) return;
+  if (vistaAtual !== 'mapa' || document.querySelector('.modal') || !$('#tv-modo').classList.contains('hidden') || e.target.closest('input,textarea,select,[contenteditable]')) return;
   if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z') { e.preventDefault(); desfazerPos(); return; }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a' && !somenteLeitura()) { e.preventDefault(); visiveis.forEach(n => multi.add(n.id)); elNo.forEach((el, k) => el.classList.toggle('msel', multi.has(k))); atualizarBarraSel(); return; }
   if (e.key === 'Escape' && (multi.size || modoSel)) { limparMulti(); alternarModoSel(false); e.stopImmediatePropagation(); return; }
@@ -1049,7 +1053,8 @@ const CORPO = {
         <label><span class="rot">Servidores</span><input class="campo" data-campo="servidores" data-num value="${esc(s.servidores)}" inputmode="numeric" placeholder="0"></label>
         <label><span class="rot">Cargos comissionados</span><input class="campo" data-campo="comissionados" data-num value="${esc(s.comissionados)}" inputmode="numeric" placeholder="0"></label>
       </div>
-      <div id="pn-soma">${blocoSoma(s)}</div>`;
+      <div id="pn-soma">${blocoSoma(s)}</div>
+      ${blocoFinSetor(s)}`;
   },
   analise(s){
     const imp = num(s.impacto), pos_ = linhasDe(s.positivos), neg = linhasDe(s.negativos), tot = pos_.length + neg.length;
@@ -1200,7 +1205,7 @@ function addVinculo(id){
 function rmVinculo(vid){ const v = DB.vinculos.find(x => x.id === vid); if (!v) return; DB.vinculos = DB.vinculos.filter(x => x.id !== vid); enfileirar('vinculos', v, true); renderPainel(); if (vistaAtual === 'mapa') desenharArestas(); }
 
 /* ===================== VISTAS ===================== */
-document.querySelectorAll('.nav-b').forEach(b => b.addEventListener('click', () => trocarVista(b.dataset.vista)));
+document.querySelectorAll('.nav-b').forEach(b => { b.title = b.querySelector('span').textContent; b.addEventListener('click', () => b.dataset.acao === 'tv' ? abrirModoTV() : trocarVista(b.dataset.vista)); });
 function trocarVista(v){
   vistaAtual = v;
   document.querySelectorAll('.nav-b').forEach(b => b.classList.toggle('on', b.dataset.vista === v));
@@ -1214,6 +1219,7 @@ function atualizarVistaAtual(){
   else if (vistaAtual === 'validacoes') renderValidacoes();
   else if (vistaAtual === 'config') renderConfig();
   else if (vistaAtual === 'usuarios') renderUsuarios();
+  else if (vistaAtual === 'financeiro') renderFinanceiro();
 }
 function redesenharTudo(){ indexar(); atualizarVistaAtual(); if (selId && porId.has(selId)) renderPainel(); else fecharPainel(); }
 function atualizarBadgeVal(){ const n = DB.validacoes.filter(v => !v.status || v.status === 'Pendente').length, b = $('#nav-val'); if (!b) return; b.textContent = n; b.classList.toggle('hidden', !n); }
@@ -1379,7 +1385,7 @@ async function importarJSON(f){
     const j = JSON.parse(await f.text()), d = j.dados || j;
     if (!Array.isArray(d.setores)) throw new Error('Arquivo sem a lista de setores.');
     if (!await confirmar('Importar cópia', `Substituir a estrutura atual pelos <b>${d.setores.length}</b> setores do arquivo?${online() ? ' A planilha também será substituída.' : ''}`, 'Importar', true)) return;
-    ['setores','validacoes','vinculos','historico'].forEach(t => DB[t] = (d[t] || []).map(x => novoReg(t, x)));
+    TABS_DB.forEach(t => DB[t] = (d[t] || []).map(x => novoReg(t, x)));
     redesenharTudo(); salvarLocal();
     if (online()) { const r = await chamar({ action:'replace_all', dados:DB }, 120000); if (r.status !== 'success') throw new Error(r.message); versaoNuvem = String(r.versao || ''); }
     toast('Cópia importada.');
@@ -1395,7 +1401,7 @@ function exportarCSV(){
 }
 async function restaurarDecreto(){
   if (!await confirmar('Restaurar estrutura do decreto', 'Todos os setores, valores, validações e vínculos atuais serão substituídos pela estrutura original do Decreto nº 2.236/2026. Exporte uma cópia antes, se precisar.', 'Restaurar', true)) return;
-  DB = Object.assign(construirDecreto(), { historico:DB.historico });
+  DB = Object.assign(construirDecreto(), { historico:DB.historico, rubricas:DB.rubricas || [], despesas:DB.despesas || [] });
   indexar();abertos = new Set(raizes().map(r => r.id)); salvarAbertos();
   salvarLocal();
   if (online()) { try { const r = await chamar({ action:'replace_all', dados:DB }, 120000); if (r.status !== 'success') throw new Error(r.message); versaoNuvem = String(r.versao || ''); } catch (e) { toast(e.message, 'erro'); } }
@@ -1780,6 +1786,413 @@ function travarLeitura(raiz){
 });
 window.addEventListener('resize', () => { if (vistaAtual === 'mapa') desenharMini(); });
 
+/* ===================== FINANCEIRO ===================== */
+const CATEG_FIN = {
+  'Cargo em comissão (DGA)':['#dc2626','fa-user-tie'], 'Função gratificada':['#ea580c','fa-award'], 'Bolsa':['#7c3aed','fa-graduation-cap'],
+  'Pessoal efetivo':['#2563eb','fa-id-card'], 'Terceirizado / contrato':['#0891b2','fa-file-contract'], 'Custeio':['#16a34a','fa-receipt'],
+  'Diárias e passagens':['#ca8a04','fa-plane'], 'Outro':['#64748b','fa-ellipsis']
+};
+const CENARIOS = ['Atual', 'Proposto'];
+const numBR = v => { let s = String(v ?? '').trim(); if (!s) return 0; if (/,\d{1,2}$/.test(s) || /^\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, '').replace(',', '.'); else s = s.replace(/[^\d.-]/g, ''); const n = Number(s); return isFinite(n) ? n : 0; };
+const fmtM = v => numBR(v).toLocaleString('pt-BR', { style:'currency', currency:'BRL' });
+const fmtM0 = v => numBR(v).toLocaleString('pt-BR', { style:'currency', currency:'BRL', maximumFractionDigits:0 });
+let abaFinAtual = 'resumo', calcLinhas = [];
+const rubricaDe = id => DB.rubricas.find(r => r.id === id);
+function calcDesp(d){
+  const r = rubricaDe(d.rubricaId) || {};
+  const unit = d.valorUnitario !== '' ? numBR(d.valorUnitario) : numBR(r.valorMensal);
+  const enc = numBR(r.encargos), qtd = d.quantidade === '' ? 1 : numBR(d.quantidade);
+  const mensal = qtd * unit * (1 + enc / 100);
+  const meses = d.meses !== '' ? numBR(d.meses) : (r.meses !== '' && r.meses != null ? numBR(r.meses) : 12);
+  return { r, unit, enc, qtd, mensal, meses, anual: mensal * meses, categoria: r.categoria || 'Outro' };
+}
+function backendSemFinanceiro(){ return online() && backendVersao && backendVersao.localeCompare('1.4.0', undefined, { numeric:true }) < 0; }
+function despesasFiltradas(area){
+  return DB.despesas.filter(d => !area || areaDe.get(d.setorId) === area || d.setorId === area);
+}
+function totaisFin(lista){
+  const t = { Atual:{ m:0, a:0, n:0 }, Proposto:{ m:0, a:0, n:0 } };
+  lista.forEach(d => { const c = calcDesp(d), k = d.cenario === 'Proposto' ? 'Proposto' : 'Atual'; t[k].m += c.mensal; t[k].a += c.anual; t[k].n++; });
+  return t;
+}
+function custoSetorFin(id, comSub){
+  const ids = new Set([id, ...(comSub ? descendentes(id) : [])]);
+  return totaisFin(DB.despesas.filter(d => ids.has(d.setorId)));
+}
+function abaFin(a){ abaFinAtual = a; document.querySelectorAll('.fin-abas button').forEach(b => b.classList.toggle('on', b.dataset.aba === a)); renderFinanceiro(); }
+function renderFinanceiro(){
+  const sel = $('#f-area'), va = sel.value;
+  sel.innerHTML = '<option value="">Toda a Secretaria</option>' + areas.map(a => `<option value="${esc(a)}" ${a === va ? 'selected' : ''}>${esc(nomeCurto(porId.get(a)))}</option>`).join('');
+  const c = $('#f-corpo');
+  const aviso = backendSemFinanceiro() ? `<div class="cartao bl" style="border-color:#f59e0b;margin-bottom:14px"><h3 style="color:#b45309"><i class="fa-solid fa-triangle-exclamation"></i>Atualize o backend</h3><p class="s">A planilha está com o Codigo.gs v${esc(backendVersao)}. Para gravar o Financeiro na planilha, cole o Codigo.gs novo no Apps Script e publique uma nova versão. Até lá, os lançamentos ficam só neste navegador.</p></div>` : '';
+  if (abaFinAtual === 'resumo') c.innerHTML = aviso + finResumo(sel.value);
+  if (abaFinAtual === 'lancamentos') { c.innerHTML = aviso + finLancamentosCasca(); filtrarLancamentos(); }
+  if (abaFinAtual === 'tabela') c.innerHTML = aviso + finTabela();
+  if (abaFinAtual === 'calc') c.innerHTML = aviso + finCalc();
+}
+function barrasFin(itens, max){
+  return `<div class="fin-barras">${itens.map(([n, cor, ic, a, p]) => `<div class="fin-barra" style="--c:${cor}"><span class="n" title="${esc(n)}"><i class="fa-solid ${ic}"></i>${esc(n)}</span><span class="t"><span style="width:${max ? a / max * 100 : 0}%"></span><span class="p" style="width:${max ? p / max * 100 : 0}%"></span></span><span class="v">${fmtM0(a)}<small>proposto ${fmtM0(p)}</small></span></div>`).join('')}</div>`;
+}
+function finResumo(area){
+  const lista = despesasFiltradas(area), t = totaisFin(lista);
+  const setoresArea = DB.setores.filter(s => s.status !== 'Extinto' && (!area || areaDe.get(s.id) === area || s.id === area));
+  const orc = setoresArea.reduce((a, s) => a + numBR(s.orcamento), 0);
+  const dif = t.Proposto.a - t.Atual.a;
+  const kpi = (cor, ic, r, v, s) => `<div class="cartao kpi" style="--c:${cor}"><div class="r"><i class="fa-solid ${ic}"></i>${r}</div><div class="v" style="font-size:22px">${v}</div><div class="s">${s}</div></div>`;
+  if (!DB.rubricas.length && !DB.despesas.length) return `<div class="cartao bl"><h3><i class="fa-solid fa-sack-dollar"></i>Comece pela tabela de valores</h3><p class="s">Cadastre os valores mensais dos cargos em comissão (DGA), funções gratificadas, bolsas e demais despesas em <b>Tabela de valores</b>. Depois faça os <b>lançamentos</b> em cada setor (quantidade × valor), no cenário <b>Atual</b> e no <b>Proposto</b>. O resumo, o painel do setor e o Modo TV passam a mostrar os totais.</p><div class="acoes"><button class="btn btn-p so-edit" onclick="abaFin('tabela')"><i class="fa-solid fa-table"></i>Abrir a tabela de valores</button></div></div>`;
+  // por categoria
+  const porCat = {}; lista.forEach(d => { const c = calcDesp(d), k = c.categoria; porCat[k] = porCat[k] || [0, 0]; porCat[k][d.cenario === 'Proposto' ? 1 : 0] += c.anual; });
+  const cats = Object.keys(porCat).sort((a, b) => porCat[b][0] - porCat[a][0]);
+  const maxC = Math.max(1, ...cats.map(k => Math.max(...porCat[k])));
+  // por área ou setor
+  const grupo = id => area ? id : areaDe.get(id);
+  const porG = new Map(); lista.forEach(d => { const g = grupo(d.setorId) || '—', c = calcDesp(d); const o = porG.get(g) || [0, 0]; o[d.cenario === 'Proposto' ? 1 : 0] += c.anual; porG.set(g, o); });
+  const gs = [...porG.entries()].sort((a, b) => b[1][0] - a[1][0]).slice(0, 12), maxG = Math.max(1, ...gs.map(g => Math.max(...g[1])));
+  // quadro por item (DGA, bolsas...)
+  const porItem = new Map();
+  lista.forEach(d => { const c = calcDesp(d), k = d.rubricaId || '__' + (d.descricao || 'Valor próprio'); const o = porItem.get(k) || { r:c.r, nome:c.r.codigo || d.descricao || 'Valor próprio', cat:c.categoria, qa:0, qp:0, ma:0, mp:0 }; if (d.cenario === 'Proposto') { o.qp += c.qtd; o.mp += c.mensal; } else { o.qa += c.qtd; o.ma += c.mensal; } porItem.set(k, o); });
+  const itens = [...porItem.values()].sort((a, b) => a.cat.localeCompare(b.cat) || String(a.nome).localeCompare(String(b.nome), 'pt-BR', { numeric:true }));
+  const tot = itens.reduce((a, o) => ({ qa:a.qa + o.qa, qp:a.qp + o.qp, ma:a.ma + o.ma, mp:a.mp + o.mp }), { qa:0, qp:0, ma:0, mp:0 });
+  const d0 = (a, b) => { const x = b - a; return x ? `<span class="${x > 0 ? 'fin-pos' : 'fin-neg'}">${x > 0 ? '+' : ''}${typeof a === 'number' && Math.abs(x) >= 100 ? fmtM0(x) : x.toLocaleString('pt-BR')}</span>` : '<span style="color:var(--mut2)">—</span>'; };
+  return `<div class="kpis">
+      ${kpi('#2563eb', 'fa-calendar-day', 'Custo mensal · atual', fmtM0(t.Atual.m), `${t.Atual.n} lançamento(s)`)}
+      ${kpi('#0e7490', 'fa-calendar', 'Custo anual · atual', fmtM0(t.Atual.a), orc ? `${(t.Atual.a / orc * 100).toLocaleString('pt-BR', { maximumFractionDigits:1 })}% do orçamento declarado` : 'sem orçamento declarado nos setores')}
+      ${kpi('#7c3aed', 'fa-lightbulb', 'Custo anual · proposto', fmtM0(t.Proposto.a), `${t.Proposto.n} lançamento(s)`)}
+      ${kpi(dif > 0 ? '#dc2626' : '#16a34a', dif > 0 ? 'fa-arrow-trend-up' : 'fa-arrow-trend-down', 'Diferença anual', (dif > 0 ? '+' : '') + fmtM0(dif), t.Atual.a ? `${(dif / t.Atual.a * 100).toLocaleString('pt-BR', { maximumFractionDigits:1 })}% em relação ao atual` : 'proposto − atual')}
+      ${kpi('#16a34a', 'fa-landmark', 'Orçamento declarado', fmtM0(orc), 'soma do campo orçamento dos setores')}
+    </div>
+    <div class="grade2">
+      <div class="cartao bl"><h3><i class="fa-solid fa-layer-group"></i>Custo anual por tipo de despesa</h3><div class="fin-leg"><span><i></i>Atual</span><span><i class="p"></i>Proposto</span></div>
+        ${cats.length ? barrasFin(cats.map(k => [k, (CATEG_FIN[k] || CATEG_FIN.Outro)[0], (CATEG_FIN[k] || CATEG_FIN.Outro)[1], porCat[k][0], porCat[k][1]]), maxC) : '<p class="s">Sem lançamentos.</p>'}</div>
+      <div class="cartao bl"><h3><i class="fa-solid fa-sitemap"></i>Custo anual por ${area ? 'setor' : 'secretaria adjunta'}</h3><div class="fin-leg"><span><i></i>Atual</span><span><i class="p"></i>Proposto</span></div>
+        ${gs.length ? barrasFin(gs.map(([g, v]) => [nomeCurto(porId.get(g)) || 'Sem setor', area ? corTipo((porId.get(g) || {}).tipo) : corArea(g), 'fa-building', v[0], v[1]]), maxG) : '<p class="s">Sem lançamentos.</p>'}</div>
+    </div>
+    <div class="cartao bl"><h3><i class="fa-solid fa-table-list"></i>Quadro por item (DGA, funções, bolsas e demais)</h3><p class="s">Quantidades e custo mensal com encargos, atual × proposto.</p>
+      <div class="tab-wrap" style="margin-top:10px"><table class="tab"><thead><tr><th>Item</th><th>Tipo</th><th class="fin-num">Valor unitário</th><th class="fin-num">Qtd atual</th><th class="fin-num">Qtd proposta</th><th class="fin-num">Δ qtd</th><th class="fin-num">Mensal atual</th><th class="fin-num">Mensal proposto</th><th class="fin-num">Δ mensal</th></tr></thead>
+      <tbody>${itens.map(o => `<tr><td><b>${esc(o.nome)}</b>${o.r && o.r.nome ? `<br><small style="color:var(--mut)">${esc(o.r.nome)}</small>` : ''}</td><td><span class="chip" style="--c:${(CATEG_FIN[o.cat] || CATEG_FIN.Outro)[0]}">${esc(o.cat)}</span></td><td class="fin-num">${o.r && o.r.id ? fmtM(o.r.valorMensal) : '—'}</td><td class="fin-num">${o.qa.toLocaleString('pt-BR')}</td><td class="fin-num">${o.qp.toLocaleString('pt-BR')}</td><td class="fin-num">${d0(o.qa, o.qp)}</td><td class="fin-num">${fmtM(o.ma)}</td><td class="fin-num">${fmtM(o.mp)}</td><td class="fin-num">${d0(o.ma, o.mp)}</td></tr>`).join('')}
+      <tr class="fin-tot"><td colspan="3">Total</td><td class="fin-num">${tot.qa.toLocaleString('pt-BR')}</td><td class="fin-num">${tot.qp.toLocaleString('pt-BR')}</td><td class="fin-num">${d0(tot.qa, tot.qp)}</td><td class="fin-num">${fmtM(tot.ma)}</td><td class="fin-num">${fmtM(tot.mp)}</td><td class="fin-num">${d0(tot.ma, tot.mp)}</td></tr></tbody></table></div></div>`;
+}
+function finLancamentosCasca(){
+  const cats = Object.keys(CATEG_FIN);
+  return `<div class="adm-filtros">
+      <div class="busca"><i class="fa-solid fa-magnifying-glass"></i><input id="fl-q" class="campo" placeholder="Buscar setor, item ou descrição" oninput="filtrarLancamentos()"></div>
+      <select id="fl-cat" class="campo" onchange="filtrarLancamentos()"><option value="">Todos os tipos</option>${cats.map(c => `<option>${c}</option>`).join('')}</select>
+      <select id="fl-cen" class="campo" onchange="filtrarLancamentos()"><option value="">Atual e proposto</option>${CENARIOS.map(c => `<option>${c}</option>`).join('')}</select>
+    </div><div id="fl-lista"></div>`;
+}
+function lancamentosFiltrados(){
+  const q = norm(($('#fl-q') || {}).value || ''), cat = ($('#fl-cat') || {}).value || '', cen = ($('#fl-cen') || {}).value || '';
+  return despesasFiltradas($('#f-area').value).map(d => ({ d, c:calcDesp(d), s:porId.get(d.setorId) }))
+    .filter(o => (!cat || o.c.categoria === cat) && (!cen || (o.d.cenario || 'Atual') === cen) && (!q || norm(((o.s || {}).nome || '') + ' ' + ((o.s || {}).sigla || '') + ' ' + (o.c.r.codigo || '') + ' ' + (o.c.r.nome || '') + ' ' + o.d.descricao).includes(q)))
+    .sort((a, b) => ((a.s || {}).nome || '').localeCompare((b.s || {}).nome || '', 'pt-BR') || (a.d.cenario || '').localeCompare(b.d.cenario || ''));
+}
+function filtrarLancamentos(){
+  const el = $('#fl-lista'); if (!el) return;
+  const l = lancamentosFiltrados();
+  if (!l.length) { el.innerHTML = `<div class="cartao vazio">Nenhum lançamento${DB.despesas.length ? ' com esses filtros' : ''}. <button class="btn btn-p btn-sm so-edit" style="margin-left:8px" onclick="formDespesa()"><i class="fa-solid fa-plus"></i>Novo lançamento</button></div>`; return; }
+  const t = totaisFin(l.map(o => o.d));
+  el.innerHTML = `<div class="tab-wrap"><table class="tab"><thead><tr><th>Setor</th><th>Item</th><th class="fin-num">Qtd</th><th class="fin-num">Unitário</th><th class="fin-num">Encargos</th><th class="fin-num">Mensal</th><th class="fin-num">Meses</th><th class="fin-num">Anual</th><th>Cenário</th><th></th></tr></thead><tbody>
+    ${l.map(({ d, c, s }) => `<tr><td>${s ? `<a href="#" onclick="event.preventDefault();irPara(${arg(s.id)})"><b>${esc(nomeCurto(s))}</b></a><br><small style="color:var(--mut)">${esc(s.nome)}</small>` : '<span style="color:var(--perigo)">setor removido</span>'}</td>
+      <td><span class="chip" style="--c:${(CATEG_FIN[c.categoria] || CATEG_FIN.Outro)[0]}">${esc(c.r.codigo || c.categoria)}</span>${d.descricao ? `<br><small>${esc(d.descricao)}</small>` : (c.r.nome ? `<br><small style="color:var(--mut)">${esc(c.r.nome)}</small>` : '')}</td>
+      <td class="fin-num">${c.qtd.toLocaleString('pt-BR')}</td><td class="fin-num">${fmtM(c.unit)}${d.valorUnitario !== '' ? ' <small title="Valor próprio, diferente da tabela">*</small>' : ''}</td><td class="fin-num">${c.enc ? c.enc.toLocaleString('pt-BR') + '%' : '—'}</td>
+      <td class="fin-num"><b>${fmtM(c.mensal)}</b></td><td class="fin-num">${c.meses.toLocaleString('pt-BR')}</td><td class="fin-num">${fmtM(c.anual)}</td>
+      <td><span class="chip" style="--c:${d.cenario === 'Proposto' ? '#7c3aed' : '#2563eb'}">${esc(d.cenario || 'Atual')}</span></td>
+      <td><div class="u-acoes so-edit"><button class="btn btn-s btn-sm btn-i" title="Editar" onclick="formDespesa(${arg(d.id)})"><i class="fa-solid fa-pen"></i></button><button class="btn btn-s btn-sm btn-i" title="Copiar para o outro cenário" onclick="copiarCenario(${arg(d.id)})"><i class="fa-regular fa-copy"></i></button><button class="btn btn-perigo btn-sm btn-i" title="Excluir" onclick="excluirDespesa(${arg(d.id)})"><i class="fa-solid fa-trash-can"></i></button></div></td></tr>`).join('')}
+    <tr class="fin-tot"><td colspan="5">Atual (${t.Atual.n})</td><td class="fin-num">${fmtM(t.Atual.m)}</td><td></td><td class="fin-num">${fmtM(t.Atual.a)}</td><td colspan="2"></td></tr>
+    <tr class="fin-tot"><td colspan="5">Proposto (${t.Proposto.n})</td><td class="fin-num">${fmtM(t.Proposto.m)}</td><td></td><td class="fin-num">${fmtM(t.Proposto.a)}</td><td colspan="2"></td></tr>
+  </tbody></table></div><p style="font-size:12px;color:var(--mut);margin-top:8px">Mensal = quantidade × valor unitário × (1 + encargos). Anual = mensal × meses. * valor próprio do lançamento, diferente da tabela.</p>`;
+}
+function opcoesSetores(sel){
+  const ord = []; const visit = (s, d) => { ord.push([s, d]); filhosDe(s.id).forEach(k => visit(k, d + 1)); }; raizes().forEach(r => visit(r, 0));
+  return ord.map(([s, d]) => `<option value="${esc(s.id)}" ${s.id === sel ? 'selected' : ''}>${'  '.repeat(Math.min(d, 6))}${esc(s.sigla ? s.sigla + ' · ' : '')}${esc(s.nome)}</option>`).join('');
+}
+function opcoesRubricas(sel){
+  const g = {}; DB.rubricas.filter(r => r.ativo !== 'Não' || r.id === sel).forEach(r => (g[r.categoria || 'Outro'] = g[r.categoria || 'Outro'] || []).push(r));
+  return `<option value="">— Sem item da tabela (valor próprio) —</option>` + Object.keys(g).map(c => `<optgroup label="${esc(c)}">${g[c].sort((a, b) => String(a.codigo).localeCompare(String(b.codigo), 'pt-BR', { numeric:true })).map(r => `<option value="${esc(r.id)}" ${r.id === sel ? 'selected' : ''}>${esc(r.codigo || r.nome)} — ${esc(r.nome || '')} (${fmtM(r.valorMensal)})</option>`).join('')}</optgroup>`).join('');
+}
+function formDespesa(id, setorPadrao){
+  if (somenteLeitura()) return toast('Seu perfil é somente leitura.', 'aviso');
+  const d = DB.despesas.find(x => x.id === id) || novoReg('despesas', { setorId:setorPadrao || selId || '', quantidade:'1', cenario:'Atual' });
+  const prev = m => {
+    const o = { rubricaId:m.querySelector('#fd-rub').value, quantidade:m.querySelector('#fd-qtd').value, valorUnitario:m.querySelector('#fd-val').value, meses:m.querySelector('#fd-mes').value };
+    const r = rubricaDe(o.rubricaId); m.querySelector('#fd-val').placeholder = r ? 'Tabela: ' + fmtM(r.valorMensal) : 'Valor mensal';
+    m.querySelector('#fd-mes').placeholder = r && r.meses ? r.meses : '12';
+    const c = calcDesp(o); m.querySelector('#fd-prev').innerHTML = `<div>Total mensal${c.enc ? ` (com ${c.enc.toLocaleString('pt-BR')}% de encargos)` : ''}<b>${fmtM(c.mensal)}</b></div><div>Total anual (${c.meses.toLocaleString('pt-BR')} meses)<b>${fmtM(c.anual)}</b></div>`;
+  };
+  abrirModal({ titulo: id ? 'Editar lançamento' : 'Novo lançamento', rotulo: id ? 'Salvar' : 'Lançar', largura:540,
+    html:`<label><span class="rot">Setor</span><select id="fd-set" class="campo" required>${d.setorId ? '' : '<option value="">Escolha o setor</option>'}${opcoesSetores(d.setorId)}</select></label>
+      <label><span class="rot">Item da tabela de valores</span><select id="fd-rub" class="campo">${opcoesRubricas(d.rubricaId)}</select></label>
+      <label><span class="rot">Descrição <small>opcional</small></span><input id="fd-desc" class="campo" value="${esc(d.descricao)}" placeholder="ex.: Coordenador, bolsistas do programa X"></label>
+      <div class="g2"><label><span class="rot">Quantidade</span><input id="fd-qtd" class="campo" type="number" min="0" step="any" value="${esc(d.quantidade)}"></label>
+      <label><span class="rot">Valor unitário mensal <small>vazio = tabela</small></span><input id="fd-val" class="campo" type="number" min="0" step="0.01" value="${esc(d.valorUnitario)}"></label></div>
+      <div class="g2"><label><span class="rot">Meses no ano <small>vazio = tabela</small></span><input id="fd-mes" class="campo" type="number" min="0" max="13.34" step="any" value="${esc(d.meses)}"></label>
+      <label><span class="rot">Cenário</span><select id="fd-cen" class="campo">${CENARIOS.map(c => `<option ${c === (d.cenario || 'Atual') ? 'selected' : ''}>${c}</option>`).join('')}</select></label></div>
+      <label><span class="rot">Observação</span><input id="fd-obs" class="campo" value="${esc(d.observacao)}"></label>
+      <div class="fin-prev" id="fd-prev"></div>`,
+    aoConfirmar: async m => {
+      const v = { setorId:m.querySelector('#fd-set').value, rubricaId:m.querySelector('#fd-rub').value, descricao:m.querySelector('#fd-desc').value.trim(), quantidade:m.querySelector('#fd-qtd').value, valorUnitario:m.querySelector('#fd-val').value, meses:m.querySelector('#fd-mes').value, cenario:m.querySelector('#fd-cen').value, observacao:m.querySelector('#fd-obs').value.trim() };
+      if (!v.setorId) throw new Error('Escolha o setor.');
+      if (!v.rubricaId && v.valorUnitario === '') throw new Error('Escolha um item da tabela ou informe o valor unitário.');
+      if (!v.rubricaId && !v.descricao) throw new Error('Sem item da tabela, descreva a despesa.');
+      Object.assign(d, v, { atualizadoEm:agora(), atualizadoPor:cfg.usuario || '' });
+      if (!DB.despesas.includes(d)) { d.id = novoId('fd'); DB.despesas.push(d); }
+      enfileirar('despesas', d);
+      const c = calcDesp(d); registrar(d.setorId, `Financeiro: ${id ? 'alterou' : 'lançou'} ${c.r.codigo || d.descricao} × ${c.qtd.toLocaleString('pt-BR')} (${d.cenario}) = ${fmtM(c.mensal)}/mês`);
+      return true;
+    }
+  }).then(ok => { if (ok) { toast('Lançamento salvo.'); posFinanceiro(); } });
+  const m = document.querySelectorAll('.modal'); const mm = m[m.length - 1];
+  mm.querySelectorAll('#fd-rub,#fd-qtd,#fd-val,#fd-mes').forEach(i => i.addEventListener('input', () => prev(mm))); prev(mm);
+}
+function posFinanceiro(){ salvarLocal(); if (vistaAtual === 'financeiro') renderFinanceiro(); if (selId && $('#painel').classList.contains('aberto')) renderPainel(); }
+function copiarCenario(id){
+  const d = DB.despesas.find(x => x.id === id); if (!d || somenteLeitura()) return;
+  const n = novoReg('despesas', Object.assign({}, d, { id:novoId('fd'), cenario:d.cenario === 'Proposto' ? 'Atual' : 'Proposto', atualizadoEm:agora(), atualizadoPor:cfg.usuario || '' }));
+  DB.despesas.push(n); enfileirar('despesas', n); toast(`Copiado para o cenário ${n.cenario}.`); posFinanceiro();
+}
+async function excluirDespesa(id){
+  const d = DB.despesas.find(x => x.id === id); if (!d || somenteLeitura()) return;
+  if (!await confirmar('Excluir lançamento', 'Excluir este lançamento financeiro?', 'Excluir', true)) return;
+  DB.despesas = DB.despesas.filter(x => x !== d); enfileirar('despesas', d, true);
+  const c = calcDesp(d); registrar(d.setorId, `Financeiro: excluiu ${c.r.codigo || d.descricao} (${d.cenario})`);
+  posFinanceiro();
+}
+/* Tabela de valores */
+function finTabela(){
+  const usos = id => DB.despesas.filter(d => d.rubricaId === id).length;
+  const ro = somenteLeitura() ? 'disabled' : '';
+  const lin = r => `<tr data-id="${esc(r.id)}" style="${r.ativo === 'Não' ? 'opacity:.55' : ''}">
+    <td><input class="campo fin-edit" ${ro} value="${esc(r.codigo)}" onchange="alterarRubrica(${arg(r.id)},'codigo',this.value)" placeholder="DGA-1"></td>
+    <td><input class="campo fin-edit" ${ro} value="${esc(r.nome)}" onchange="alterarRubrica(${arg(r.id)},'nome',this.value)" placeholder="Descrição"></td>
+    <td><select class="campo fin-edit" ${ro} onchange="alterarRubrica(${arg(r.id)},'categoria',this.value)">${Object.keys(CATEG_FIN).map(c => `<option ${c === r.categoria ? 'selected' : ''}>${c}</option>`).join('')}</select></td>
+    <td><input class="campo fin-edit n" ${ro} type="number" min="0" step="0.01" value="${esc(r.valorMensal)}" onchange="alterarRubrica(${arg(r.id)},'valorMensal',this.value)" placeholder="0,00"></td>
+    <td><input class="campo fin-edit n" ${ro} type="number" min="0" step="0.01" value="${esc(r.encargos)}" onchange="alterarRubrica(${arg(r.id)},'encargos',this.value)" placeholder="0" style="min-width:60px"></td>
+    <td><input class="campo fin-edit n" ${ro} type="number" min="0" max="13.34" step="any" value="${esc(r.meses)}" onchange="alterarRubrica(${arg(r.id)},'meses',this.value)" placeholder="12" style="min-width:60px"></td>
+    <td class="fin-num">${usos(r.id)}</td>
+    <td><div class="u-acoes so-edit"><button class="btn btn-s btn-sm btn-i" title="${r.ativo === 'Não' ? 'Reativar' : 'Desativar (some da lista de lançamento)'}" onclick="alterarRubrica(${arg(r.id)},'ativo','${r.ativo === 'Não' ? 'Sim' : 'Não'}');renderFinanceiro()"><i class="fa-solid ${r.ativo === 'Não' ? 'fa-eye' : 'fa-eye-slash'}"></i></button><button class="btn btn-perigo btn-sm btn-i" title="Excluir" onclick="excluirRubrica(${arg(r.id)})"><i class="fa-solid fa-trash-can"></i></button></div></td></tr>`;
+  const ord = [...DB.rubricas].sort((a, b) => Object.keys(CATEG_FIN).indexOf(a.categoria) - Object.keys(CATEG_FIN).indexOf(b.categoria) || String(a.codigo).localeCompare(String(b.codigo), 'pt-BR', { numeric:true }));
+  return `<div class="cartao bl" style="margin-bottom:14px"><h3><i class="fa-solid fa-table"></i>Tabela de valores</h3>
+      <p class="s">Valores mensais usados nos cálculos: símbolos DGA dos cargos em comissão, funções gratificadas, bolsas e demais itens. <b>Encargos</b> soma um percentual ao valor (ex.: contribuição patronal). <b>Meses por ano</b>: 12 por padrão; use 13,33 para incluir 13º e 1/3 de férias. Mudar um valor aqui atualiza todos os lançamentos que usam o item.</p>
+      <div class="acoes so-edit"><button class="btn btn-p" onclick="novaRubrica()"><i class="fa-solid fa-plus"></i>Novo item</button>${DB.rubricas.length ? '' : '<button class="btn btn-s" onclick="modeloRubricas()"><i class="fa-solid fa-wand-magic-sparkles"></i>Criar modelo inicial (DGA, funções e bolsas)</button>'}</div></div>
+    ${DB.rubricas.length ? `<div class="tab-wrap"><table class="tab"><thead><tr><th style="min-width:100px">Código</th><th style="min-width:200px">Descrição</th><th style="min-width:170px">Tipo</th><th class="fin-num" style="min-width:120px">Valor mensal (R$)</th><th class="fin-num">Encargos %</th><th class="fin-num">Meses/ano</th><th class="fin-num">Usos</th><th></th></tr></thead><tbody>${ord.map(lin).join('')}</tbody></table></div>` : '<div class="cartao vazio">Nenhum item cadastrado.</div>'}`;
+}
+function alterarRubrica(id, campo, valor){
+  if (somenteLeitura()) return;
+  const r = rubricaDe(id); if (!r || r[campo] === String(valor)) return;
+  r[campo] = String(valor); r.atualizadoEm = agora(); r.atualizadoPor = cfg.usuario || '';
+  enfileirar('rubricas', r); salvarLocal();
+}
+function novaRubrica(){
+  if (somenteLeitura()) return;
+  const r = novoReg('rubricas', { id:novoId('rb'), codigo:'', nome:'', categoria:'Cargo em comissão (DGA)', valorMensal:'', encargos:'', meses:'12', ativo:'Sim', atualizadoEm:agora(), atualizadoPor:cfg.usuario || '' });
+  DB.rubricas.push(r); enfileirar('rubricas', r); renderFinanceiro();
+  setTimeout(() => { const i = document.querySelector(`tr[data-id="${r.id}"] input`); if (i) i.focus(); }, 50);
+}
+async function excluirRubrica(id){
+  const r = rubricaDe(id); if (!r || somenteLeitura()) return;
+  const n = DB.despesas.filter(d => d.rubricaId === id).length;
+  if (n) return toast(`Este item é usado em ${n} lançamento(s). Desative-o em vez de excluir.`, 'aviso');
+  if (!await confirmar('Excluir item', `Excluir <b>${esc(r.codigo || r.nome || 'item')}</b> da tabela de valores?`, 'Excluir', true)) return;
+  DB.rubricas = DB.rubricas.filter(x => x !== r); enfileirar('rubricas', r, true); salvarLocal(); renderFinanceiro();
+}
+function modeloRubricas(){
+  if (somenteLeitura()) return;
+  const base = [];
+  for (let i = 1; i <= 6; i++) base.push(['DGA-' + i, 'Cargo em comissão – símbolo DGA-' + i, 'Cargo em comissão (DGA)']);
+  base.push(['FG', 'Função gratificada', 'Função gratificada'], ['BOLSA', 'Bolsa (programa)', 'Bolsa'], ['EFETIVO', 'Servidor efetivo (média)', 'Pessoal efetivo'], ['DIÁRIA', 'Diária', 'Diárias e passagens']);
+  base.forEach(([codigo, nome, categoria]) => { const r = novoReg('rubricas', { id:novoId('rb'), codigo, nome, categoria, valorMensal:'', encargos:'', meses:'12', ativo:'Sim', observacao:'Preencher com o valor vigente', atualizadoEm:agora(), atualizadoPor:cfg.usuario || '' }); DB.rubricas.push(r); enfileirar('rubricas', r); });
+  renderFinanceiro(); toast('Modelo criado. Preencha os valores mensais de cada item e ajuste os símbolos.');
+}
+/* Calculadora */
+function finCalc(){
+  if (!calcLinhas.length) calcLinhas = [{ rub:'', qtd:'1', meses:'' }];
+  return `<div class="cartao bl"><h3><i class="fa-solid fa-calculator"></i>Calculadora rápida</h3><p class="s">Simule combinações (ex.: 3 × DGA-2 + 10 bolsas) sem gravar nada. Se quiser, lance o resultado num setor.</p>
+    <div id="calc-ls" style="margin-top:12px"></div>
+    <div class="acoes" style="justify-content:space-between;flex-wrap:wrap"><button class="btn btn-s" onclick="calcLinhas.push({rub:'',qtd:'1',meses:''});desenharCalc()"><i class="fa-solid fa-plus"></i>Adicionar linha</button><div class="fin-prev" id="calc-tot" style="flex:1;max-width:420px"></div></div>
+    <div class="acoes so-edit" style="margin-top:12px;flex-wrap:wrap"><select id="calc-set" class="campo" style="width:auto;max-width:100%"><option value="">Lançar em qual setor?</option>${opcoesSetores(selId)}</select><select id="calc-cen" class="campo" style="width:auto">${CENARIOS.map(c => `<option>${c}</option>`).join('')}</select><button class="btn btn-p" onclick="lancarCalc()"><i class="fa-solid fa-file-import"></i>Lançar no setor</button></div></div>`;
+}
+function desenharCalc(){
+  const el = $('#calc-ls'); if (!el) return;
+  el.innerHTML = calcLinhas.map((l, i) => { const c = calcDesp({ rubricaId:l.rub, quantidade:l.qtd, valorUnitario:'', meses:l.meses }); return `<div class="calc-l"><select class="campo" onchange="calcLinhas[${i}].rub=this.value;desenharCalc()">${opcoesRubricas(l.rub).replace('— Sem item da tabela (valor próprio) —', 'Escolha um item')}</select><input class="campo" type="number" min="0" step="any" value="${esc(l.qtd)}" title="Quantidade" oninput="calcLinhas[${i}].qtd=this.value;desenharCalcTot(this,${i})"><input class="campo" type="number" min="0" step="any" value="${esc(l.meses)}" placeholder="${c.meses}" title="Meses" oninput="calcLinhas[${i}].meses=this.value;desenharCalcTot(this,${i})"><span class="v" data-i="${i}">${fmtM(c.mensal)}/mês</span><button class="btn btn-s btn-i" title="Remover" onclick="calcLinhas.splice(${i},1);desenharCalc()"><i class="fa-solid fa-xmark"></i></button></div>`; }).join('');
+  desenharCalcTot();
+}
+function desenharCalcTot(){
+  let m = 0, a = 0; calcLinhas.forEach((l, i) => { const c = calcDesp({ rubricaId:l.rub, quantidade:l.qtd, valorUnitario:'', meses:l.meses }); m += c.mensal; a += c.anual; const v = document.querySelector(`.calc-l .v[data-i="${i}"]`); if (v) v.textContent = fmtM(c.mensal) + '/mês'; });
+  const t = $('#calc-tot'); if (t) t.innerHTML = `<div>Total mensal<b>${fmtM(m)}</b></div><div>Total anual<b>${fmtM(a)}</b></div>`;
+}
+function lancarCalc(){
+  if (somenteLeitura()) return;
+  const sid = $('#calc-set').value, cen = $('#calc-cen').value; if (!sid) return toast('Escolha o setor.', 'aviso');
+  const ok = calcLinhas.filter(l => l.rub && numBR(l.qtd)); if (!ok.length) return toast('Nenhuma linha com item e quantidade.', 'aviso');
+  ok.forEach(l => { const d = novoReg('despesas', { id:novoId('fd'), setorId:sid, rubricaId:l.rub, quantidade:l.qtd, meses:l.meses, cenario:cen, atualizadoEm:agora(), atualizadoPor:cfg.usuario || '' }); DB.despesas.push(d); enfileirar('despesas', d); });
+  registrar(sid, `Financeiro: ${ok.length} lançamento(s) pela calculadora (${cen})`);
+  toast(`${ok.length} lançamento(s) feitos em ${nomeCurto(porId.get(sid))}.`); calcLinhas = []; abaFin('lancamentos');
+}
+function exportarFinanceiro(){
+  const q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"', n = v => numBR(v).toFixed(2).replace('.', ',');
+  const l = DB.despesas.map(d => ({ d, c:calcDesp(d), s:porId.get(d.setorId) }));
+  const csv = '﻿' + ['Setor;Sigla;Área;Item;Tipo;Descrição;Quantidade;Valor unitário;Encargos %;Mensal;Meses;Anual;Cenário;Observação', ...l.map(({ d, c, s }) => [s ? s.nome : '(removido)', s ? s.sigla : '', nomeCurto(porId.get(areaDe.get(d.setorId))), c.r.codigo || '', c.categoria, d.descricao, c.qtd, n(c.unit), c.enc, n(c.mensal), c.meses, n(c.anual), d.cenario || 'Atual', d.observacao].map(q).join(';'))].join('\r\n');
+  baixarArquivo('gaborg-financeiro-' + new Date().toISOString().slice(0, 10) + '.csv', csv, 'text/csv;charset=utf-8');
+}
+/* Bloco financeiro no painel do setor (aba Valores) */
+function blocoFinSetor(s){
+  const p = custoSetorFin(s.id, false), t = custoSetorFin(s.id, true), lst = DB.despesas.filter(d => d.setorId === s.id);
+  const temSub = descendentes(s.id).size > 0;
+  return `<div class="sec-t" style="margin-top:18px"><i class="fa-solid fa-sack-dollar"></i>Financeiro (lançamentos)</div>
+    <div class="fin-prev"><div>Mensal atual<b>${fmtM0(p.Atual.m)}</b></div><div>Mensal proposto<b>${fmtM0(p.Proposto.m)}</b></div>${temSub ? `<div>Com subordinados · atual<b>${fmtM0(t.Atual.m)}</b></div><div>Com subordinados · proposto<b>${fmtM0(t.Proposto.m)}</b></div>` : ''}</div>
+    ${lst.length ? `<div class="tab-wrap" style="margin-top:10px"><table class="tab"><tbody>${lst.map(d => { const c = calcDesp(d); return `<tr><td><b>${esc(c.r.codigo || d.descricao || c.categoria)}</b> × ${c.qtd.toLocaleString('pt-BR')}<br><small style="color:var(--mut)">${esc(d.cenario || 'Atual')}</small></td><td class="fin-num">${fmtM(c.mensal)}/mês</td><td><div class="u-acoes so-edit"><button class="btn btn-s btn-sm btn-i" onclick="formDespesa(${arg(d.id)})" title="Editar"><i class="fa-solid fa-pen"></i></button></div></td></tr>`; }).join('')}</tbody></table></div>` : '<p style="font-size:12.5px;color:var(--mut)">Nenhum lançamento financeiro neste setor.</p>'}
+    <div class="acoes" style="margin-top:10px"><button class="btn btn-p btn-sm so-edit" onclick="formDespesa('', ${arg(s.id)})"><i class="fa-solid fa-plus"></i>Lançamento</button><button class="btn btn-s btn-sm" onclick="trocarVista('financeiro');abaFin('lancamentos');setTimeout(()=>{const q=$('#fl-q');if(q){q.value=${arg(s.sigla || s.nome)};filtrarLancamentos()}},50)"><i class="fa-solid fa-arrow-up-right-from-square"></i>Abrir no Financeiro</button></div>`;
+}
+
+/* ===================== MENU LATERAL: RECOLHER E AJUSTAR LARGURA ===================== */
+let ladoCfg = Object.assign({ mini:false, w:236 }, store.get('gaborg_lado', {}));
+function aplicarLado(){
+  const larga = window.innerWidth > 820;
+  document.body.classList.toggle('lado-mini', larga && ladoCfg.mini);
+  document.documentElement.style.setProperty('--lado-w', Math.max(180, Math.min(340, ladoCfg.w)) + 'px');
+  const tg = document.querySelector('.lado-tg'); if (tg) tg.title = ladoCfg.mini ? 'Expandir o menu (tecla [ )' : 'Recolher o menu (tecla [ )';
+  setTimeout(() => { if (vistaAtual === 'mapa') desenharMini(); }, 260);
+}
+function alternarLado(forcar){ ladoCfg.mini = forcar !== undefined ? forcar : !ladoCfg.mini; store.set('gaborg_lado', ladoCfg); aplicarLado(); }
+(function(){
+  const alca = document.querySelector('.lado-alca'), lado = document.querySelector('.lado'); if (!alca) return;
+  let ini = null;
+  alca.addEventListener('pointerdown', e => { ini = { x:e.clientX, w:lado.getBoundingClientRect().width }; alca.setPointerCapture(e.pointerId); alca.classList.add('on'); lado.classList.add('redim'); e.preventDefault(); });
+  alca.addEventListener('pointermove', e => {
+    if (!ini) return; const w = ini.w + e.clientX - ini.x;
+    if (w < 130) { if (!ladoCfg.mini) { ladoCfg.mini = true; aplicarLado(); } return; }
+    if (ladoCfg.mini) { ladoCfg.mini = false; aplicarLado(); }
+    ladoCfg.w = Math.max(180, Math.min(340, w)); document.documentElement.style.setProperty('--lado-w', ladoCfg.w + 'px');
+  });
+  const fim = () => { if (!ini) return; ini = null; alca.classList.remove('on'); lado.classList.remove('redim'); store.set('gaborg_lado', ladoCfg); aplicarLado(); };
+  alca.addEventListener('pointerup', fim); alca.addEventListener('pointercancel', fim);
+  alca.addEventListener('dblclick', () => { ladoCfg.w = 236; alternarLado(false); });
+})();
+window.addEventListener('resize', aplicarLado);
+document.addEventListener('keydown', e => {
+  if (e.target.closest('input,textarea,select,[contenteditable]') || document.querySelector('.modal') || !$('#tv-modo').classList.contains('hidden')) return;
+  if (e.key === '[' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); alternarLado(); }
+});
+aplicarLado();
+
+/* ===================== MODO TV ===================== */
+const tv = { slides:[], i:0, timer:null, prog:null, relogio:null, pausado:false, inicio:0, seg:Number(store.get('gaborg_tv_seg', 20)), ocioso:null, voltas:0 };
+function tvSlides(){
+  const L = [['visao', 'Visão geral'], ['mapa', 'Mapa da estrutura'], ['areas', 'Estrutura por área']];
+  if (DB.despesas.length) L.push(['fin', 'Financeiro']);
+  L.push(['val', 'Validações e impacto']);
+  return L;
+}
+function abrirModoTV(){
+  if (vistaAtual !== 'mapa') { const v = vistaAtual; vistaAtual = 'mapa'; calcularLayout(); vistaAtual = v; } else calcularLayout();
+  tv.slides = tvSlides(); tv.i = 0; tv.pausado = false; tv.voltas = 0;
+  $('#tv-seg').value = String(tv.seg);
+  const el = $('#tv-modo'); el.classList.remove('hidden'); el.focus();
+  if (document.documentElement.requestFullscreen && !document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
+  tvRelogio(); clearInterval(tv.relogio); tv.relogio = setInterval(tvRelogio, 1000);
+  tvMostrar(0);
+}
+function fecharModoTV(){
+  clearTimeout(tv.timer); cancelAnimationFrame(tv.prog); clearInterval(tv.relogio);
+  $('#tv-modo').classList.add('hidden'); $('#tv-palco').innerHTML = '';
+  if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
+  if (vistaAtual === 'mapa') desenharMapa();
+}
+function tvTelaCheia(){ if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); else document.documentElement.requestFullscreen && document.documentElement.requestFullscreen().catch(() => {}); }
+function tvRelogio(){ const d = new Date(); $('#tv-relogio').textContent = d.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' }); $('#tv-data').textContent = d.toLocaleDateString('pt-BR', { weekday:'long', day:'2-digit', month:'long' }); }
+function tvTempo(v){ tv.seg = Number(v); store.set('gaborg_tv_seg', tv.seg); tvAgendar(); }
+function tvPausar(forcar){ tv.pausado = forcar !== undefined ? forcar : !tv.pausado; $('#tv-btn-pausa').innerHTML = `<i class="fa-solid ${tv.pausado ? 'fa-play' : 'fa-pause'}"></i>`; tvAgendar(); }
+function tvPasso(d){ tvMostrar((tv.i + d + tv.slides.length) % tv.slides.length); }
+async function tvMostrar(i){
+  if (i === 0 && tv.voltas++ > 0 && online()) { try { await lerNuvem(); calcularLayout(); tv.slides = tvSlides(); } catch (e) {} }
+  tv.i = Math.min(i, tv.slides.length - 1);
+  const [k, t] = tv.slides[tv.i];
+  $('#tv-titulo-slide').textContent = t + ' · ' + (tv.i + 1) + '/' + tv.slides.length;
+  $('#tv-pontos').innerHTML = tv.slides.map((s, j) => `<button class="${j === tv.i ? 'on' : ''}" title="${esc(s[1])}" onclick="tvMostrar(${j})"></button>`).join('');
+  $('#tv-palco').innerHTML = `<div class="tv-slide">${TV_SLIDE[k]()}</div>`;
+  if (k === 'mapa') tvMontarMapa();
+  tvAgendar();
+}
+function tvAgendar(){
+  clearTimeout(tv.timer); cancelAnimationFrame(tv.prog);
+  const bar = $('#tv-barra'); bar.style.width = '0';
+  if (tv.pausado || !tv.seg) return;
+  tv.inicio = performance.now(); const dur = tv.seg * 1000;
+  const anima = () => { const p = Math.min(1, (performance.now() - tv.inicio) / dur); bar.style.width = (p * 100) + '%'; if (p < 1) tv.prog = requestAnimationFrame(anima); };
+  anima(); tv.timer = setTimeout(() => tvPasso(1), dur);
+}
+const tvKpi = (c, l, v, s, m) => `<div class="tv-kpi" style="--c:${c}"><div class="l">${l}</div><div class="v ${m ? 'm' : ''}">${v}</div><div class="s">${s}</div></div>`;
+const TV_SLIDE = {
+  visao(){
+    const at = DB.setores.filter(s => s.status !== 'Extinto'), soma = k => at.reduce((a, s) => a + num(s[k]), 0);
+    const pend = DB.validacoes.filter(v => !v.status || v.status === 'Pendente').length, f = totaisFin(DB.despesas);
+    return `<div class="tv-h" style="--c:#60a5fa"><i class="fa-solid fa-building-columns"></i>Secretaria de Estado de Educação<small>Decreto nº 2.236/2026</small></div>
+      <div class="tv-kpis">${tvKpi('#3b82f6', 'Setores ativos', at.length.toLocaleString('pt-BR'), `${areas.length} áreas`)}${tvKpi('#22c55e', 'Servidores', soma('servidores').toLocaleString('pt-BR'), `${soma('comissionados').toLocaleString('pt-BR')} comissionados`)}${tvKpi('#a855f7', 'Custo mensal', fmtRc(f.Atual.m), f.Proposto.m ? `proposto ${fmtRc(f.Proposto.m)}` : 'lançamentos atuais', true)}${tvKpi('#f59e0b', 'Validações pendentes', pend, `${DB.validacoes.length} no total`)}${tvKpi('#ef4444', 'Sem responsável', at.filter(s => !s.responsavel && filhosDe(s.id).length).length, 'chefias a definir')}</div>
+      <div class="tv-duas"><div class="tv-caixa"><h4>Setores por tipo</h4>${tvBarras(Object.entries(at.reduce((a, s) => (a[s.tipo] = (a[s.tipo] || 0) + 1, a), {})).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([t, n]) => [t, n, corTipo(t), n]))}</div>
+      <div class="tv-caixa"><h4>Maiores áreas (setores)</h4>${tvBarras(areas.map(a => [nomeCurto(porId.get(a)), DB.setores.filter(s => areaDe.get(s.id) === a && s.status !== 'Extinto').length, corArea(a)]).sort((a, b) => b[1] - a[1]).slice(0, 8).map(x => [x[0], x[1], x[2], x[1]]))}</div></div>`;
+  },
+  mapa(){ return `<div class="tv-h" style="--c:#22d3ee"><i class="fa-solid fa-diagram-project"></i>Mapa da estrutura<small>${visiveis.length} setores visíveis</small></div><div class="tv-mapa" id="tv-mapa"><div class="mundo-tv" id="tv-mundo"></div><span class="tv-dica"><i class="fa-solid fa-hand"></i> arraste para mover · roda ou pinça para zoom · duplo clique centraliza</span></div>`; },
+  areas(){
+    const f = new Map(); DB.despesas.filter(d => d.cenario !== 'Proposto').forEach(d => { const a = areaDe.get(d.setorId); f.set(a, (f.get(a) || 0) + calcDesp(d).mensal); });
+    return `<div class="tv-h" style="--c:#a78bfa"><i class="fa-solid fa-sitemap"></i>Estrutura por área<small>${areas.length} unidades ligadas ao Gabinete</small></div>
+      <div class="tv-grade">${(() => {
+        const grandes = areas.filter(a => DB.setores.filter(x => areaDe.get(x.id) === a).length > 1), unicas = areas.filter(a => !grandes.includes(a));
+        const card = (cor, tit, sub, lst, fm) => `<div class="tv-area" style="--c:${cor}"><b>${esc(tit)}</b><small>${esc(sub)}</small><div class="nums"><span><b>${lst.length}</b>setores</span><span><b>${lst.reduce((t, x) => t + num(x.servidores), 0).toLocaleString('pt-BR')}</b>servidores</span>${fm ? `<span><b>${fmtRc(fm)}</b>por mês</span>` : ''}</div></div>`;
+        const ativos = a => DB.setores.filter(x => areaDe.get(x.id) === a && x.status !== 'Extinto');
+        return grandes.sort((x, y) => ativos(y).length - ativos(x).length).map(a => card(corArea(a), nomeCurto(porId.get(a)), (porId.get(a) || {}).nome || '', ativos(a), f.get(a))).join('')
+          + (unicas.length ? card('#94a3b8', 'Unidades do Gabinete', unicas.map(a => nomeCurto(porId.get(a))).join(' · '), unicas.flatMap(ativos), unicas.reduce((t, a) => t + (f.get(a) || 0), 0)) : '');
+      })()}</div>`;
+  },
+  fin(){
+    const t = totaisFin(DB.despesas), dif = t.Proposto.a - t.Atual.a;
+    const porCat = {}; DB.despesas.forEach(d => { if (d.cenario === 'Proposto') return; const c = calcDesp(d); porCat[c.categoria] = (porCat[c.categoria] || 0) + c.anual; });
+    const porSet = new Map(); DB.despesas.forEach(d => { if (d.cenario === 'Proposto') return; porSet.set(d.setorId, (porSet.get(d.setorId) || 0) + calcDesp(d).mensal); });
+    return `<div class="tv-h" style="--c:#4ade80"><i class="fa-solid fa-sack-dollar"></i>Financeiro<small>valores com encargos</small></div>
+      <div class="tv-kpis" style="grid-template-columns:repeat(4,1fr)">${tvKpi('#3b82f6', 'Mensal · atual', fmtRc(t.Atual.m), `${t.Atual.n} lançamentos`, true)}${tvKpi('#06b6d4', 'Anual · atual', fmtRc(t.Atual.a), '', true)}${tvKpi('#a855f7', 'Anual · proposto', fmtRc(t.Proposto.a), `${t.Proposto.n} lançamentos`, true)}${tvKpi(dif > 0 ? '#ef4444' : '#22c55e', 'Diferença anual', (dif > 0 ? '+' : '') + fmtRc(Math.abs(dif)).replace('R$', dif < 0 ? '−R$' : 'R$'), 'proposto − atual', true)}</div>
+      <div class="tv-duas"><div class="tv-caixa"><h4>Custo anual por tipo (atual)</h4>${tvBarras(Object.entries(porCat).sort((a, b) => b[1] - a[1]).map(([k, v]) => [k, v, (CATEG_FIN[k] || CATEG_FIN.Outro)[0], fmtRc(v)]))}</div>
+      <div class="tv-caixa"><h4>Setores com maior custo mensal</h4><div class="tv-lista">${[...porSet.entries()].sort((a, b) => b[1] - a[1]).slice(0, 7).map(([id, v]) => `<div><span>${esc(nomeCurto(porId.get(id)))} · ${esc((porId.get(id) || {}).nome || '')}</span><b>${fmtRc(v)}</b></div>`).join('')}</div></div></div>`;
+  },
+  val(){
+    const cont = {}; DB.validacoes.forEach(v => cont[v.status || 'Pendente'] = (cont[v.status || 'Pendente'] || 0) + 1);
+    const pend = DB.validacoes.filter(v => !v.status || v.status === 'Pendente').slice(0, 7);
+    const alto = DB.setores.filter(s => num(s.impacto) >= 4 && s.status !== 'Extinto').sort((a, b) => num(b.impacto) - num(a.impacto)).slice(0, 7);
+    return `<div class="tv-h" style="--c:#fbbf24"><i class="fa-solid fa-stamp"></i>Validações e impacto</div>
+      <div class="tv-kpis" style="grid-template-columns:repeat(4,1fr)">${['Pendente', 'Aprovado', 'Aprovado com ressalvas', 'Reprovado'].map(k => tvKpi(STATUS_VAL[k] || '#64748b', k, cont[k] || 0, 'validações', false)).join('')}</div>
+      <div class="tv-duas"><div class="tv-caixa"><h4>Aguardando validação</h4><div class="tv-lista">${pend.length ? pend.map(v => `<div><span>${esc(nomeCurto(porId.get(v.setorId)))} → ${esc(nomeCurto(porId.get(v.validadorId)))}</span><b>${v.solicitadoEm ? new Date(v.solicitadoEm).toLocaleDateString('pt-BR') : ''}</b></div>`).join('') : '<div><span>Nenhuma pendência</span><b>✓</b></div>'}</div></div>
+      <div class="tv-caixa"><h4>Setores de impacto alto ou crítico</h4><div class="tv-lista">${alto.length ? alto.map(s => `<div><span>${esc(nomeCurto(s))} · ${esc(s.nome)}</span><b style="color:${IMPACTO[num(s.impacto)][1]}">${IMPACTO[num(s.impacto)][0]}</b></div>`).join('') : '<div><span>Nenhum setor avaliado com impacto alto</span><b>—</b></div>'}</div></div></div>`;
+  }
+};
+function tvBarras(itens){ const max = Math.max(1, ...itens.map(x => x[1])); return itens.map(([n, v, c, rot]) => `<div class="tv-bar" style="--c:${c}"><span class="n">${esc(n)}</span><span class="t"><span style="width:${v / max * 100}%"></span></span><span class="v">${rot ?? v}</span></div>`).join(''); }
+function tvMontarMapa(){
+  const cx = $('#tv-mapa'), mundo = $('#tv-mundo'); if (!cx) return;
+  const L = limites();
+  let ar = ''; visiveis.forEach(s => filhosVis(s.id).forEach(k => { if (pos.has(k.id)) ar += `<path d="${caminhoAresta(s, k)}"/>`; }));
+  mundo.innerHTML = `<svg style="position:absolute;left:0;top:0;width:1px;height:1px;overflow:visible">${ar}</svg>` + visiveis.map(cardHTML).join('').replace(/ sel /g, ' ').replace(/ msel /g, ' ');
+  const r = cx.getBoundingClientRect();
+  const fit = () => { const k = Math.min((r.width - 40) / (L.x1 - L.x0), (r.height - 40) / (L.y1 - L.y0), 1.2); return { k, x:(r.width - (L.x1 - L.x0) * k) / 2 - L.x0 * k, y:(r.height - (L.y1 - L.y0) * k) / 2 - L.y0 * k }; };
+  let v = fit(); const ap = () => { mundo.style.transform = `translate(${v.x}px,${v.y}px) scale(${v.k})`; }; ap();
+  let arr = null;
+  cx.addEventListener('pointerdown', e => { arr = { x:e.clientX, y:e.clientY, vx:v.x, vy:v.y }; cx.setPointerCapture(e.pointerId); cx.classList.add('pan'); tvPausar(true); });
+  cx.addEventListener('pointermove', e => { if (!arr) return; v.x = arr.vx + e.clientX - arr.x; v.y = arr.vy + e.clientY - arr.y; ap(); });
+  const solta = () => { arr = null; cx.classList.remove('pan'); }; cx.addEventListener('pointerup', solta); cx.addEventListener('pointercancel', solta);
+  cx.addEventListener('wheel', e => { e.preventDefault(); tvPausar(true); const b = cx.getBoundingClientRect(), mx = e.clientX - b.left, my = e.clientY - b.top, k = Math.max(.08, Math.min(3, v.k * Math.exp(-e.deltaY * .0015))), q = k / v.k; v = { k, x:mx - (mx - v.x) * q, y:my - (my - v.y) * q }; ap(); }, { passive:false });
+  cx.addEventListener('dblclick', () => { v = fit(); ap(); });
+  tv.moverMapa = (dx, dy, z) => { if (z) { const b = cx.getBoundingClientRect(), mx = b.width / 2, my = b.height / 2, k = Math.max(.08, Math.min(3, v.k * z)), q = k / v.k; v = { k, x:mx - (mx - v.x) * q, y:my - (my - v.y) * q }; } else { v.x += dx; v.y += dy; } ap(); };
+}
+document.addEventListener('keydown', e => {
+  if ($('#tv-modo').classList.contains('hidden')) return;
+  const noMapa = tv.slides[tv.i] && tv.slides[tv.i][0] === 'mapa' && tv.pausado && tv.moverMapa;
+  if (e.key === 'Escape') { e.preventDefault(); fecharModoTV(); }
+  else if (noMapa && ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','+','-','='].includes(e.key)) { e.preventDefault(); const p = 60; ({ ArrowLeft:() => tv.moverMapa(p, 0), ArrowRight:() => tv.moverMapa(-p, 0), ArrowUp:() => tv.moverMapa(0, p), ArrowDown:() => tv.moverMapa(0, -p), '+':() => tv.moverMapa(0, 0, 1.2), '=':() => tv.moverMapa(0, 0, 1.2), '-':() => tv.moverMapa(0, 0, 1 / 1.2) })[e.key](); }
+  else if (e.key === 'ArrowRight' || e.key === 'PageDown') { e.preventDefault(); tvPasso(1); }
+  else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); tvPasso(-1); }
+  else if (e.key === ' ') { e.preventDefault(); tvPausar(); }
+  else if (e.key.toLowerCase() === 'f') tvTelaCheia();
+  e.stopImmediatePropagation();
+}, true);
+document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && !$('#tv-modo').classList.contains('hidden')) { /* continua em tela normal */ } });
+$('#tv-modo').addEventListener('pointermove', () => { const el = $('#tv-modo'); el.classList.remove('ocioso'); clearTimeout(tv.ocioso); tv.ocioso = setTimeout(() => el.classList.add('ocioso'), 3000); });
+
 /* ===================== MENU DO USUÁRIO ===================== */
 function menuUsuario(){
   const sync = $('#sync') ? $('#sync').outerHTML : '';
@@ -1788,6 +2201,7 @@ function menuUsuario(){
   m.innerHTML = `<div class="cx" role="dialog" aria-modal="true" style="max-width:380px"><div class="menu-u">
     <div class="cab"><span class="av">${esc(iniciais(cfg.usuario || cfg.login))}</span><div style="min-width:0"><b>${esc(cfg.usuario || cfg.login || 'Usuário')}</b><small>${esc(cfg.login || '')} · ${esc(cfg.perfil || '')}</small>${sync}</div></div>
     ${appInstalavel() ? '<button class="it" data-a="instalar"><i class="fa-solid fa-download"></i>Instalar o GABOrg como app</button>' : ''}
+    <button class="it" data-a="tv"><i class="fa-solid fa-tv"></i>Modo TV (apresentação)</button>
     <button class="it" data-a="tema"><i class="fa-solid fa-circle-half-stroke"></i>${escuro ? 'Tema claro' : 'Tema escuro'}</button>
     <button class="it" data-a="senha"><i class="fa-solid fa-key"></i>Alterar minha senha</button>
     <button class="it" data-a="config"><i class="fa-solid fa-gear"></i>Configurações</button>
@@ -1798,6 +2212,7 @@ function menuUsuario(){
     const b = e.target.closest('[data-a]'); if (!b && e.target !== m) return;
     m.remove(); const a = b && b.dataset.a;
     if (a === 'instalar') instalarApp();
+    if (a === 'tv') abrirModoTV();
     if (a === 'tema') alternarTema();
     if (a === 'senha') modalTrocarSenha(false);
     if (a === 'config') trocarVista('config');
@@ -1833,7 +2248,7 @@ atualizarInstalavel();
   $('#lg-lembrar').checked = sessao.lembrado();
   if (!cfg.token || !cfg.url || cfg.modo !== 'nuvem') return mostrarLogin();
   const d = store.get('gaborg_db', null);
-  if (d && Array.isArray(d.setores) && d.setores.length) { DB = d; ['setores','validacoes','vinculos','historico'].forEach(t => DB[t] = (DB[t] || []).map(x => novoReg(t, x))); abrirApp(); }
+  if (d && Array.isArray(d.setores) && d.setores.length) { DB = d; TABS_DB.forEach(t => DB[t] = (DB[t] || []).map(x => novoReg(t, x))); abrirApp(); }
   try {
     const me = await chamar({ action:'me' }, 30000);
     if (me.status !== 'success') { if (me.code !== 'AUTH') throw new Error(me.message); return; }
