@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.8.0';
+const VERSAO = '1.9.0';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -72,7 +72,7 @@ const TIPOS_VINCULO = ['Apoio técnico','Supervisão','Fluxo de processos','Cola
 const PALETA_AREA = ['#1e3a8a','#0891b2','#7c3aed','#ea580c','#059669','#db2777','#ca8a04','#4f46e5','#0d9488','#9333ea','#64748b','#be123c'];
 
 const CAMPOS = {
-  setores: ['id','nome','sigla','tipo','paiId','ordem','status','responsavel','contato','competencias','entregas','orcamento','custoMensal','servidores','comissionados','impacto','impactoDescricao','positivos','negativos','layout','colunas','dx','dy','atualizadoEm','atualizadoPor'],
+  setores: ['id','nome','sigla','tipo','paiId','ordem','status','responsavel','contato','competencias','entregas','orcamento','custoMensal','servidores','comissionados','impacto','impactoDescricao','positivos','negativos','layout','colunas','dx','dy','atualizadoEm','atualizadoPor','quantidade'],
   validacoes: ['id','setorId','validadorId','status','parecer','solicitadoEm','solicitadoPor','respondidoEm','respondidoPor'],
   vinculos: ['id','origemId','destinoId','tipo','descricao'],
   historico: ['id','setorId','data','usuario','acao'],
@@ -275,6 +275,8 @@ function tipoPorNome(n){
   for (const [p,tp] of r) if (t.startsWith(p)) return tp;
   return 'Outro';
 }
+const ESCOLAS_PADRAO = '631';
+const rotuloUnid = s => s.tipo === 'Unidades Escolares' ? 'escolas' : 'unidades';
 function construirDecreto(){
   const L = [], V = []; let seq = 0;
   const add = (nome, pai, extra) => { const s = novoSetor(Object.assign({ id:'d'+String(++seq).padStart(3,'0'), nome, tipo:tipoPorNome(nome), paiId:pai||'', ordem:String(seq) }, extra||{})); L.push(s); return s.id; };
@@ -301,6 +303,7 @@ function construirDecreto(){
     const nrc = add('Núcleo de Regime de Colaboração da Diretoria Regional de ' + cid, pol);
     V.push(novoReg('vinculos', { id:'dv'+String(++nv).padStart(3,'0'), origemId:nrc, destinoId:d, tipo:'Atuação regional', descricao:'Atua junto à DRE de ' + cid + ' no regime de colaboração com os municípios.' }));
   });
+  L.forEach(s => { if (s.tipo === 'Unidades Escolares' && !s.quantidade) s.quantidade = ESCOLAS_PADRAO; });
   return { setores:L, vinculos:V, validacoes:[], historico:[], rubricas:[], despesas:[], propostas:[] };
 }
 
@@ -504,7 +507,7 @@ function registrar(setorId, acao){
   DB.historico.unshift(h); if (DB.historico.length > 3000) DB.historico.length = 3000;
   enfileirar('historico', h);
 }
-const ROTULOS = { nome:'Nome', sigla:'Sigla', tipo:'Tipo', paiId:'Setor superior', status:'Situação', responsavel:'Responsável', contato:'Contato', competencias:'Competências', entregas:'Entregas', orcamento:'Orçamento anual', custoMensal:'Custo mensal', servidores:'Servidores', comissionados:'Cargos comissionados', impacto:'Impacto', impactoDescricao:'Descrição do impacto', positivos:'Pontos positivos', negativos:'Pontos negativos', layout:'Disposição dos subordinados', colunas:'Colunas', ordem:'Ordem' };
+const ROTULOS = { quantidade:'Unidades representadas', nome:'Nome', sigla:'Sigla', tipo:'Tipo', paiId:'Setor superior', status:'Situação', responsavel:'Responsável', contato:'Contato', competencias:'Competências', entregas:'Entregas', orcamento:'Orçamento anual', custoMensal:'Custo mensal', servidores:'Servidores', comissionados:'Cargos comissionados', impacto:'Impacto', impactoDescricao:'Descrição do impacto', positivos:'Pontos positivos', negativos:'Pontos negativos', layout:'Disposição dos subordinados', colunas:'Colunas', ordem:'Ordem' };
 const ESTRUTURAIS = ['paiId','layout','colunas','ordem','nome','tipo','status','dx','dy'];
 function alterar(s, campo, valor, silencioso){
   valor = String(valor ?? '');
@@ -588,11 +591,12 @@ function cardHTML(s){
   const estilo = $('#m-cor').value === 'tipo' ? ((TIPOS[s.tipo] || {}).estilo || '') : (prof.get(s.id) === 0 ? 'cheio' : '');
   const sv = statusVal(s.id), imp = num(s.impacto);
   const ser = num(s.servidores);
-  const mk = s._marcas && s._marcas.length ? [...new Set(s._marcas)] : [];
-  return `<div class="no ${estilo} ${s.status === 'Extinto' ? 'extinto' : ''} ${modos.get(s.id) === 'v' ? 'v-mode' : ''} ${s.id === selId ? 'sel' : ''} ${multi.has(s.id) ? 'msel' : ''} ${mk.length ? 'cen-m cen-' + mk[0] : ''}" data-id="${esc(s.id)}" style="--c:${corDe(s)};transform:translate(${p.x}px,${p.y}px)" title="${esc(s.nome)}">
+  const mk = s._marcas && s._marcas.length ? [...new Set(s._marcas)] : [], qt = num(s.quantidade);
+  return `<div class="no ${qt ? 'grupo' : ''} ${estilo} ${s.status === 'Extinto' ? 'extinto' : ''} ${modos.get(s.id) === 'v' ? 'v-mode' : ''} ${s.id === selId ? 'sel' : ''} ${multi.has(s.id) ? 'msel' : ''} ${mk.length ? 'cen-m cen-' + mk[0] : ''}" data-id="${esc(s.id)}" style="--c:${corDe(s)};transform:translate(${p.x}px,${p.y}px)" title="${esc(s.nome)}">
     <div class="no-tipo"><i class="fa-solid ${icTipo(s.tipo)}"></i>${esc(s.tipo)}${s.sigla ? ' · ' + esc(s.sigla) : ''}</div>
     <div class="no-nome">${esc(s.nome)}</div>
-    <div class="no-pe"><span class="r">${s.responsavel ? '<i class="fa-solid fa-user"></i> ' + esc(s.responsavel) : 'Sem responsável'}</span>${ser ? `<span><i class="fa-solid fa-users"></i> ${fmtN(ser)}</span>` : ''}${imp ? `<span class="p" style="background:${IMPACTO[imp][1]}" title="Impacto: ${IMPACTO[imp][0]}"></span>` : ''}${sv !== 'Sem validação' ? `<span class="p" style="background:${STATUS_VAL[sv]};border-radius:2px" title="Validação: ${sv}"></span>` : ''}</div>
+    ${qt ? `<span class="no-qt" title="${fmtN(qt)} ${rotuloUnid(s)} representadas neste cartão"><b>${fmtN(qt)}</b>${rotuloUnid(s)}</span>` : ''}
+    <div class="no-pe"><span class="r">${qt ? '' : s.responsavel ? '<i class="fa-solid fa-user"></i> ' + esc(s.responsavel) : 'Sem responsável'}</span>${ser ? `<span><i class="fa-solid fa-users"></i> ${fmtN(ser)}</span>` : ''}${imp ? `<span class="p" style="background:${IMPACTO[imp][1]}" title="Impacto: ${IMPACTO[imp][0]}"></span>` : ''}${sv !== 'Sem validação' ? `<span class="p" style="background:${STATUS_VAL[sv]};border-radius:2px" title="Validação: ${sv}"></span>` : ''}</div>
     ${mk.length ? `<span class="cen-tags">${marcasHTML(s)}</span>` : ''}
     ${n ? `<button class="no-exp ${ab ? 'aberto' : ''}" data-exp title="${ab ? 'Recolher' : 'Mostrar'} ${n} subordinado(s)">${ab ? '<i class="fa-solid fa-minus"></i>' : n}</button>` : ''}
   </div>`;
@@ -1045,6 +1049,7 @@ const CORPO = {
         <label><span class="rot">Situação</span>${sel('status', Object.keys(STATUS_SETOR), s.status || 'Ativo')}</label>
         <div><span class="rot">Posição entre os pares</span><div style="display:flex;gap:6px"><button class="btn btn-s btn-sm" ${i <= 0 ? 'disabled' : ''} onclick="moverOrdem(${arg(s.id)},-1)"><i class="fa-solid fa-arrow-up"></i>Antes</button><button class="btn btn-s btn-sm" ${i < 0 || i >= irmaos.length - 1 ? 'disabled' : ''} onclick="moverOrdem(${arg(s.id)},1)"><i class="fa-solid fa-arrow-down"></i>Depois</button></div></div>
       </div>
+      ${s.tipo === 'Unidades Escolares' || num(s.quantidade) ? `<label><span class="rot">Quantidade de ${rotuloUnid(s)} <small>representadas por este cartão, sem desenhar uma a uma</small></span><input class="campo" data-campo="quantidade" data-num inputmode="numeric" value="${esc(s.quantidade)}" placeholder="ex.: 631"></label>` : ''}
       <div class="g2">
         <label><span class="rot">Responsável</span><input class="campo" data-campo="responsavel" value="${esc(s.responsavel)}" placeholder="Nome do titular"></label>
         <label><span class="rot">Contato</span><input class="campo" data-campo="contato" value="${esc(s.contato)}" placeholder="E-mail ou ramal"></label>
@@ -1135,6 +1140,7 @@ $('#painel').addEventListener('change', e => {
   alterar(s, c, c === 'nome' ? v.trim() : v);
   if (c === 'nome') $('#pn-nome').textContent = s.nome;
   if (['tipo','status','paiId','layout'].includes(c)) renderPainel();
+  if (c === 'quantidade' && vistaAtual === 'mapa') desenharMapa();
   if (['orcamento','custoMensal','servidores','comissionados'].includes(c)) $('#pn-soma').innerHTML = blocoSoma(s);
 });
 
@@ -1261,7 +1267,7 @@ function renderLista(){
   $('#l-corpo').innerHTML = linhas.map(([s, d]) => {
     const n = filhosDe(s.id).length, ab = filtro || listaAbertos.has(s.id), sv = statusVal(s.id), imp = num(s.impacto), casaQ = filtro && casa(s);
     return `<tr class="${s.id === selId ? 'sel' : ''}" onclick="selecionar(${arg(s.id)})">
-      <td><div class="arv" style="padding-left:${d * 20}px;--c:${corTipo(s.tipo)}">${n ? `<button class="tg" onclick="event.stopPropagation();listaAlternar(${arg(s.id)})" title="${ab ? 'Recolher' : 'Abrir'}"><i class="fa-solid fa-chevron-${ab ? 'down' : 'right'}"></i></button>` : '<span style="width:20px"></span>'}<span class="ic"><i class="fa-solid ${icTipo(s.tipo)}"></i></span><span class="nm" style="${filtro && !casaQ ? 'opacity:.55' : ''}">${esc(s.nome)}</span>${s.sigla ? `<span class="sg">${esc(s.sigla)}</span>` : ''}${n ? `<span class="sg">· ${n}</span>` : ''}</div></td>
+      <td><div class="arv" style="padding-left:${d * 20}px;--c:${corTipo(s.tipo)}">${n ? `<button class="tg" onclick="event.stopPropagation();listaAlternar(${arg(s.id)})" title="${ab ? 'Recolher' : 'Abrir'}"><i class="fa-solid fa-chevron-${ab ? 'down' : 'right'}"></i></button>` : '<span style="width:20px"></span>'}<span class="ic"><i class="fa-solid ${icTipo(s.tipo)}"></i></span><span class="nm" style="${filtro && !casaQ ? 'opacity:.55' : ''}">${esc(s.nome)}${num(s.quantidade) ? ` <span class="chip" style="--c:#16a34a">${fmtN(s.quantidade)} ${rotuloUnid(s)}</span>` : ''}</span>${s.sigla ? `<span class="sg">${esc(s.sigla)}</span>` : ''}${n ? `<span class="sg">· ${n}</span>` : ''}</div></td>
       <td>${esc(s.tipo)}</td><td>${esc(s.responsavel) || '<span style="color:var(--mut2)">—</span>'}</td>
       <td class="n">${s.servidores ? fmtN(s.servidores) : '—'}</td><td class="n">${s.orcamento ? fmtRc(s.orcamento) : '—'}</td>
       <td>${imp ? `<span class="chip" style="--c:${IMPACTO[imp][1]}">${IMPACTO[imp][0]}</span>` : '<span style="color:var(--mut2)">—</span>'}</td>
@@ -1296,6 +1302,7 @@ function renderPainelInd(){
     <div class="kpis">
       ${kpi('#1e3a8a','fa-sitemap','Setores ativos', fmtN(base.length), `${porTipo.length} tipos · ${DB.setores.filter(s => s.status === 'Extinto' && (!fa || areaDe.get(s.id) === fa)).length} extintos`)}
       ${kpi('#0891b2','fa-users','Servidores', fmtN(soma('servidores')), `${fmtN(soma('comissionados'))} em cargos comissionados`)}
+      ${(() => { const esc_ = base.filter(s => s.tipo === 'Unidades Escolares').reduce((t, s) => t + num(s.quantidade), 0); return esc_ ? kpi('#16a34a','fa-school','Unidades escolares', fmtN(esc_), 'representadas no mapa por um cartão') : ''; })()}
       ${kpi('#16a34a','fa-coins','Orçamento anual', fmtRc(soma('orcamento')), `custo mensal ${fmtRc(soma('custoMensal'))}`)}
       ${kpi('#d97706','fa-stamp','Validações pendentes', fmtN(pend), `${vals.length} pedidas no total`)}
       ${kpi('#7c3aed','fa-list-check','Cadastro completo', compl + '%', `${comResp} com responsável · ${comComp} com competências`)}
@@ -1481,8 +1488,12 @@ function sair(){
   if (fila.length && !confirm(`${fila.length} alteração(ões) ainda não chegaram à planilha. Elas ficam guardadas neste navegador e serão enviadas quando você entrar de novo. Sair mesmo assim?`)) return;
   cfg.token = ''; sessao.set(''); location.reload();
 }
+function migrarEscolas(){
+  if (somenteLeitura()) return;
+  DB.setores.filter(s => s.tipo === 'Unidades Escolares' && s.quantidade === '' && s.status !== 'Extinto').forEach(s => { s.quantidade = ESCOLAS_PADRAO; enfileirar('setores', s); });
+}
 function abrirApp(){
-  indexar();
+  indexar(); migrarEscolas();
   if (!store.get('gaborg_abertos', null)) { abertos = new Set(raizes().map(r => r.id)); salvarAbertos(); }
   $('#login').classList.add('hidden'); $('#app').classList.remove('hidden');
   preencherUsuario(); statusSync();
@@ -2646,7 +2657,7 @@ const TV_SLIDE = {
     const at = DB.setores.filter(s => s.status !== 'Extinto'), soma = k => at.reduce((a, s) => a + num(s[k]), 0);
     const pend = DB.validacoes.filter(v => !v.status || v.status === 'Pendente').length, f = totaisFin(DB.despesas);
     return `<div class="tv-h" style="--c:#60a5fa"><i class="fa-solid fa-building-columns"></i>Secretaria de Estado de Educação<small>Decreto nº 2.236/2026</small></div>
-      <div class="tv-kpis">${tvKpi('#3b82f6', 'Setores ativos', at.length.toLocaleString('pt-BR'), `${areas.length} áreas`)}${tvKpi('#22c55e', 'Servidores', soma('servidores').toLocaleString('pt-BR'), `${soma('comissionados').toLocaleString('pt-BR')} comissionados`)}${tvKpi('#a855f7', 'Custo mensal', fmtRc(f.Atual.m), f.Proposto.m ? `proposto ${fmtRc(f.Proposto.m)}` : 'lançamentos atuais', true)}${tvKpi('#f59e0b', 'Validações pendentes', pend, `${DB.validacoes.length} no total`)}${tvKpi('#ef4444', 'Sem responsável', at.filter(s => !s.responsavel && filhosDe(s.id).length).length, 'chefias a definir')}</div>
+      <div class="tv-kpis">${tvKpi('#3b82f6', 'Setores ativos', at.length.toLocaleString('pt-BR'), `${areas.length} áreas${(() => { const e = at.filter(s => s.tipo === 'Unidades Escolares').reduce((t, s) => t + num(s.quantidade), 0); return e ? ' · ' + e.toLocaleString('pt-BR') + ' escolas' : ''; })()}`)}${tvKpi('#22c55e', 'Servidores', soma('servidores').toLocaleString('pt-BR'), `${soma('comissionados').toLocaleString('pt-BR')} comissionados`)}${tvKpi('#a855f7', 'Custo mensal', fmtRc(f.Atual.m), f.Proposto.m ? `proposto ${fmtRc(f.Proposto.m)}` : 'lançamentos atuais', true)}${tvKpi('#f59e0b', 'Validações pendentes', pend, `${DB.validacoes.length} no total`)}${tvKpi('#ef4444', 'Sem responsável', at.filter(s => !s.responsavel && filhosDe(s.id).length).length, 'chefias a definir')}</div>
       <div class="tv-duas"><div class="tv-caixa"><h4>Setores por tipo</h4>${tvBarras(Object.entries(at.reduce((a, s) => (a[s.tipo] = (a[s.tipo] || 0) + 1, a), {})).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([t, n]) => [t, n, corTipo(t), n]))}</div>
       <div class="tv-caixa"><h4>Maiores áreas (setores)</h4>${tvBarras(areas.map(a => [nomeCurto(porId.get(a)), DB.setores.filter(s => areaDe.get(s.id) === a && s.status !== 'Extinto').length, corArea(a)]).sort((a, b) => b[1] - a[1]).slice(0, 8).map(x => [x[0], x[1], x[2], x[1]]))}</div></div>`;
   },
