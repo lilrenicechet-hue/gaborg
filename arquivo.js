@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.4.0';
+const VERSAO = '1.6.0';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -76,8 +76,8 @@ const CAMPOS = {
   validacoes: ['id','setorId','validadorId','status','parecer','solicitadoEm','solicitadoPor','respondidoEm','respondidoPor'],
   vinculos: ['id','origemId','destinoId','tipo','descricao'],
   historico: ['id','setorId','data','usuario','acao'],
-  rubricas: ['id','codigo','nome','categoria','valorMensal','encargos','meses','observacao','ativo','atualizadoEm','atualizadoPor'],
-  despesas: ['id','setorId','rubricaId','descricao','quantidade','valorUnitario','meses','cenario','observacao','atualizadoEm','atualizadoPor']
+  rubricas: ['id','codigo','nome','categoria','valorMensal','encargos','meses','observacao','ativo','atualizadoEm','atualizadoPor','percEfetivo','fonte'],
+  despesas: ['id','setorId','rubricaId','descricao','quantidade','valorUnitario','meses','cenario','observacao','atualizadoEm','atualizadoPor','vinculo']
 };
 const TABS_DB = ['setores','validacoes','vinculos','historico','rubricas','despesas'];
 
@@ -1793,6 +1793,50 @@ const CATEG_FIN = {
   'Diárias e passagens':['#ca8a04','fa-plane'], 'Outro':['#64748b','fa-ellipsis']
 };
 const CENARIOS = ['Atual', 'Proposto'];
+/* Subsídio dos cargos em comissão do Poder Executivo de MT (inclui a SEDUC-MT):
+ * Anexo V da LC nº 266/2006, na redação da LC nº 755, de 12/01/2023 (D.O. 13/01/2023).
+ * % efetivo = percentual do subsídio pago como gratificação ao servidor efetivo/de carreira nomeado no cargo. */
+const DGA_FONTE = 'LC 755/2023 (Anexo V da LC 266/2006)';
+const DGA_OFICIAL = [['DGA-1',25096.81,70],['DGA-2',12891.56,70],['DGA-3',9436.62,70],['DGA-4',7700.56,70],['DGA-5',5534.78,70],['DGA-6',4273.12,70],['DGA-7',3217.73,85],['DGA-8',3032.10,85],['DGA-9',1794.51,85],['DGA-10',1344.16,85]];
+function carregarDGA(sobrescrever){
+  let novos = 0, atualizados = 0;
+  DGA_OFICIAL.forEach(([cod, val, pe]) => {
+    let r = DB.rubricas.find(x => String(x.codigo).trim().toUpperCase().replace(/\s+/g, '') === cod);
+    const dados = { valorMensal:String(val), percEfetivo:String(pe), fonte:DGA_FONTE, categoria:'Cargo em comissão (DGA)' };
+    if (!r) {
+      r = novoReg('rubricas', Object.assign({ id:novoId('rb'), codigo:cod, nome:'Cargo em comissão – símbolo ' + cod, encargos:'', meses:'12', ativo:'Sim', observacao:'Subsídio do comissionado; servidor efetivo recebe ' + pe + '% como gratificação' }, dados, { atualizadoEm:agora(), atualizadoPor:cfg.usuario || '' }));
+      DB.rubricas.push(r); enfileirar('rubricas', r); novos++;
+    } else if (sobrescrever || !numBR(r.valorMensal) || r.percEfetivo === '') {
+      if (!sobrescrever && numBR(r.valorMensal)) delete dados.valorMensal;
+      Object.assign(r, dados, { atualizadoEm:agora(), atualizadoPor:cfg.usuario || '' }); enfileirar('rubricas', r); atualizados++;
+    }
+  });
+  salvarLocal();
+  return { novos, atualizados };
+}
+async function atualizarDGAOficial(){
+  if (somenteLeitura()) return;
+  if (!await confirmar('Tabela oficial DGA', `Gravar os valores de <b>DGA-1 a DGA-10</b> da ${DGA_FONTE}? Os valores que você editou nesses símbolos serão substituídos. Os lançamentos que usam esses itens são recalculados.`, 'Atualizar valores')) return;
+  const r = carregarDGA(true); toast(`Tabela DGA: ${r.novos} incluído(s), ${r.atualizados} atualizado(s).`); renderFinanceiro();
+}
+function reajusteTabela(){
+  if (somenteLeitura()) return;
+  const cats = Object.keys(CATEG_FIN);
+  abrirModal({ titulo:'Aplicar reajuste', rotulo:'Aplicar', largura:460,
+    html:`<p>Aplica um percentual (ex.: revisão geral anual) sobre o valor mensal dos itens escolhidos. Arredonda em centavos e registra na observação.</p>
+      <div class="g2"><label><span class="rot">Percentual (%)</span><input id="rj-p" class="campo" type="number" step="0.01" required placeholder="ex.: 4,83"></label>
+      <label><span class="rot">Aplicar em</span><select id="rj-c" class="campo"><option value="Cargo em comissão (DGA)">Cargos em comissão (DGA)</option><option value="">Todos os itens</option>${cats.filter(c => c !== 'Cargo em comissão (DGA)').map(c => `<option>${c}</option>`).join('')}</select></label></div>
+      <label><span class="rot">Referência <small>opcional</small></span><input id="rj-r" class="campo" placeholder="ex.: RGA 2025 – Lei nº 12.793/2025"></label>`,
+    aoConfirmar: async m => {
+      const pct = numBR(m.querySelector('#rj-p').value), cat = m.querySelector('#rj-c').value, ref = m.querySelector('#rj-r').value.trim();
+      if (!pct) throw new Error('Informe o percentual.');
+      const alvo = DB.rubricas.filter(r => (!cat || r.categoria === cat) && numBR(r.valorMensal));
+      if (!alvo.length) throw new Error('Nenhum item com valor nessa categoria.');
+      alvo.forEach(r => { r.valorMensal = String(Math.round(numBR(r.valorMensal) * (1 + pct / 100) * 100) / 100); r.observacao = ((r.observacao ? r.observacao + ' · ' : '') + `Reajuste de ${pct.toLocaleString('pt-BR')}%${ref ? ' (' + ref + ')' : ''} em ${new Date().toLocaleDateString('pt-BR')}`).slice(0, 500); r.atualizadoEm = agora(); r.atualizadoPor = cfg.usuario || ''; enfileirar('rubricas', r); });
+      salvarLocal(); toast(`Reajuste de ${pct.toLocaleString('pt-BR')}% aplicado em ${alvo.length} item(ns).`); return true;
+    }
+  }).then(ok => { if (ok) renderFinanceiro(); });
+}
 const numBR = v => { let s = String(v ?? '').trim(); if (!s) return 0; if (/,\d{1,2}$/.test(s) || /^\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, '').replace(',', '.'); else s = s.replace(/[^\d.-]/g, ''); const n = Number(s); return isFinite(n) ? n : 0; };
 const fmtM = v => numBR(v).toLocaleString('pt-BR', { style:'currency', currency:'BRL' });
 const fmtM0 = v => numBR(v).toLocaleString('pt-BR', { style:'currency', currency:'BRL', maximumFractionDigits:0 });
@@ -1800,11 +1844,12 @@ let abaFinAtual = 'resumo', calcLinhas = [];
 const rubricaDe = id => DB.rubricas.find(r => r.id === id);
 function calcDesp(d){
   const r = rubricaDe(d.rubricaId) || {};
-  const unit = d.valorUnitario !== '' ? numBR(d.valorUnitario) : numBR(r.valorMensal);
+  const pe = d.vinculo === 'Efetivo' && r.percEfetivo !== undefined && r.percEfetivo !== '' ? numBR(r.percEfetivo) / 100 : 1;
+  const unit = d.valorUnitario !== '' ? numBR(d.valorUnitario) : numBR(r.valorMensal) * pe;
   const enc = numBR(r.encargos), qtd = d.quantidade === '' ? 1 : numBR(d.quantidade);
   const mensal = qtd * unit * (1 + enc / 100);
   const meses = d.meses !== '' ? numBR(d.meses) : (r.meses !== '' && r.meses != null ? numBR(r.meses) : 12);
-  return { r, unit, enc, qtd, mensal, meses, anual: mensal * meses, categoria: r.categoria || 'Outro' };
+  return { r, unit, enc, qtd, mensal, meses, anual: mensal * meses, categoria: r.categoria || 'Outro', efetivo: pe !== 1 };
 }
 function backendSemFinanceiro(){ return online() && backendVersao && backendVersao.localeCompare('1.4.0', undefined, { numeric:true }) < 0; }
 function despesasFiltradas(area){
@@ -1820,7 +1865,42 @@ function custoSetorFin(id, comSub){
   return totaisFin(DB.despesas.filter(d => ids.has(d.setorId)));
 }
 function abaFin(a){ abaFinAtual = a; document.querySelectorAll('.fin-abas button').forEach(b => b.classList.toggle('on', b.dataset.aba === a)); renderFinanceiro(); }
+/* Cargos padrão das chefias (titulares), no cenário Atual:
+ * Secretário(a) de Estado = DGA-1 · Secretários Adjuntos = DGA-2 · Superintendentes = DGA-3 · Coordenadores = DGA-5 */
+const CHEFIAS_PADRAO = [
+  { cod:'DGA-1', titulo:'Secretário(a) de Estado de Educação', teste:s => !s.paiId || !porId.has(s.paiId) },
+  { cod:'DGA-2', titulo:'Secretário(a) Adjunto(a)', teste:s => s.tipo === 'Gabinete' && /^Gabinete d[oa] Secret[aá]ri[oa] Adjunt/i.test(s.nome) },
+  { cod:'DGA-3', titulo:'Superintendente', teste:s => s.tipo === 'Superintendência' },
+  { cod:'DGA-5', titulo:'Coordenador(a)', teste:s => s.tipo === 'Coordenadoria' }
+];
+const MARCA_CHEFIA = 'Cargo padrão da chefia', MARCA_HIST = 'Financeiro: cargos padrão das chefias aplicados';
+function aplicarCargosChefia(){
+  if (somenteLeitura()) return 0;
+  carregarDGA(false);
+  const rub = cod => DB.rubricas.find(r => String(r.codigo).trim().toUpperCase() === cod);
+  let n = 0;
+  DB.setores.filter(s => s.status !== 'Extinto').forEach(s => {
+    const regra = CHEFIAS_PADRAO.find(c => c.teste(s)); if (!regra) return;
+    const r = rub(regra.cod); if (!r) return;
+    const ja = DB.despesas.some(d => d.setorId === s.id && d.observacao === MARCA_CHEFIA && (d.cenario || 'Atual') === 'Atual');
+    if (ja) return;
+    const d = novoReg('despesas', { id:novoId('fd'), setorId:s.id, rubricaId:r.id, descricao:regra.titulo, quantidade:'1', meses:'', cenario:'Atual', vinculo:'Comissionado', observacao:MARCA_CHEFIA, atualizadoEm:agora(), atualizadoPor:cfg.usuario || '' });
+    DB.despesas.push(d); enfileirar('despesas', d); n++;
+  });
+  if (n) { const raiz = raizes()[0]; registrar(raiz ? raiz.id : '', `${MARCA_HIST} (${n} lançamento(s))`); salvarLocal(); }
+  return n;
+}
+async function reaplicarCargosChefia(){
+  if (somenteLeitura()) return;
+  const n = aplicarCargosChefia();
+  toast(n ? `${n} cargo(s) de chefia lançado(s) no cenário Atual.` : 'Todas as chefias já têm o cargo padrão lançado.');
+  renderFinanceiro();
+}
 function renderFinanceiro(){
+  if (!somenteLeitura() && !DB.rubricas.some(r => /^DGA-?\d+$/i.test(String(r.codigo).trim()))) { const r = carregarDGA(false); if (r.novos) toast('Tabela DGA-1 a DGA-10 carregada (' + DGA_FONTE + '). Os valores podem ser editados.'); }
+  if (!somenteLeitura() && !DB.historico.some(x => String(x.acao).startsWith(MARCA_HIST)) && !DB.despesas.some(d => d.observacao === MARCA_CHEFIA)) {
+    const n = aplicarCargosChefia(); if (n) setTimeout(() => toast(`Cargos das chefias lançados: ${n} (Secretário DGA-1, Adjuntos DGA-2, Superintendentes DGA-3, Coordenadores DGA-5).`), 900);
+  }
   const sel = $('#f-area'), va = sel.value;
   sel.innerHTML = '<option value="">Toda a Secretaria</option>' + areas.map(a => `<option value="${esc(a)}" ${a === va ? 'selected' : ''}>${esc(nomeCurto(porId.get(a)))}</option>`).join('');
   const c = $('#f-corpo');
@@ -1878,7 +1958,10 @@ function finLancamentosCasca(){
       <div class="busca"><i class="fa-solid fa-magnifying-glass"></i><input id="fl-q" class="campo" placeholder="Buscar setor, item ou descrição" oninput="filtrarLancamentos()"></div>
       <select id="fl-cat" class="campo" onchange="filtrarLancamentos()"><option value="">Todos os tipos</option>${cats.map(c => `<option>${c}</option>`).join('')}</select>
       <select id="fl-cen" class="campo" onchange="filtrarLancamentos()"><option value="">Atual e proposto</option>${CENARIOS.map(c => `<option>${c}</option>`).join('')}</select>
-    </div><div id="fl-lista"></div>`;
+      <button class="btn btn-s so-edit" onclick="reaplicarCargosChefia()" title="Lança o cargo do titular nas chefias que ainda não têm: Secretário DGA-1, Adjuntos DGA-2, Superintendentes DGA-3, Coordenadores DGA-5"><i class="fa-solid fa-user-tie"></i>Cargos das chefias</button>
+    </div>
+    <p style="font-size:12px;color:var(--mut);margin:-4px 0 10px"><i class="fa-solid fa-circle-info"></i> Titulares lançados automaticamente no cenário Atual: Secretário(a) de Estado <b>DGA-1</b>, Secretários Adjuntos <b>DGA-2</b>, Superintendentes <b>DGA-3</b>, Coordenadores <b>DGA-5</b> — como exclusivamente comissionados. Edite cada um para mudar o vínculo (servidor efetivo), o símbolo ou copiar para o Proposto.</p>
+    <div id="fl-lista"></div>`;
 }
 function lancamentosFiltrados(){
   const q = norm(($('#fl-q') || {}).value || ''), cat = ($('#fl-cat') || {}).value || '', cen = ($('#fl-cen') || {}).value || '';
@@ -1892,9 +1975,9 @@ function filtrarLancamentos(){
   if (!l.length) { el.innerHTML = `<div class="cartao vazio">Nenhum lançamento${DB.despesas.length ? ' com esses filtros' : ''}. <button class="btn btn-p btn-sm so-edit" style="margin-left:8px" onclick="formDespesa()"><i class="fa-solid fa-plus"></i>Novo lançamento</button></div>`; return; }
   const t = totaisFin(l.map(o => o.d));
   el.innerHTML = `<div class="tab-wrap"><table class="tab"><thead><tr><th>Setor</th><th>Item</th><th class="fin-num">Qtd</th><th class="fin-num">Unitário</th><th class="fin-num">Encargos</th><th class="fin-num">Mensal</th><th class="fin-num">Meses</th><th class="fin-num">Anual</th><th>Cenário</th><th></th></tr></thead><tbody>
-    ${l.map(({ d, c, s }) => `<tr><td>${s ? `<a href="#" onclick="event.preventDefault();irPara(${arg(s.id)})"><b>${esc(nomeCurto(s))}</b></a><br><small style="color:var(--mut)">${esc(s.nome)}</small>` : '<span style="color:var(--perigo)">setor removido</span>'}</td>
+    ${l.map(({ d, c, s }) => `<tr><td>${s ? `<a href="#" style="color:var(--txt);text-decoration:none" onclick="event.preventDefault();irPara(${arg(s.id)})"><b>${esc(s.sigla ? s.sigla + ' · ' + s.nome : s.nome)}</b></a><br><small style="color:var(--mut)">${esc(caminho(s.id).slice(-2).map(nomeCurto).join(' › ') || 'Topo da estrutura')}</small>` : '<span style="color:var(--perigo)">setor removido</span>'}</td>
       <td><span class="chip" style="--c:${(CATEG_FIN[c.categoria] || CATEG_FIN.Outro)[0]}">${esc(c.r.codigo || c.categoria)}</span>${d.descricao ? `<br><small>${esc(d.descricao)}</small>` : (c.r.nome ? `<br><small style="color:var(--mut)">${esc(c.r.nome)}</small>` : '')}</td>
-      <td class="fin-num">${c.qtd.toLocaleString('pt-BR')}</td><td class="fin-num">${fmtM(c.unit)}${d.valorUnitario !== '' ? ' <small title="Valor próprio, diferente da tabela">*</small>' : ''}</td><td class="fin-num">${c.enc ? c.enc.toLocaleString('pt-BR') + '%' : '—'}</td>
+      <td class="fin-num">${c.qtd.toLocaleString('pt-BR')}</td><td class="fin-num">${fmtM(c.unit)}${d.valorUnitario !== '' ? ' <small title="Valor próprio, diferente da tabela">*</small>' : ''}${c.efetivo ? `<br><small style="color:var(--mut)">efetivo · ${numBR(c.r.percEfetivo).toLocaleString('pt-BR')}%</small>` : ''}</td><td class="fin-num">${c.enc ? c.enc.toLocaleString('pt-BR') + '%' : '—'}</td>
       <td class="fin-num"><b>${fmtM(c.mensal)}</b></td><td class="fin-num">${c.meses.toLocaleString('pt-BR')}</td><td class="fin-num">${fmtM(c.anual)}</td>
       <td><span class="chip" style="--c:${d.cenario === 'Proposto' ? '#7c3aed' : '#2563eb'}">${esc(d.cenario || 'Atual')}</span></td>
       <td><div class="u-acoes so-edit"><button class="btn btn-s btn-sm btn-i" title="Editar" onclick="formDespesa(${arg(d.id)})"><i class="fa-solid fa-pen"></i></button><button class="btn btn-s btn-sm btn-i" title="Copiar para o outro cenário" onclick="copiarCenario(${arg(d.id)})"><i class="fa-regular fa-copy"></i></button><button class="btn btn-perigo btn-sm btn-i" title="Excluir" onclick="excluirDespesa(${arg(d.id)})"><i class="fa-solid fa-trash-can"></i></button></div></td></tr>`).join('')}
@@ -1914,8 +1997,10 @@ function formDespesa(id, setorPadrao){
   if (somenteLeitura()) return toast('Seu perfil é somente leitura.', 'aviso');
   const d = DB.despesas.find(x => x.id === id) || novoReg('despesas', { setorId:setorPadrao || selId || '', quantidade:'1', cenario:'Atual' });
   const prev = m => {
-    const o = { rubricaId:m.querySelector('#fd-rub').value, quantidade:m.querySelector('#fd-qtd').value, valorUnitario:m.querySelector('#fd-val').value, meses:m.querySelector('#fd-mes').value };
-    const r = rubricaDe(o.rubricaId); m.querySelector('#fd-val').placeholder = r ? 'Tabela: ' + fmtM(r.valorMensal) : 'Valor mensal';
+    const o = { rubricaId:m.querySelector('#fd-rub').value, quantidade:m.querySelector('#fd-qtd').value, valorUnitario:m.querySelector('#fd-val').value, meses:m.querySelector('#fd-mes').value, vinculo:m.querySelector('#fd-vinc').value };
+    const r = rubricaDe(o.rubricaId), temPe = !!(r && r.percEfetivo !== '');
+    m.querySelector('#fd-vinc-cx').style.display = temPe ? '' : 'none'; if (!temPe) o.vinculo = '';
+    m.querySelector('#fd-val').placeholder = r ? 'Tabela: ' + fmtM(numBR(r.valorMensal) * (o.vinculo === 'Efetivo' ? numBR(r.percEfetivo) / 100 : 1)) : 'Valor mensal';
     m.querySelector('#fd-mes').placeholder = r && r.meses ? r.meses : '12';
     const c = calcDesp(o); m.querySelector('#fd-prev').innerHTML = `<div>Total mensal${c.enc ? ` (com ${c.enc.toLocaleString('pt-BR')}% de encargos)` : ''}<b>${fmtM(c.mensal)}</b></div><div>Total anual (${c.meses.toLocaleString('pt-BR')} meses)<b>${fmtM(c.anual)}</b></div>`;
   };
@@ -1927,10 +2012,12 @@ function formDespesa(id, setorPadrao){
       <label><span class="rot">Valor unitário mensal <small>vazio = tabela</small></span><input id="fd-val" class="campo" type="number" min="0" step="0.01" value="${esc(d.valorUnitario)}"></label></div>
       <div class="g2"><label><span class="rot">Meses no ano <small>vazio = tabela</small></span><input id="fd-mes" class="campo" type="number" min="0" max="13.34" step="any" value="${esc(d.meses)}"></label>
       <label><span class="rot">Cenário</span><select id="fd-cen" class="campo">${CENARIOS.map(c => `<option ${c === (d.cenario || 'Atual') ? 'selected' : ''}>${c}</option>`).join('')}</select></label></div>
+      <label id="fd-vinc-cx"><span class="rot">Ocupante do cargo</span><select id="fd-vinc" class="campo"><option value="Comissionado" ${d.vinculo !== 'Efetivo' ? 'selected' : ''}>Exclusivamente comissionado (100% do subsídio)</option><option value="Efetivo" ${d.vinculo === 'Efetivo' ? 'selected' : ''}>Servidor efetivo (gratificação de % do subsídio)</option></select></label>
       <label><span class="rot">Observação</span><input id="fd-obs" class="campo" value="${esc(d.observacao)}"></label>
       <div class="fin-prev" id="fd-prev"></div>`,
     aoConfirmar: async m => {
-      const v = { setorId:m.querySelector('#fd-set').value, rubricaId:m.querySelector('#fd-rub').value, descricao:m.querySelector('#fd-desc').value.trim(), quantidade:m.querySelector('#fd-qtd').value, valorUnitario:m.querySelector('#fd-val').value, meses:m.querySelector('#fd-mes').value, cenario:m.querySelector('#fd-cen').value, observacao:m.querySelector('#fd-obs').value.trim() };
+      const v = { setorId:m.querySelector('#fd-set').value, rubricaId:m.querySelector('#fd-rub').value, descricao:m.querySelector('#fd-desc').value.trim(), quantidade:m.querySelector('#fd-qtd').value, valorUnitario:m.querySelector('#fd-val').value, meses:m.querySelector('#fd-mes').value, cenario:m.querySelector('#fd-cen').value, observacao:m.querySelector('#fd-obs').value.trim(), vinculo:'' };
+      const rr = rubricaDe(v.rubricaId); if (rr && rr.percEfetivo !== '') v.vinculo = m.querySelector('#fd-vinc').value;
       if (!v.setorId) throw new Error('Escolha o setor.');
       if (!v.rubricaId && v.valorUnitario === '') throw new Error('Escolha um item da tabela ou informe o valor unitário.');
       if (!v.rubricaId && !v.descricao) throw new Error('Sem item da tabela, descreva a despesa.');
@@ -1942,7 +2029,7 @@ function formDespesa(id, setorPadrao){
     }
   }).then(ok => { if (ok) { toast('Lançamento salvo.'); posFinanceiro(); } });
   const m = document.querySelectorAll('.modal'); const mm = m[m.length - 1];
-  mm.querySelectorAll('#fd-rub,#fd-qtd,#fd-val,#fd-mes').forEach(i => i.addEventListener('input', () => prev(mm))); prev(mm);
+  mm.querySelectorAll('#fd-rub,#fd-qtd,#fd-val,#fd-mes,#fd-vinc').forEach(i => i.addEventListener('input', () => prev(mm))); prev(mm);
 }
 function posFinanceiro(){ salvarLocal(); if (vistaAtual === 'financeiro') renderFinanceiro(); if (selId && $('#painel').classList.contains('aberto')) renderPainel(); }
 function copiarCenario(id){
@@ -1963,23 +2050,26 @@ function finTabela(){
   const ro = somenteLeitura() ? 'disabled' : '';
   const lin = r => `<tr data-id="${esc(r.id)}" style="${r.ativo === 'Não' ? 'opacity:.55' : ''}">
     <td><input class="campo fin-edit" ${ro} value="${esc(r.codigo)}" onchange="alterarRubrica(${arg(r.id)},'codigo',this.value)" placeholder="DGA-1"></td>
-    <td><input class="campo fin-edit" ${ro} value="${esc(r.nome)}" onchange="alterarRubrica(${arg(r.id)},'nome',this.value)" placeholder="Descrição"></td>
+    <td><input class="campo fin-edit" ${ro} value="${esc(r.nome)}" onchange="alterarRubrica(${arg(r.id)},'nome',this.value)" placeholder="Descrição">${r.fonte ? `<small style="display:block;color:var(--mut);font-size:10.5px;margin-top:2px" title="Fonte / base legal"><i class="fa-solid fa-scale-balanced"></i> ${esc(r.fonte)}</small>` : ''}</td>
     <td><select class="campo fin-edit" ${ro} onchange="alterarRubrica(${arg(r.id)},'categoria',this.value)">${Object.keys(CATEG_FIN).map(c => `<option ${c === r.categoria ? 'selected' : ''}>${c}</option>`).join('')}</select></td>
     <td><input class="campo fin-edit n" ${ro} type="number" min="0" step="0.01" value="${esc(r.valorMensal)}" onchange="alterarRubrica(${arg(r.id)},'valorMensal',this.value)" placeholder="0,00"></td>
     <td><input class="campo fin-edit n" ${ro} type="number" min="0" step="0.01" value="${esc(r.encargos)}" onchange="alterarRubrica(${arg(r.id)},'encargos',this.value)" placeholder="0" style="min-width:60px"></td>
     <td><input class="campo fin-edit n" ${ro} type="number" min="0" max="13.34" step="any" value="${esc(r.meses)}" onchange="alterarRubrica(${arg(r.id)},'meses',this.value)" placeholder="12" style="min-width:60px"></td>
+    <td><input class="campo fin-edit n" ${ro} type="number" min="0" max="100" step="0.01" value="${esc(r.percEfetivo)}" onchange="alterarRubrica(${arg(r.id)},'percEfetivo',this.value)" placeholder="—" style="min-width:60px" title="Percentual do valor pago quando o ocupante é servidor efetivo (gratificação)"></td>
     <td class="fin-num">${usos(r.id)}</td>
     <td><div class="u-acoes so-edit"><button class="btn btn-s btn-sm btn-i" title="${r.ativo === 'Não' ? 'Reativar' : 'Desativar (some da lista de lançamento)'}" onclick="alterarRubrica(${arg(r.id)},'ativo','${r.ativo === 'Não' ? 'Sim' : 'Não'}');renderFinanceiro()"><i class="fa-solid ${r.ativo === 'Não' ? 'fa-eye' : 'fa-eye-slash'}"></i></button><button class="btn btn-perigo btn-sm btn-i" title="Excluir" onclick="excluirRubrica(${arg(r.id)})"><i class="fa-solid fa-trash-can"></i></button></div></td></tr>`;
   const ord = [...DB.rubricas].sort((a, b) => Object.keys(CATEG_FIN).indexOf(a.categoria) - Object.keys(CATEG_FIN).indexOf(b.categoria) || String(a.codigo).localeCompare(String(b.codigo), 'pt-BR', { numeric:true }));
   return `<div class="cartao bl" style="margin-bottom:14px"><h3><i class="fa-solid fa-table"></i>Tabela de valores</h3>
       <p class="s">Valores mensais usados nos cálculos: símbolos DGA dos cargos em comissão, funções gratificadas, bolsas e demais itens. <b>Encargos</b> soma um percentual ao valor (ex.: contribuição patronal). <b>Meses por ano</b>: 12 por padrão; use 13,33 para incluir 13º e 1/3 de férias. Mudar um valor aqui atualiza todos os lançamentos que usam o item.</p>
-      <div class="acoes so-edit"><button class="btn btn-p" onclick="novaRubrica()"><i class="fa-solid fa-plus"></i>Novo item</button>${DB.rubricas.length ? '' : '<button class="btn btn-s" onclick="modeloRubricas()"><i class="fa-solid fa-wand-magic-sparkles"></i>Criar modelo inicial (DGA, funções e bolsas)</button>'}</div></div>
-    ${DB.rubricas.length ? `<div class="tab-wrap"><table class="tab"><thead><tr><th style="min-width:100px">Código</th><th style="min-width:200px">Descrição</th><th style="min-width:170px">Tipo</th><th class="fin-num" style="min-width:120px">Valor mensal (R$)</th><th class="fin-num">Encargos %</th><th class="fin-num">Meses/ano</th><th class="fin-num">Usos</th><th></th></tr></thead><tbody>${ord.map(lin).join('')}</tbody></table></div>` : '<div class="cartao vazio">Nenhum item cadastrado.</div>'}`;
+      <div class="acoes so-edit"><button class="btn btn-p" onclick="novaRubrica()"><i class="fa-solid fa-plus"></i>Novo item</button><button class="btn btn-s" onclick="atualizarDGAOficial()"><i class="fa-solid fa-scale-balanced"></i>Atualizar DGA pela LC 755/2023</button><button class="btn btn-s" onclick="reajusteTabela()"><i class="fa-solid fa-percent"></i>Aplicar reajuste (RGA)</button>${DB.rubricas.some(r => r.categoria !== 'Cargo em comissão (DGA)') ? '' : '<button class="btn btn-s" onclick="modeloRubricas()"><i class="fa-solid fa-wand-magic-sparkles"></i>Incluir modelos de função, bolsa e diária</button>'}</div>
+      <p class="s" style="margin-top:10px;font-size:12px"><i class="fa-solid fa-circle-info"></i> DGA-1 a DGA-10: subsídio dos cargos em comissão do Executivo de MT, conforme o Anexo V da LC 266/2006 na redação da <b>LC nº 755, de 12/01/2023</b>. O servidor efetivo nomeado em cargo DGA recebe a gratificação de <b>70%</b> (DGA-1 a 6) ou <b>85%</b> (DGA-7 a 10) desse valor. Se houver reajuste posterior (revisão geral anual), use "Aplicar reajuste" ou edite os valores.</p></div>
+    ${DB.rubricas.length ? `<div class="tab-wrap"><table class="tab"><thead><tr><th style="min-width:100px">Código</th><th style="min-width:200px">Descrição</th><th style="min-width:170px">Tipo</th><th class="fin-num" style="min-width:120px">Valor mensal (R$)</th><th class="fin-num">Encargos %</th><th class="fin-num">Meses/ano</th><th class="fin-num" title="Percentual pago ao servidor efetivo nomeado no cargo">% efetivo</th><th class="fin-num">Usos</th><th></th></tr></thead><tbody>${ord.map(lin).join('')}</tbody></table></div>` : '<div class="cartao vazio">Nenhum item cadastrado.</div>'}`;
 }
 function alterarRubrica(id, campo, valor){
   if (somenteLeitura()) return;
   const r = rubricaDe(id); if (!r || r[campo] === String(valor)) return;
   r[campo] = String(valor); r.atualizadoEm = agora(); r.atualizadoPor = cfg.usuario || '';
+  if (campo === 'valorMensal' && r.fonte && !/editado/.test(r.fonte)) r.fonte += ' · valor editado em ' + new Date().toLocaleDateString('pt-BR');
   enfileirar('rubricas', r); salvarLocal();
 }
 function novaRubrica(){
@@ -1997,41 +2087,41 @@ async function excluirRubrica(id){
 }
 function modeloRubricas(){
   if (somenteLeitura()) return;
+  carregarDGA(false);
   const base = [];
-  for (let i = 1; i <= 6; i++) base.push(['DGA-' + i, 'Cargo em comissão – símbolo DGA-' + i, 'Cargo em comissão (DGA)']);
   base.push(['FG', 'Função gratificada', 'Função gratificada'], ['BOLSA', 'Bolsa (programa)', 'Bolsa'], ['EFETIVO', 'Servidor efetivo (média)', 'Pessoal efetivo'], ['DIÁRIA', 'Diária', 'Diárias e passagens']);
-  base.forEach(([codigo, nome, categoria]) => { const r = novoReg('rubricas', { id:novoId('rb'), codigo, nome, categoria, valorMensal:'', encargos:'', meses:'12', ativo:'Sim', observacao:'Preencher com o valor vigente', atualizadoEm:agora(), atualizadoPor:cfg.usuario || '' }); DB.rubricas.push(r); enfileirar('rubricas', r); });
-  renderFinanceiro(); toast('Modelo criado. Preencha os valores mensais de cada item e ajuste os símbolos.');
+  base.filter(([codigo]) => !DB.rubricas.some(x => x.codigo === codigo)).forEach(([codigo, nome, categoria]) => { const r = novoReg('rubricas', { id:novoId('rb'), codigo, nome, categoria, valorMensal:'', encargos:'', meses:'12', ativo:'Sim', observacao:'Preencher com o valor vigente', atualizadoEm:agora(), atualizadoPor:cfg.usuario || '' }); DB.rubricas.push(r); enfileirar('rubricas', r); });
+  renderFinanceiro(); toast('Modelo criado: DGA-1 a DGA-10 com os valores da LC 755/2023 e itens de função, bolsa, efetivo e diária para preencher.');
 }
 /* Calculadora */
 function finCalc(){
-  if (!calcLinhas.length) calcLinhas = [{ rub:'', qtd:'1', meses:'' }];
+  if (!calcLinhas.length) calcLinhas = [{ rub:'', qtd:'1', meses:'', vinc:'Comissionado' }];
   return `<div class="cartao bl"><h3><i class="fa-solid fa-calculator"></i>Calculadora rápida</h3><p class="s">Simule combinações (ex.: 3 × DGA-2 + 10 bolsas) sem gravar nada. Se quiser, lance o resultado num setor.</p>
     <div id="calc-ls" style="margin-top:12px"></div>
-    <div class="acoes" style="justify-content:space-between;flex-wrap:wrap"><button class="btn btn-s" onclick="calcLinhas.push({rub:'',qtd:'1',meses:''});desenharCalc()"><i class="fa-solid fa-plus"></i>Adicionar linha</button><div class="fin-prev" id="calc-tot" style="flex:1;max-width:420px"></div></div>
+    <div class="acoes" style="justify-content:space-between;flex-wrap:wrap"><button class="btn btn-s" onclick="calcLinhas.push({rub:'',qtd:'1',meses:'',vinc:'Comissionado'});desenharCalc()"><i class="fa-solid fa-plus"></i>Adicionar linha</button><div class="fin-prev" id="calc-tot" style="flex:1;max-width:420px"></div></div>
     <div class="acoes so-edit" style="margin-top:12px;flex-wrap:wrap"><select id="calc-set" class="campo" style="width:auto;max-width:100%"><option value="">Lançar em qual setor?</option>${opcoesSetores(selId)}</select><select id="calc-cen" class="campo" style="width:auto">${CENARIOS.map(c => `<option>${c}</option>`).join('')}</select><button class="btn btn-p" onclick="lancarCalc()"><i class="fa-solid fa-file-import"></i>Lançar no setor</button></div></div>`;
 }
 function desenharCalc(){
   const el = $('#calc-ls'); if (!el) return;
-  el.innerHTML = calcLinhas.map((l, i) => { const c = calcDesp({ rubricaId:l.rub, quantidade:l.qtd, valorUnitario:'', meses:l.meses }); return `<div class="calc-l"><select class="campo" onchange="calcLinhas[${i}].rub=this.value;desenharCalc()">${opcoesRubricas(l.rub).replace('— Sem item da tabela (valor próprio) —', 'Escolha um item')}</select><input class="campo" type="number" min="0" step="any" value="${esc(l.qtd)}" title="Quantidade" oninput="calcLinhas[${i}].qtd=this.value;desenharCalcTot(this,${i})"><input class="campo" type="number" min="0" step="any" value="${esc(l.meses)}" placeholder="${c.meses}" title="Meses" oninput="calcLinhas[${i}].meses=this.value;desenharCalcTot(this,${i})"><span class="v" data-i="${i}">${fmtM(c.mensal)}/mês</span><button class="btn btn-s btn-i" title="Remover" onclick="calcLinhas.splice(${i},1);desenharCalc()"><i class="fa-solid fa-xmark"></i></button></div>`; }).join('');
+  el.innerHTML = calcLinhas.map((l, i) => { const c = calcDesp({ rubricaId:l.rub, quantidade:l.qtd, valorUnitario:'', meses:l.meses, vinculo:l.vinc }); const rr = rubricaDe(l.rub), temPe = !!(rr && rr.percEfetivo !== ''); return `<div class="calc-l"><select class="campo" onchange="calcLinhas[${i}].rub=this.value;desenharCalc()">${opcoesRubricas(l.rub).replace('— Sem item da tabela (valor próprio) —', 'Escolha um item')}</select><input class="campo" type="number" min="0" step="any" value="${esc(l.qtd)}" title="Quantidade" oninput="calcLinhas[${i}].qtd=this.value;desenharCalcTot(this,${i})"><input class="campo" type="number" min="0" step="any" value="${esc(l.meses)}" placeholder="${c.meses}" title="Meses" oninput="calcLinhas[${i}].meses=this.value;desenharCalcTot(this,${i})"><span class="v" data-i="${i}">${fmtM(c.mensal)}/mês</span>${temPe ? `<select class="campo" style="grid-column:1/-2;height:32px;font-size:12px" onchange="calcLinhas[${i}].vinc=this.value;desenharCalc()"><option value="Comissionado" ${l.vinc !== 'Efetivo' ? 'selected' : ''}>Exclusivamente comissionado (100%)</option><option value="Efetivo" ${l.vinc === 'Efetivo' ? 'selected' : ''}>Servidor efetivo (${numBR(rr.percEfetivo).toLocaleString('pt-BR')}% do subsídio)</option></select>` : ''}<button class="btn btn-s btn-i" title="Remover" onclick="calcLinhas.splice(${i},1);desenharCalc()"><i class="fa-solid fa-xmark"></i></button></div>`; }).join('');
   desenharCalcTot();
 }
 function desenharCalcTot(){
-  let m = 0, a = 0; calcLinhas.forEach((l, i) => { const c = calcDesp({ rubricaId:l.rub, quantidade:l.qtd, valorUnitario:'', meses:l.meses }); m += c.mensal; a += c.anual; const v = document.querySelector(`.calc-l .v[data-i="${i}"]`); if (v) v.textContent = fmtM(c.mensal) + '/mês'; });
+  let m = 0, a = 0; calcLinhas.forEach((l, i) => { const c = calcDesp({ rubricaId:l.rub, quantidade:l.qtd, valorUnitario:'', meses:l.meses, vinculo:l.vinc }); m += c.mensal; a += c.anual; const v = document.querySelector(`.calc-l .v[data-i="${i}"]`); if (v) v.textContent = fmtM(c.mensal) + '/mês'; });
   const t = $('#calc-tot'); if (t) t.innerHTML = `<div>Total mensal<b>${fmtM(m)}</b></div><div>Total anual<b>${fmtM(a)}</b></div>`;
 }
 function lancarCalc(){
   if (somenteLeitura()) return;
   const sid = $('#calc-set').value, cen = $('#calc-cen').value; if (!sid) return toast('Escolha o setor.', 'aviso');
   const ok = calcLinhas.filter(l => l.rub && numBR(l.qtd)); if (!ok.length) return toast('Nenhuma linha com item e quantidade.', 'aviso');
-  ok.forEach(l => { const d = novoReg('despesas', { id:novoId('fd'), setorId:sid, rubricaId:l.rub, quantidade:l.qtd, meses:l.meses, cenario:cen, atualizadoEm:agora(), atualizadoPor:cfg.usuario || '' }); DB.despesas.push(d); enfileirar('despesas', d); });
+  ok.forEach(l => { const rr = rubricaDe(l.rub); const d = novoReg('despesas', { id:novoId('fd'), setorId:sid, rubricaId:l.rub, quantidade:l.qtd, meses:l.meses, cenario:cen, vinculo:rr && rr.percEfetivo !== '' ? (l.vinc || 'Comissionado') : '', atualizadoEm:agora(), atualizadoPor:cfg.usuario || '' }); DB.despesas.push(d); enfileirar('despesas', d); });
   registrar(sid, `Financeiro: ${ok.length} lançamento(s) pela calculadora (${cen})`);
   toast(`${ok.length} lançamento(s) feitos em ${nomeCurto(porId.get(sid))}.`); calcLinhas = []; abaFin('lancamentos');
 }
 function exportarFinanceiro(){
   const q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"', n = v => numBR(v).toFixed(2).replace('.', ',');
   const l = DB.despesas.map(d => ({ d, c:calcDesp(d), s:porId.get(d.setorId) }));
-  const csv = '﻿' + ['Setor;Sigla;Área;Item;Tipo;Descrição;Quantidade;Valor unitário;Encargos %;Mensal;Meses;Anual;Cenário;Observação', ...l.map(({ d, c, s }) => [s ? s.nome : '(removido)', s ? s.sigla : '', nomeCurto(porId.get(areaDe.get(d.setorId))), c.r.codigo || '', c.categoria, d.descricao, c.qtd, n(c.unit), c.enc, n(c.mensal), c.meses, n(c.anual), d.cenario || 'Atual', d.observacao].map(q).join(';'))].join('\r\n');
+  const csv = '﻿' + ['Setor;Sigla;Área;Item;Tipo;Descrição;Ocupante;Quantidade;Valor unitário;Encargos %;Mensal;Meses;Anual;Cenário;Observação', ...l.map(({ d, c, s }) => [s ? s.nome : '(removido)', s ? s.sigla : '', nomeCurto(porId.get(areaDe.get(d.setorId))), c.r.codigo || '', c.categoria, d.descricao, d.vinculo === 'Efetivo' ? 'Servidor efetivo' : (d.vinculo ? 'Comissionado' : ''), c.qtd, n(c.unit), c.enc, n(c.mensal), c.meses, n(c.anual), d.cenario || 'Atual', d.observacao].map(q).join(';'))].join('\r\n');
   baixarArquivo('gaborg-financeiro-' + new Date().toISOString().slice(0, 10) + '.csv', csv, 'text/csv;charset=utf-8');
 }
 /* Bloco financeiro no painel do setor (aba Valores) */
@@ -2193,6 +2283,10 @@ document.addEventListener('keydown', e => {
 document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && !$('#tv-modo').classList.contains('hidden')) { /* continua em tela normal */ } });
 $('#tv-modo').addEventListener('pointermove', () => { const el = $('#tv-modo'); el.classList.remove('ocioso'); clearTimeout(tv.ocioso); tv.ocioso = setTimeout(() => el.classList.add('ocioso'), 3000); });
 
+/* Erros inesperados depois de aberto: avisa em vez de falhar em silêncio */
+window.addEventListener('error', e => { if (window.GABORG_INICIADO && e.message && typeof toast === 'function') toast('Erro: ' + e.message + ' — recarregue a página. Se repetir, envie esta mensagem ao suporte.', 'erro'); });
+window.addEventListener('unhandledrejection', e => { const m = e.reason && (e.reason.message || String(e.reason)); if (window.GABORG_INICIADO && m && !/abort/i.test(m) && typeof toast === 'function') console.warn('GABOrg:', m); });
+
 /* ===================== MENU DO USUÁRIO ===================== */
 function menuUsuario(){
   const sync = $('#sync') ? $('#sync').outerHTML : '';
@@ -2243,7 +2337,10 @@ async function instalarApp(){
 if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister())).catch(() => {});
 atualizarInstalavel();
 
+window.GABORG_VERSAO_JS = VERSAO;
 (async function iniciar(){
+  window.GABORG_INICIADO = true;
+  if (window.GABORG_VERSAO_HTML && window.GABORG_VERSAO_HTML !== VERSAO) setTimeout(() => toast(`Versões diferentes: index.html ${window.GABORG_VERSAO_HTML} × arquivo.js ${VERSAO}. Envie os dois arquivos da mesma versão ao GitHub.`, 'aviso'), 1500);
   $('#lg-login').value = cfg.login || ''; $('#lg-url').value = cfg.url || URL_PADRAO;
   $('#lg-lembrar').checked = sessao.lembrado();
   if (!cfg.token || !cfg.url || cfg.modo !== 'nuvem') return mostrarLogin();

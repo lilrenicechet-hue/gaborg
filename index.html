@@ -509,6 +509,41 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background
 </style>
 </head>
 <body>
+<!-- Vigia de inicialização: se o arquivo.js não carregar ou falhar, mostra o motivo em vez de uma tela vazia -->
+<script>
+window.GABORG_VERSAO_HTML = '1.6.0'; window.GABORG_ERROS = [];
+window.addEventListener('error', function (e) {
+  var alvo = e.target || {};
+  if (alvo.tagName === 'SCRIPT') window.GABORG_ERROS.push('Não foi possível baixar o arquivo ' + (alvo.getAttribute('src') || '') + '.');
+  else if (e.message) window.GABORG_ERROS.push(e.message + (e.lineno ? ' (linha ' + e.lineno + ')' : ''));
+}, true);
+window.GABORG_DIAGNOSTICO = function (forcar) {
+  if (window.GABORG_INICIADO && !forcar) return;
+  var d = document.getElementById('gaborg-diag'); if (d) d.remove();
+  var semJs = typeof window.trocarVista !== 'function';
+  var erros = window.GABORG_ERROS.slice(-4).map(function (x) { return '<li>' + String(x).replace(/[<>&]/g, '') + '</li>'; }).join('');
+  d = document.createElement('div'); d.id = 'gaborg-diag';
+  d.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;background:#0b1222;font-family:Inter,system-ui,sans-serif;color:#e2e8f0';
+  d.innerHTML = '<div style="max-width:560px;background:#131c2e;border:1px solid #25324a;border-radius:16px;padding:24px;line-height:1.55;font-size:14px">'
+    + '<div style="font-size:20px;font-weight:800;color:#fff;margin-bottom:6px">O GABOrg não conseguiu abrir</div>'
+    + (semJs ? '<p>O arquivo <b>arquivo.js</b> não foi carregado. Confira no GitHub se ele está <b>na mesma pasta</b> do index.html, com o nome exatamente <b>arquivo.js</b> (minúsculo, sem "(1)"), e se os dois arquivos são da <b>mesma versão</b>.</p>'
+             : '<p>O sistema encontrou um erro ao iniciar. Normalmente é o navegador usando uma cópia antiga de um dos arquivos.</p>')
+    + (erros ? '<p style="margin:10px 0 4px;color:#94a3b8">Detalhe técnico:</p><ul style="margin:0;padding-left:18px;color:#fca5a5;font-size:12.5px">' + erros + '</ul>' : '')
+    + '<p style="color:#94a3b8;font-size:12.5px;margin-top:12px">Versão do index.html: ' + window.GABORG_VERSAO_HTML + (window.GABORG_VERSAO_JS ? ' · arquivo.js: ' + window.GABORG_VERSAO_JS : '') + '</p>'
+    + '<button onclick="GABORG_LIMPAR()" style="margin-top:12px;height:42px;padding:0 18px;border:0;border-radius:10px;background:#2563eb;color:#fff;font-weight:700;font-size:14px;cursor:pointer">Limpar cópia antiga e recarregar</button></div>';
+  document.body.appendChild(d);
+};
+window.GABORG_LIMPAR = function () {
+  var feito = function () { location.replace(location.pathname + '?v=' + Date.now() + location.hash); };
+  try {
+    var p = [];
+    if (window.caches && caches.keys) p.push(caches.keys().then(function (ks) { return Promise.all(ks.map(function (k) { return caches.delete(k); })); }));
+    if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) p.push(navigator.serviceWorker.getRegistrations().then(function (rs) { return Promise.all(rs.map(function (r) { return r.unregister(); })); }));
+    Promise.all(p).then(feito, feito);
+  } catch (e) { feito(); }
+};
+window.addEventListener('load', function () { setTimeout(function () { window.GABORG_DIAGNOSTICO(); }, 2500); });
+</script>
 
 <!-- ===================== LOGIN ===================== -->
 <div id="login" class="hidden">
@@ -736,6 +771,6 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background
 
 <div id="toast"><i class="fa-solid fa-check"></i><span></span></div>
 
-<script src="arquivo.js"></script>
+<script src="arquivo.js?v=1.6.0" onerror="window.GABORG_ERROS.push('O arquivo arquivo.js não foi encontrado no servidor (erro 404).');GABORG_DIAGNOSTICO()"></script>
 </body>
 </html>
