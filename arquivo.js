@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.7.0';
+const VERSAO = '1.8.0';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -588,15 +588,22 @@ function cardHTML(s){
   const estilo = $('#m-cor').value === 'tipo' ? ((TIPOS[s.tipo] || {}).estilo || '') : (prof.get(s.id) === 0 ? 'cheio' : '');
   const sv = statusVal(s.id), imp = num(s.impacto);
   const ser = num(s.servidores);
-  return `<div class="no ${estilo} ${s.status === 'Extinto' ? 'extinto' : ''} ${modos.get(s.id) === 'v' ? 'v-mode' : ''} ${s.id === selId ? 'sel' : ''} ${multi.has(s.id) ? 'msel' : ''}" data-id="${esc(s.id)}" style="--c:${corDe(s)};transform:translate(${p.x}px,${p.y}px)" title="${esc(s.nome)}">
+  const mk = s._marcas && s._marcas.length ? [...new Set(s._marcas)] : [];
+  return `<div class="no ${estilo} ${s.status === 'Extinto' ? 'extinto' : ''} ${modos.get(s.id) === 'v' ? 'v-mode' : ''} ${s.id === selId ? 'sel' : ''} ${multi.has(s.id) ? 'msel' : ''} ${mk.length ? 'cen-m cen-' + mk[0] : ''}" data-id="${esc(s.id)}" style="--c:${corDe(s)};transform:translate(${p.x}px,${p.y}px)" title="${esc(s.nome)}">
     <div class="no-tipo"><i class="fa-solid ${icTipo(s.tipo)}"></i>${esc(s.tipo)}${s.sigla ? ' · ' + esc(s.sigla) : ''}</div>
     <div class="no-nome">${esc(s.nome)}</div>
     <div class="no-pe"><span class="r">${s.responsavel ? '<i class="fa-solid fa-user"></i> ' + esc(s.responsavel) : 'Sem responsável'}</span>${ser ? `<span><i class="fa-solid fa-users"></i> ${fmtN(ser)}</span>` : ''}${imp ? `<span class="p" style="background:${IMPACTO[imp][1]}" title="Impacto: ${IMPACTO[imp][0]}"></span>` : ''}${sv !== 'Sem validação' ? `<span class="p" style="background:${STATUS_VAL[sv]};border-radius:2px" title="Validação: ${sv}"></span>` : ''}</div>
+    ${mk.length ? `<span class="cen-tags">${marcasHTML(s)}</span>` : ''}
     ${n ? `<button class="no-exp ${ab ? 'aberto' : ''}" data-exp title="${ab ? 'Recolher' : 'Mostrar'} ${n} subordinado(s)">${ab ? '<i class="fa-solid fa-minus"></i>' : n}</button>` : ''}
   </div>`;
 }
 function desenharMapa(){
   if (vistaAtual !== 'mapa') return;
+  preencherCenarios();
+  if (cenMapa) return emCenario(desenharMapaBase);
+  desenharMapaBase();
+}
+function desenharMapaBase(){
   calcularLayout();
   $('#nos').innerHTML = visiveis.map(cardHTML).join('');
   elNo.clear(); document.querySelectorAll('#nos .no').forEach(el => elNo.set(el.dataset.id, el));
@@ -612,6 +619,7 @@ function caminhoAresta(p, c){
   return `M${x1},${y1} C${x1},${y1 + k} ${x2},${y2 - k} ${x2},${y2}`;
 }
 function desenharArestas(){
+  if (cenMapa && !desenharArestas.dentro) { desenharArestas.dentro = true; try { return emCenario(desenharArestas); } finally { desenharArestas.dentro = false; } }
   const ativos = new Set(selId ? [selId, ...caminho(selId).map(s => s.id)] : []);
   let h = '';
   visiveis.forEach(s => { filhosVis(s.id).forEach(k => { if (pos.has(k.id)) h += `<path d="${caminhoAresta(s, k)}" class="${ativos.has(k.id) ? 'ativa' : ''}"/>`; }); });
@@ -620,6 +628,7 @@ function desenharArestas(){
     const x1 = a.x + NW / 2, y1 = a.y + NH / 2, x2 = b.x + NW / 2, y2 = b.y + NH / 2, my = Math.min(y1, y2) - 80;
     h += `<path d="M${x1},${y1} C${x1},${my} ${x2},${my} ${x2},${y2}" class="vin ${v.origemId === selId || v.destinoId === selId ? 'ativa' : ''}"><title>${esc(v.tipo)}</title></path>`;
   });
+  if (cenMapa) visiveis.forEach(s => { if (s._paiOrig && pos.has(s._paiOrig) && pos.has(s.id)) { const a = pos.get(s._paiOrig), b = pos.get(s.id); h += `<path d="M${a.x + NW / 2},${a.y + NH} C${a.x + NW / 2},${a.y + NH + 60} ${b.x + NW / 2},${b.y - 60} ${b.x + NW / 2},${b.y}" class="orig"><title>Subordinação anterior</title></path>`; } });
   $('#arestas').innerHTML = h;
 }
 function aplicarView(anim){
@@ -668,11 +677,13 @@ function desenharLegenda(){
   else if (m === 'validacao') it = Object.entries(STATUS_VAL);
   else if (m === 'impacto') it = IMPACTO.map(x => [x[0], x[1]]);
   else it = Object.entries(STATUS_SETOR);
+  if (cenMapa) it = Object.values(ROT_MARCA).map(([n, c]) => [n + ' (proposta)', c]).concat(it);
   $('#m-leg').innerHTML = it.map(([n, c]) => `<span><i class="q" style="background:${c}"></i>${esc(n)}</span>`).join('')
     + `<span class="dica"><i class="fa-solid fa-hand"></i> Arraste o fundo para navegar · roda do mouse para zoom · arraste um setor para reposicionar (encaixa nas guias; <b>Alt</b> solta livre) · <b>Ctrl</b> + clique seleciona vários · <b>Ctrl</b> + arrastar o fundo seleciona uma área · setas movem a seleção · <b>Shift</b> + arrastar sobre outro setor para subordinar · duplo clique abre/fecha</span>`;
 }
 /* Minimapa */
 function desenharMini(){
+  if (cenMapa && !desenharMini.dentro) { desenharMini.dentro = true; try { return emCenario(desenharMini); } finally { desenharMini.dentro = false; } }
   const c = $('#mini'); if (!c || !c.offsetWidth) return;
   const W = c.width = c.offsetWidth * 2, H = c.height = c.offsetHeight * 2, L = limites();
   const s = Math.min((W - 16) / (L.x1 - L.x0), (H - 16) / (L.y1 - L.y0));
@@ -710,9 +721,9 @@ vpEl.addEventListener('pointerdown', e => {
   if (ponteiros.size === 2) { const [a, b] = [...ponteiros.values()]; pinca = { d:Math.hypot(a.x - b.x, a.y - b.y), k:view.k }; drag = null; $('#laco').classList.add('hidden'); return; }
   const no = e.target.closest('.no');
   if (no) {
-    const s = porId.get(no.dataset.id);
+    const s = porId.get(no.dataset.id) || { id:no.dataset.id, dx:'', dy:'' };
     drag = { tipo:'no', s, x0:e.clientX, y0:e.clientY, moveu:false, alvo:null, adit:aditivo(e) };
-  } else if (aditivo(e) && !somenteLeitura()) {
+  } else if (aditivo(e) && !somenteLeitura() && !cenMapa) {
     drag = { tipo:'laco', x0:e.clientX, y0:e.clientY, base:new Set(multi), moveu:false };
   } else { drag = { tipo:'pan', x0:e.clientX, y0:e.clientY, vx:view.x, vy:view.y, moveu:false }; vpEl.classList.add('pan'); }
   vpEl.setPointerCapture(e.pointerId);
@@ -776,7 +787,7 @@ vpEl.addEventListener('pointermove', e => {
     elNo.forEach((el, id) => el.classList.toggle('msel', multi.has(id)));
     atualizarBarraSel(); return;
   }
-  if (somenteLeitura()) return;
+  if (somenteLeitura() || cenMapa) return;
   if (!drag.moveu) { drag.moveu = true; iniciarArrasto(); }
   const ox = dx / view.k, oy = dy / view.k;
   drag.grupo.forEach(g => { g.s.dx = String(Math.round(g.dx0 + ox)); g.s.dy = String(Math.round(g.dy0 + oy)); });
@@ -802,6 +813,7 @@ function fimDrag(e){
   if (d.tipo === 'laco') { $('#laco').classList.add('hidden'); atualizarBarraSel(); if (d.moveu && multi.size) toast(`${multi.size} setor(es) selecionado(s).`); return; }
   if (d.tipo === 'pan') { if (!d.moveu && multi.size && !modoSel) limparMulti(); return; }
   if (!d.moveu) {
+    if (cenMapa) { infoCenario(d.s.id); return; }
     if (d.adit && !somenteLeitura()) alternarMulti(d.s.id);
     else { if (multi.size) limparMulti(true); selecionar(d.s.id); }
     return;
@@ -2156,7 +2168,7 @@ function estruturaProposta(p){
     if (it.tipo === 'novo') { const s = novoReg('setores', { id:it.novoId, nome:it.nome || 'Novo setor', sigla:it.sigla || '', tipo:it.tipoSetor || 'Coordenadoria', paiId:it.paiId || '', status:'Proposto', ordem:'999' }); s._marcas = ['novo']; lista.push(s); mapa.set(s.id, s); }
     const s = mapa.get(it.setorId); if (!s) return;
     if (it.tipo === 'extinguir') { const alvo = [s.id]; if (it.comSub) { const vis = id => lista.filter(x => x.paiId === id).forEach(x => { alvo.push(x.id); vis(x.id); }); vis(s.id); } alvo.forEach(id => { const x = mapa.get(id); x.status = 'Extinto'; x._marcas.push('extinto'); }); }
-    if (it.tipo === 'mover' && it.paiId && it.paiId !== s.id) { s.paiId = it.paiId; s._marcas.push('movido'); }
+    if (it.tipo === 'mover' && it.paiId && it.paiId !== s.id) { if (s._paiOrig === undefined) s._paiOrig = s.paiId; s.paiId = it.paiId; s._marcas.push('movido'); }
     if (it.tipo === 'renomear') { if (it.nome) s.nome = it.nome; if (it.sigla !== undefined && it.sigla !== '') s.sigla = it.sigla; if (it.tipoSetor) s.tipo = it.tipoSetor; s._marcas.push('renomeado'); }
     if (it.tipo === 'cargo') s._marcas.push('cargo');
   });
@@ -2239,7 +2251,7 @@ function detalheProposta(p, base){
           <textarea class="campo" ${ro ? 'disabled' : ''} rows="2" style="margin-top:6px" placeholder="Descrição / justificativa" onchange="editarProp(${arg(p.id)},'descricao',this.value)">${esc(p.descricao)}</textarea></div>
         <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
           <select class="campo" style="width:auto" ${ro ? 'disabled' : ''} onchange="editarProp(${arg(p.id)},'status',this.value)">${Object.keys(STATUS_PROP).map(s => `<option ${s === (p.status || 'Rascunho') ? 'selected' : ''}>${s}</option>`).join('')}</select>
-          <div class="u-acoes"><button class="btn btn-s btn-sm" onclick="exportarProposta(${arg(p.id)})" title="Exportar comparativo (CSV)"><i class="fa-solid fa-file-csv"></i>CSV</button><button class="btn btn-s btn-sm so-edit" onclick="novaProposta(${arg(p.id)})" title="Duplicar"><i class="fa-regular fa-copy"></i>Duplicar</button>${ehAdmin() && p.status !== 'Aplicada' ? `<button class="btn btn-s btn-sm" onclick="aplicarProposta(${arg(p.id)})" title="Aplicar à estrutura oficial"><i class="fa-solid fa-check-double"></i>Aplicar</button>` : ''}<button class="btn btn-perigo btn-sm btn-i so-edit" onclick="excluirProposta(${arg(p.id)})" title="Excluir"><i class="fa-solid fa-trash-can"></i></button></div>
+          <div class="u-acoes"><button class="btn btn-p btn-sm" onclick="verPropostaNoMapa(${arg(p.id)})" title="Ver a estrutura desta proposta no mapa"><i class="fa-solid fa-diagram-project"></i>Ver no mapa</button><button class="btn btn-s btn-sm" onclick="abrirComparativo('', ${arg(p.id)})" title="Comparar com a estrutura atual, lado a lado"><i class="fa-solid fa-code-compare"></i>Comparar</button><button class="btn btn-s btn-sm" onclick="exportarProposta(${arg(p.id)})" title="Exportar comparativo (CSV)"><i class="fa-solid fa-file-csv"></i>CSV</button><button class="btn btn-s btn-sm so-edit" onclick="novaProposta(${arg(p.id)})" title="Duplicar"><i class="fa-regular fa-copy"></i>Duplicar</button>${ehAdmin() && p.status !== 'Aplicada' ? `<button class="btn btn-s btn-sm" onclick="aplicarProposta(${arg(p.id)})" title="Aplicar à estrutura oficial"><i class="fa-solid fa-check-double"></i>Aplicar</button>` : ''}<button class="btn btn-perigo btn-sm btn-i so-edit" onclick="excluirProposta(${arg(p.id)})" title="Excluir"><i class="fa-solid fa-trash-can"></i></button></div>
         </div>
       </div></div>
     <div class="kpis">
@@ -2405,6 +2417,151 @@ function formBolsa(id, deDentro){
     }
   }).then(ok => { if (!ok) return; if (deDentro && tv.atualizarRubFA) tv.atualizarRubFA(); else renderPropostas(); });
 }
+
+/* ===================== MAPA POR CENÁRIO (atual × propostas) E COMPARATIVO ===================== */
+let cenMapa = '';
+const ROT_MARCA = { novo:['Novo', '#16a34a'], extinto:['Extinto', '#dc2626'], movido:['Movido', '#7c3aed'], renomeado:['Renomeado', '#0891b2'], cargo:['Cargo alterado', '#ea580c'] };
+function listaCenario(id){
+  const p = id && DB.propostas.find(x => x.id === id);
+  return p ? estruturaProposta(p).lista : DB.setores;
+}
+function linhasCenario(id){
+  const p = id && DB.propostas.find(x => x.id === id);
+  return p ? custoProposta(p).linhas : DB.despesas.filter(d => (d.cenario || 'Atual') === 'Atual');
+}
+function nomeCenario(id){ const p = id && DB.propostas.find(x => x.id === id); return p ? p.nome : 'Estrutura atual (oficial)'; }
+/* Executa fn com a estrutura de um cenário no lugar da oficial (só para desenhar; nada é gravado) */
+function comLista(lista, fn, manterLayout, abExtra){
+  const S = { setores:DB.setores, porId, filhos, prof, areaDe, areas, valPorSetor, pos, visiveis, caixas, modos, origemRaiz, abertos };
+  DB.setores = lista; const jaAtivo = comLista.ativo; comLista.ativo = true;
+  try { indexar(); if (abExtra) abertos = new Set([...abertos, ...abExtra]); return fn(); }
+  finally {
+    comLista.ativo = jaAtivo;
+    const L = { pos, visiveis, caixas, modos, origemRaiz };
+    DB.setores = S.setores; porId = S.porId; filhos = S.filhos; prof = S.prof; areaDe = S.areaDe; areas = S.areas; valPorSetor = S.valPorSetor; abertos = S.abertos;
+    if (manterLayout) { pos = L.pos; visiveis = L.visiveis; caixas = L.caixas; modos = L.modos; origemRaiz = L.origemRaiz; }
+    else { pos = S.pos; visiveis = S.visiveis; caixas = S.caixas; modos = S.modos; origemRaiz = S.origemRaiz; }
+  }
+}
+const emCenario = fn => !comLista.ativo && cenMapa && DB.propostas.some(p => p.id === cenMapa) ? comLista(listaCenario(cenMapa), fn, true) : fn();
+function ancestraisMarcados(lista){
+  const m = new Map(lista.map(s => [s.id, s])), r = new Set();
+  lista.filter(s => s._marcas && s._marcas.length).forEach(s => { let x = m.get(s.paiId), g = 0; while (x && g++ < 40) { r.add(x.id); x = m.get(x.paiId); } if (s._paiOrig) { let y = m.get(s._paiOrig), h = 0; while (y && h++ < 40) { r.add(y.id); y = m.get(y.paiId); } } });
+  return r;
+}
+function preencherCenarios(){
+  const sel = $('#m-cen'); if (!sel) return;
+  if (cenMapa && !DB.propostas.some(p => p.id === cenMapa)) cenMapa = '';
+  sel.innerHTML = '<option value="">Estrutura atual</option>' + DB.propostas.filter(p => p.status !== 'Aplicada').map(p => `<option value="${esc(p.id)}" ${p.id === cenMapa ? 'selected' : ''}>Proposta: ${esc(p.nome)}</option>`).join('');
+  sel.value = cenMapa;
+  const f = $('#m-cen-faixa');
+  if (f) {
+    f.classList.toggle('hidden', !cenMapa);
+    if (cenMapa) { const p = DB.propostas.find(x => x.id === cenMapa), cp = custoProposta(p), b = baseAtual(), d = cp.m - b.m;
+      f.innerHTML = `<i class="fa-solid fa-lightbulb"></i><span><b>${esc(p.nome)}</b> · ${itensProp(p).length} alteração(ões) · ${d ? (d > 0 ? '+' : '−') + fmtM0(Math.abs(d)) + '/mês' : 'sem impacto financeiro'} · somente visualização</span><button class="btn btn-s btn-sm" onclick="abrirComparativo('', ${arg(p.id)})"><i class="fa-solid fa-code-compare"></i>Comparar com o atual</button><button class="btn btn-s btn-sm" onclick="trocarVista('propostas');propSel=${arg(p.id)};abaProp('propostas')"><i class="fa-solid fa-pen"></i>Editar proposta</button><button class="btn btn-s btn-sm" onclick="escolherCenarioMapa('')"><i class="fa-solid fa-xmark"></i>Voltar ao atual</button>`; }
+  }
+  document.body.classList.toggle('cen-ativo', !!cenMapa);
+}
+function escolherCenarioMapa(id){
+  cenMapa = id || ''; limparMulti(true); fecharPainel();
+  if (cenMapa) { ancestraisMarcados(listaCenario(cenMapa)).forEach(a => abertos.add(a)); }
+  if (vistaAtual !== 'mapa') trocarVista('mapa'); else desenharMapa();
+  setTimeout(() => ajustar(true), 40);
+}
+function verPropostaNoMapa(id){ escolherCenarioMapa(id); }
+function marcasHTML(s){ return (s._marcas && s._marcas.length) ? [...new Set(s._marcas)].map(m => `<span class="cen-tag" style="--t:${ROT_MARCA[m][1]}">${ROT_MARCA[m][0]}</span>`).join('') : ''; }
+function infoCenario(id){
+  const lista = listaCenario(cenMapa), m = new Map(lista.map(s => [s.id, s])), s = m.get(id); if (!s) return;
+  const linhas = linhasCenario(cenMapa).filter(l => l.setorId === id), real = DB.setores.find(x => x.id === id);
+  const pai = m.get(s.paiId), paiOrig = s._paiOrig ? m.get(s._paiOrig) : null;
+  abrirModal({ titulo: s.nome, rotulo:'Fechar', semCancelar:true, largura:480,
+    html:`<p style="margin-top:-6px">${esc(s.tipo)}${s.sigla ? ' · ' + esc(s.sigla) : ''} ${marcasHTML(s)}</p>
+      <p><span class="rot">Responde a (nesta proposta)</span>${esc(pai ? pai.nome : '—')}${paiOrig ? `<br><small style="color:var(--mut)">antes: ${esc(paiOrig.nome)}</small>` : ''}</p>
+      ${real && real.nome !== s.nome ? `<p><span class="rot">Nome atual</span>${esc(real.nome)}</p>` : ''}
+      <div><span class="rot">Custos nesta proposta</span>${linhas.length ? linhas.map(l => { const c = calcDesp(l); return `<div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0"><span>${esc(c.r.codigo || l.descricao || c.categoria)} × ${c.qtd.toLocaleString('pt-BR')}</span><b>${fmtM(c.mensal)}/mês</b></div>`; }).join('') : '<p class="s">Nenhum.</p>'}</div>
+      <div class="acoes" style="justify-content:flex-start">${real ? `<button type="button" class="btn btn-s btn-sm" onclick="this.closest('.modal').remove();escolherCenarioMapa('');setTimeout(()=>irPara(${arg(id)}),80)"><i class="fa-solid fa-arrow-right"></i>Abrir setor na estrutura atual</button>` : ''}</div>` });
+}
+/* ---------- Comparativo lado a lado ---------- */
+const cmp = { a:'', b:'', sinc:true, v:[null, null] };
+function diffCenarios(aId, bId){
+  const A = listaCenario(aId), B = listaCenario(bId), mA = new Map(A.map(s => [s.id, s])), mB = new Map(B.map(s => [s.id, s]));
+  const ativo = s => s && s.status !== 'Extinto', nm = (m, id) => { const s = m.get(id); return s ? (s.sigla || s.nome) : '(topo)'; };
+  const est = [];
+  B.forEach(s => { const a = mA.get(s.id);
+    if (ativo(s) && !ativo(a)) est.push({ id:s.id, tipo:a ? 'reativado' : 'novo', txt:`<b>${esc(s.nome)}</b> (${esc(s.tipo)}) sob ${esc(nm(mB, s.paiId))}` });
+    if (!ativo(s) && ativo(a)) est.push({ id:s.id, tipo:'extinto', txt:`<b>${esc(a.nome)}</b> (${esc(a.tipo)})` });
+    if (a && ativo(s) && ativo(a)) {
+      if ((a.paiId || '') !== (s.paiId || '')) est.push({ id:s.id, tipo:'movido', txt:`<b>${esc(s.nome)}</b>: ${esc(nm(mA, a.paiId))} → ${esc(nm(mB, s.paiId))}` });
+      if (a.nome !== s.nome || (a.sigla || '') !== (s.sigla || '')) est.push({ id:s.id, tipo:'renomeado', txt:`${esc(a.nome)} → <b>${esc(s.nome)}</b>` });
+      if (a.tipo !== s.tipo) est.push({ id:s.id, tipo:'tipo', txt:`<b>${esc(s.nome)}</b>: ${esc(a.tipo)} → ${esc(s.tipo)}` });
+    }
+  });
+  A.forEach(a => { if (!mB.has(a.id) && ativo(a)) est.push({ id:a.id, tipo:'extinto', txt:`<b>${esc(a.nome)}</b> (${esc(a.tipo)})` }); });
+  const custo = lst => { const m = new Map(); lst.forEach(l => { const c = calcDesp(l); const o = m.get(l.setorId) || { m:0, itens:[] }; o.m += c.mensal; o.itens.push((c.r.codigo || l.descricao || c.categoria) + (c.qtd !== 1 ? ' ×' + c.qtd.toLocaleString('pt-BR') : '')); m.set(l.setorId, o); }); return m; };
+  const cA = custo(linhasCenario(aId)), cB = custo(linhasCenario(bId)), fin = [];
+  new Set([...cA.keys(), ...cB.keys()]).forEach(id => { const x = cA.get(id) || { m:0, itens:[] }, y = cB.get(id) || { m:0, itens:[] }, d = y.m - x.m; if (Math.abs(d) > .004) fin.push({ id, nome:(mB.get(id) || mA.get(id) || {}).nome || '(sem setor)', a:x, b:y, d }); });
+  fin.sort((p, q) => Math.abs(q.d) - Math.abs(p.d));
+  const tot = (l, k) => l.reduce((t, x) => t + calcDesp(x)[k], 0), LA = linhasCenario(aId), LB = linhasCenario(bId);
+  return { est, fin, tA:tot(LA, 'mensal'), tB:tot(LB, 'mensal'), aA:tot(LA, 'anual'), aB:tot(LB, 'anual'), mA, mB, A, B };
+}
+function abrirComparativo(a, b){
+  cmp.a = a || ''; cmp.b = b !== undefined ? b : (cenMapa || (DB.propostas[0] || {}).id || '');
+  let el = $('#cmp'); if (!el) { el = document.createElement('div'); el.id = 'cmp'; document.body.appendChild(el); }
+  el.classList.remove('hidden'); renderComparativo();
+}
+function fecharComparativo(){ const el = $('#cmp'); if (el) { el.classList.add('hidden'); el.innerHTML = ''; } }
+function opcoesCen(sel){ return '<option value="">Estrutura atual (oficial)</option>' + DB.propostas.map(p => `<option value="${esc(p.id)}" ${p.id === sel ? 'selected' : ''}>${esc(p.nome)}${p.status ? ' · ' + esc(p.status) : ''}</option>`).join(''); }
+function renderComparativo(){
+  const el = $('#cmp'), D = diffCenarios(cmp.a, cmp.b), dif = D.tB - D.tA;
+  const ROT = { novo:['Criado', '#16a34a', 'fa-square-plus'], reativado:['Reativado', '#16a34a', 'fa-rotate-left'], extinto:['Extinto', '#dc2626', 'fa-square-minus'], movido:['Subordinação', '#7c3aed', 'fa-arrows-up-down-left-right'], renomeado:['Nome', '#0891b2', 'fa-pen'], tipo:['Tipo', '#0e7490', 'fa-tag'] };
+  el.innerHTML = `<div class="cmp-topo"><b><i class="fa-solid fa-code-compare"></i> Comparar cenários</b>
+      <select class="campo" onchange="cmp.a=this.value;renderComparativo()">${opcoesCen(cmp.a)}</select><span class="cmp-x">×</span><select class="campo" onchange="cmp.b=this.value;renderComparativo()">${opcoesCen(cmp.b)}</select>
+      <label class="chk" style="margin-left:6px"><input type="checkbox" ${cmp.sinc ? 'checked' : ''} onchange="cmp.sinc=this.checked"><span>Mover os dois mapas juntos</span></label>
+      <button class="btn btn-s btn-sm" onclick="exportarComparativo()"><i class="fa-solid fa-file-csv"></i>CSV</button><button class="btn btn-s btn-sm btn-i" title="Fechar (Esc)" onclick="fecharComparativo()"><i class="fa-solid fa-xmark"></i></button></div>
+    <div class="cmp-mapas">
+      ${[0, 1].map(i => `<div class="cmp-pane"><div class="cmp-tit"><span>${i ? 'B' : 'A'} · ${esc(nomeCenario(i ? cmp.b : cmp.a))}</span><b>${fmtM0(i ? D.tB : D.tA)}/mês</b></div><div class="cmp-vp" id="cmp-vp${i}"><div class="mundo-cmp" id="cmp-m${i}"></div></div></div>`).join('')}
+    </div>
+    <div class="cmp-dif">
+      <div class="cmp-res"><span><b>${D.est.length}</b> mudança(s) de estrutura</span><span><b>${D.fin.length}</b> setor(es) com custo diferente</span><span>Diferença de custo (B − A): <b class="${dif > 0 ? 'fin-pos' : dif < 0 ? 'fin-neg' : ''}">${dif ? (dif > 0 ? '+' : '−') + fmtM(Math.abs(dif)) + '/mês · ' + (D.aB - D.aA > 0 ? '+' : '−') + fmtM0(Math.abs(D.aB - D.aA)) + '/ano' : 'nenhuma'}</b></span></div>
+      <div class="cmp-col"><h4>Estrutura</h4>${D.est.length ? D.est.map(x => `<button class="cmp-it" onclick="cmpFocar(${arg(x.id)})" style="--c:${ROT[x.tipo][1]}"><i class="fa-solid ${ROT[x.tipo][2]}"></i><span><small>${ROT[x.tipo][0]}</small>${x.txt}</span></button>`).join('') : '<p class="s">Nenhuma diferença de estrutura.</p>'}</div>
+      <div class="cmp-col"><h4>Custos por setor</h4>${D.fin.length ? D.fin.map(x => `<button class="cmp-it" onclick="cmpFocar(${arg(x.id)})" style="--c:${x.d > 0 ? '#dc2626' : '#16a34a'}"><i class="fa-solid ${x.d > 0 ? 'fa-arrow-trend-up' : 'fa-arrow-trend-down'}"></i><span><small>${x.d > 0 ? '+' : '−'}${fmtM(Math.abs(x.d))}/mês</small><b>${esc(x.nome)}</b><br><span style="color:var(--mut);font-size:11.5px">A: ${esc(x.a.itens.join(', ') || '—')} · B: ${esc(x.b.itens.join(', ') || '—')}</span></span></button>`).join('') : '<p class="s">Nenhuma diferença de custo.</p>'}</div>
+    </div>`;
+  // marcas de diferença em cada lado
+  const marcaA = new Map(), marcaB = new Map();
+  D.est.forEach(x => { const t = x.tipo === 'reativado' ? 'novo' : x.tipo === 'tipo' ? 'renomeado' : x.tipo; if (t === 'extinto') { marcaA.set(x.id, 'extinto'); marcaB.set(x.id, 'extinto'); } else marcaB.set(x.id, t); if (t === 'movido') marcaA.set(x.id, 'movido'); });
+  D.fin.forEach(x => { if (!marcaB.has(x.id)) marcaB.set(x.id, 'cargo'); });
+  [[cmp.a, marcaA, 0], [cmp.b, marcaB, 1]].forEach(([id, mk, i]) => montarPaneCmp(id, mk, i));
+}
+function montarPaneCmp(cid, marcas, i){
+  const lista = listaCenario(cid).map(s => Object.assign({}, s, { _marcas: marcas.has(s.id) ? [marcas.get(s.id)] : [] }));
+  const anc = ancestraisMarcados(lista); marcas.forEach((v, id) => anc.add(id));
+  let html = '', L;
+  comLista(lista, () => {
+    calcularLayout();
+    let ar = ''; visiveis.forEach(s => filhosVis(s.id).forEach(k => { if (pos.has(k.id)) ar += `<path d="${caminhoAresta(s, k)}"/>`; }));
+    html = `<svg style="position:absolute;left:0;top:0;width:1px;height:1px;overflow:visible">${ar}</svg>` + visiveis.map(cardHTML).join('').replace(/ sel /g, ' ').replace(/ msel /g, ' ');
+    L = limites(); cmp['pos' + i] = new Map(pos);
+  }, false, anc);
+  const vp = $('#cmp-vp' + i), mu = $('#cmp-m' + i); mu.innerHTML = html;
+  const r = vp.getBoundingClientRect(), k = Math.max(.1, Math.min((r.width - 30) / (L.x1 - L.x0), (r.height - 30) / (L.y1 - L.y0), .9));
+  cmp.v[i] = { k, x:(r.width - (L.x1 - L.x0) * k) / 2 - L.x0 * k, y:14 - L.y0 * k };
+  aplicarCmp(i);
+  let arr = null;
+  vp.onpointerdown = e => { if (e.target.closest('.no')) { const id = e.target.closest('.no').dataset.id; cmpFocar(id); return; } arr = { x:e.clientX, y:e.clientY, v:Object.assign({}, cmp.v[i]) }; vp.setPointerCapture(e.pointerId); vp.classList.add('pan'); };
+  vp.onpointermove = e => { if (!arr) return; const dx = e.clientX - arr.x, dy = e.clientY - arr.y; [i, ...(cmp.sinc ? [1 - i] : [])].forEach(j => { if (j === i) { cmp.v[j].x = arr.v.x + dx; cmp.v[j].y = arr.v.y + dy; } else { cmp.v[j].x += e.movementX; cmp.v[j].y += e.movementY; } aplicarCmp(j); }); };
+  vp.onpointerup = vp.onpointercancel = () => { arr = null; vp.classList.remove('pan'); };
+  vp.onwheel = e => { e.preventDefault(); const b = vp.getBoundingClientRect(), mx = e.clientX - b.left, my = e.clientY - b.top, f = Math.exp(-e.deltaY * .0015); [i, ...(cmp.sinc ? [1 - i] : [])].forEach(j => { const v = cmp.v[j]; if (!v) return; const kk = Math.max(.06, Math.min(2.5, v.k * f)), q = kk / v.k; cmp.v[j] = { k:kk, x:mx - (mx - v.x) * q, y:my - (my - v.y) * q }; aplicarCmp(j); }); };
+}
+function aplicarCmp(i){ const m = $('#cmp-m' + i), v = cmp.v[i]; if (m && v) m.style.transform = `translate(${v.x}px,${v.y}px) scale(${v.k})`; }
+function cmpFocar(id){
+  [0, 1].forEach(i => { const p = cmp['pos' + i] && cmp['pos' + i].get(id), vp = $('#cmp-vp' + i); document.querySelectorAll(`#cmp-m${i} .no`).forEach(n => n.classList.toggle('sel', n.dataset.id === id)); if (!p || !vp) return; const r = vp.getBoundingClientRect(), k = Math.max(cmp.v[i].k, .6); cmp.v[i] = { k, x:r.width / 2 - (p.x + NW / 2) * k, y:r.height / 2 - (p.y + NH / 2) * k }; const m = $('#cmp-m' + i); m.style.transition = 'transform .4s'; aplicarCmp(i); setTimeout(() => { m.style.transition = ''; }, 420); });
+}
+function exportarComparativo(){
+  const D = diffCenarios(cmp.a, cmp.b), q = v => '"' + String(v ?? '').replace(/"/g, '""').replace(/<[^>]+>/g, '') + '"', n = v => numBR(v).toFixed(2).replace('.', ',');
+  const l = ['A;' + q(nomeCenario(cmp.a)), 'B;' + q(nomeCenario(cmp.b)), 'Custo mensal A;' + n(D.tA), 'Custo mensal B;' + n(D.tB), 'Diferença mensal;' + n(D.tB - D.tA), 'Diferença anual;' + n(D.aB - D.aA), '', 'Mudança de estrutura;Detalhe', ...D.est.map(x => q(x.tipo) + ';' + q(x.txt)), '', 'Setor;Custo mensal A;Custo mensal B;Diferença;Itens A;Itens B', ...D.fin.map(x => [x.nome, n(x.a.m), n(x.b.m), n(x.d), x.a.itens.join(', '), x.b.itens.join(', ')].map(q).join(';'))];
+  baixarArquivo('gaborg-comparativo-' + new Date().toISOString().slice(0, 10) + '.csv', '﻿' + l.join('\r\n'), 'text/csv;charset=utf-8');
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#cmp') && !$('#cmp').classList.contains('hidden') && !document.querySelector('.modal')) { e.stopImmediatePropagation(); fecharComparativo(); } }, true);
 
 /* ===================== MENU LATERAL: RECOLHER E AJUSTAR LARGURA ===================== */
 let ladoCfg = Object.assign({ mini:false, w:236 }, store.get('gaborg_lado', {}));

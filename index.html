@@ -162,6 +162,45 @@ body.lado-mini .lado-pe .av{cursor:pointer}
 .prop-no{display:flex;align-items:center;gap:7px;padding:4px 0;flex-wrap:wrap}
 .prop-no .chip{height:18px;font-size:10px;padding:0 7px}
 @media (max-width:1100px){.prop-grade{grid-template-columns:1fr}.prop-lista{position:static}}
+/* ===================== CENÁRIOS NO MAPA E COMPARATIVO ===================== */
+.m-cen-faixa{flex-basis:100%;display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;padding:7px 10px;border-radius:12px;background:#fef3c7;border:1px solid #f59e0b;color:#78350f;font-size:12.5px;box-shadow:var(--sombra)}
+#m-cen-faixa.hidden{display:none}
+html[data-tema="escuro"] .m-cen-faixa{background:#3b2a06;color:#fde68a}
+.m-cen-faixa>i{color:#d97706}
+body.cen-ativo #m-sel{display:none!important}
+body.cen-ativo #vp{background-color:color-mix(in srgb,#f59e0b 6%,var(--bg))}
+#m-cen{max-width:230px;font-weight:700;color:#b45309}
+.no.cen-m{outline:3px solid var(--t,#f59e0b);outline-offset:2px}
+.no.cen-novo{--t:#16a34a;border-style:dashed;border-color:#16a34a}
+.no.cen-extinto{--t:#dc2626;opacity:.55}
+.no.cen-extinto .no-nome{text-decoration:line-through}
+.no.cen-movido{--t:#7c3aed}.no.cen-renomeado{--t:#0891b2}.no.cen-cargo{--t:#ea580c}
+.cen-tags{position:absolute;right:6px;top:-10px;display:flex;gap:3px}
+.cen-tag{height:17px;padding:0 6px;border-radius:999px;background:var(--t);color:#fff;font-size:9.5px;font-weight:800;display:inline-flex;align-items:center;white-space:nowrap}
+#arestas path.orig{stroke:#7c3aed;stroke-dasharray:3 5;opacity:.6}
+#cmp{position:fixed;inset:0;z-index:450;background:var(--bg);display:grid;grid-template-rows:auto minmax(0,1.4fr) minmax(0,1fr)}
+#cmp.hidden{display:none}
+.cmp-topo{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 14px;background:var(--sup);border-bottom:1px solid var(--linha)}
+.cmp-topo>b{font-size:15px;margin-right:6px}.cmp-topo .campo{width:auto;max-width:300px;height:36px}
+.cmp-topo>.btn:last-child{margin-left:auto}
+.cmp-x{font-weight:800;color:var(--mut)}
+.cmp-mapas{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:10px 14px 0;min-height:0}
+.cmp-pane{display:flex;flex-direction:column;min-height:0;border:1px solid var(--linha);border-radius:12px;overflow:hidden;background:var(--sup)}
+.cmp-tit{display:flex;justify-content:space-between;gap:8px;padding:8px 12px;font-size:12.5px;border-bottom:1px solid var(--linha);background:var(--sup2)}
+.cmp-tit span{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cmp-vp{flex:1;position:relative;overflow:hidden;cursor:grab;touch-action:none;background-image:radial-gradient(var(--ponto) 1px,transparent 1px);background-size:18px 18px}
+.cmp-vp.pan{cursor:grabbing}
+.mundo-cmp{position:absolute;left:0;top:0;transform-origin:0 0}
+.mundo-cmp svg path{fill:none;stroke:var(--linha2);stroke-width:1.6}
+.cmp-dif{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:auto minmax(0,1fr);gap:10px;padding:10px 14px 14px;min-height:0}
+.cmp-res{grid-column:1/-1;display:flex;gap:18px;flex-wrap:wrap;font-size:13px;color:var(--txt2)}
+.cmp-col{overflow:auto;min-height:0;background:var(--sup);border:1px solid var(--linha);border-radius:12px;padding:10px}
+.cmp-col h4{margin:0 0 8px;font-size:13px}
+.cmp-it{display:flex;gap:10px;align-items:flex-start;width:100%;text-align:left;padding:8px;border-radius:9px;font-size:12.5px;line-height:1.4;color:var(--txt)}
+.cmp-it:hover{background:var(--sup3)}
+.cmp-it>i{color:var(--c);margin-top:3px;width:16px;text-align:center}
+.cmp-it small{display:block;font-size:10.5px;font-weight:800;color:var(--c);text-transform:uppercase;letter-spacing:.04em}
+@media (max-width:900px){#cmp{grid-template-rows:auto 1fr 1fr;overflow:auto}.cmp-mapas{grid-template-columns:1fr;grid-auto-rows:minmax(260px,1fr)}.cmp-dif{grid-template-columns:1fr}}
 /* ===================== MODO TV ===================== */
 #tv-modo{position:fixed;inset:0;z-index:500;background:radial-gradient(1200px 600px at 85% -10%,#1e3a8a 0%,transparent 60%),#0b1220;color:#e2e8f0;display:grid;grid-template-rows:auto 1fr auto;font-family:'Inter',system-ui,sans-serif}
 #tv-modo.hidden{display:none}
@@ -526,6 +565,7 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background
   #ua-lista .tab td:last-child{width:100%}
   #ua-lista .u-acoes{display:flex;gap:6px;flex-wrap:wrap}
   .adm-filtros .campo{flex:1 1 140px;min-width:0}
+  .m-cen-faixa{font-size:11.5px}
   .kpis{grid-template-columns:1fr 1fr}
 }
 </style>
@@ -533,7 +573,7 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background
 <body>
 <!-- Vigia de inicialização: se o arquivo.js não carregar ou falhar, mostra o motivo em vez de uma tela vazia -->
 <script>
-window.GABORG_VERSAO_HTML = '1.7.0'; window.GABORG_ERROS = [];
+window.GABORG_VERSAO_HTML = '1.8.0'; window.GABORG_ERROS = [];
 window.addEventListener('error', function (e) {
   var alvo = e.target || {};
   if (alvo.tagName === 'SCRIPT') window.GABORG_ERROS.push('Não foi possível baixar o arquivo ' + (alvo.getAttribute('src') || '') + '.');
@@ -683,6 +723,8 @@ window.addEventListener('load', function () { setTimeout(function () { window.GA
           <div id="m-res" class="m-res hidden"></div>
         </div>
         <div class="m-ferr">
+          <select id="m-cen" title="Cenário exibido no mapa" onchange="escolherCenarioMapa(this.value)"><option value="">Estrutura atual</option></select>
+          <button class="btn btn-g btn-sm" onclick="abrirComparativo('', cenMapa || undefined)" title="Comparar dois cenários lado a lado"><i class="fa-solid fa-code-compare"></i><span>Comparar</span></button>
           <select id="m-cor" title="Colorir por" onchange="desenharMapa()">
             <option value="tipo">Cor: tipo de setor</option>
             <option value="area">Cor: secretaria adjunta</option>
@@ -697,6 +739,7 @@ window.addEventListener('load', function () { setTimeout(function () { window.GA
           <button class="btn btn-g btn-sm so-edit" onclick="reorganizar()" title="Desfazer posições manuais"><i class="fa-solid fa-wand-magic-sparkles"></i><span>Reorganizar</span></button>
           <button class="btn btn-p btn-sm so-edit" onclick="novoSetorEm(selId||'')" title="Novo setor"><i class="fa-solid fa-plus"></i><span>Novo setor</span></button>
         </div>
+        <div id="m-cen-faixa" class="m-cen-faixa hidden"></div>
       </div>
       <div class="m-leg" id="m-leg"></div>
       <div class="m-mini" id="m-mini" title="Clique para navegar"><canvas id="mini"></canvas></div>
@@ -807,6 +850,6 @@ window.addEventListener('load', function () { setTimeout(function () { window.GA
 
 <div id="toast"><i class="fa-solid fa-check"></i><span></span></div>
 
-<script src="arquivo.js?v=1.7.0" onerror="window.GABORG_ERROS.push('O arquivo arquivo.js não foi encontrado no servidor (erro 404).');GABORG_DIAGNOSTICO()"></script>
+<script src="arquivo.js?v=1.8.0" onerror="window.GABORG_ERROS.push('O arquivo arquivo.js não foi encontrado no servidor (erro 404).');GABORG_DIAGNOSTICO()"></script>
 </body>
 </html>
