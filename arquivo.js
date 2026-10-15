@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.2.0';
+const VERSAO = '1.3.0';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -1514,24 +1514,211 @@ function modalTrocarSenha(obrigatorio, atualConhecida){
   return trocandoSenha;
 }
 
-let usuarios = [];
+let usuarios = [], acessos = [], abaAdmAtual = 'usuarios';
 const COR_PERFIL = { Administrador:'#dc2626', Editor:'#2563eb', Leitor:'#64748b' };
-async function renderUsuarios(){
+const COR_EVENTO = { 'Login':'#16a34a', 'Senha incorreta':'#d97706', 'Login recusado':'#dc2626', 'Bloqueado por tentativas':'#dc2626', 'Usuário criado':'#2563eb', 'Usuário alterado':'#0891b2', 'Usuário desativado':'#64748b', 'Usuário excluído':'#dc2626', 'Usuário desbloqueado':'#16a34a', 'Senha alterada pelo usuário':'#7c3aed', 'Senha definida pelo administrador':'#7c3aed', 'Senha provisória gerada':'#7c3aed', 'Sessões encerradas':'#475569' };
+function situacaoUsuario(u){
+  if (u.ativo !== 'Sim') return ['Desativado', '#94a3b8'];
+  if (u.bloqueado) return ['Bloqueado', '#dc2626'];
+  if (u.trocarSenha === 'Sim') return [u.ultimoAcesso ? 'Deve trocar a senha' : 'Aguardando 1º acesso', '#d97706'];
+  return ['Ativo', '#16a34a'];
+}
+function abaAdm(a){
+  abaAdmAtual = a;
+  document.querySelectorAll('.adm-abas button').forEach(b => b.classList.toggle('on', b.dataset.aba === a));
+  renderUsuarios();
+}
+async function renderUsuarios(recarregar){
   const c = $('#u-corpo'); if (!c) return;
-  if (!ehAdmin()) { c.innerHTML = '<div class="cartao vazio">Apenas administradores gerenciam usuários.</div>'; return; }
+  if (!ehAdmin()) { c.innerHTML = '<div class="cartao vazio">Apenas administradores acessam esta área.</div>'; return; }
+  if (abaAdmAtual === 'perfis') return renderPerfis();
+  if (abaAdmAtual === 'acessos') return renderAcessos(recarregar);
   if (!usuarios.length) c.innerHTML = '<div class="cartao vazio"><i class="fa-solid fa-circle-notch fa-spin"></i>Carregando usuários...</div>';
   try { const r = await chamar({ action:'users_list' }, 30000); if (r.status !== 'success') throw new Error(r.message); usuarios = r.usuarios || []; }
   catch (e) { c.innerHTML = `<div class="cartao vazio" style="color:var(--perigo)">${esc(e.message)}</div>`; return; }
-  usuarios.sort((a, b) => (a.ativo === b.ativo ? 0 : a.ativo === 'Sim' ? -1 : 1) || a.nome.localeCompare(b.nome, 'pt-BR'));
-  const sit = u => u.ativo !== 'Sim' ? ['Desativado', '#94a3b8'] : u.bloqueado ? ['Bloqueado (tentativas)', '#dc2626'] : u.trocarSenha === 'Sim' ? ['Aguardando 1º acesso', '#d97706'] : ['Ativo', '#16a34a'];
-  c.innerHTML = `<div class="tab-wrap"><table class="tab"><thead><tr><th>Nome</th><th>Login</th><th>E-mail</th><th>Perfil</th><th>Situação</th><th>Último acesso</th><th></th></tr></thead><tbody>${usuarios.map(u => { const [st, cs] = sit(u); return `<tr>
-    <td><span style="display:inline-flex;align-items:center;gap:9px"><span class="av" style="width:28px;height:28px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff;background:${COR_PERFIL[u.perfil] || '#64748b'}">${esc(iniciais(u.nome))}</span><b>${esc(u.nome)}</b>${u.login === cfg.login ? ' <span class="chip sem" style="--c:#2563eb">você</span>' : ''}</span></td>
+  if (abaAdmAtual !== 'usuarios') return;
+  const ativos = usuarios.filter(u => u.ativo === 'Sim');
+  const kpi = (cor, ic, r, v, s) => `<div class="cartao kpi" style="--c:${cor}"><div class="r"><i class="fa-solid ${ic}"></i>${r}</div><div class="v">${v}</div><div class="s">${s}</div></div>`;
+  const f = { q:($('#ua-q') || {}).value || '', perfil:($('#ua-perfil') || {}).value || '', sit:($('#ua-sit') || {}).value || '' };
+  c.innerHTML = `<div class="kpis">
+      ${kpi('#2563eb', 'fa-users', 'Usuários', usuarios.length, `${ativos.length} ativo(s)`)}
+      ${kpi('#dc2626', 'fa-user-shield', 'Administradores', ativos.filter(u => u.perfil === 'Administrador').length, 'ativos')}
+      ${kpi('#d97706', 'fa-hourglass-half', 'Aguardando senha', ativos.filter(u => u.trocarSenha === 'Sim').length, 'precisam definir a senha')}
+      ${kpi('#7f1d1d', 'fa-lock', 'Bloqueados', usuarios.filter(u => u.bloqueado).length, 'por senhas erradas')}
+    </div>
+    <div class="adm-filtros">
+      <div class="busca"><i class="fa-solid fa-magnifying-glass"></i><input id="ua-q" class="campo" placeholder="Buscar nome, login ou e-mail" value="${esc(f.q)}" oninput="filtrarUsuarios()"></div>
+      <select id="ua-perfil" class="campo" onchange="filtrarUsuarios()"><option value="">Todos os perfis</option>${['Administrador','Editor','Leitor'].map(p => `<option ${f.perfil === p ? 'selected' : ''}>${p}</option>`).join('')}</select>
+      <select id="ua-sit" class="campo" onchange="filtrarUsuarios()"><option value="">Todas as situações</option>${['Ativo','Aguardando 1º acesso','Deve trocar a senha','Bloqueado','Desativado'].map(s => `<option ${f.sit === s ? 'selected' : ''}>${s}</option>`).join('')}</select>
+    </div>
+    <div id="ua-lista"></div>
+    <p style="font-size:12px;color:var(--mut);margin-top:10px"><i class="fa-solid fa-shield-halved"></i> Senhas nunca aparecem aqui: o sistema guarda só uma versão cifrada. Você pode <b>definir uma senha</b> para a pessoa ou <b>gerar uma provisória</b>; em ambos os casos pode exigir que ela crie a própria no próximo acesso.</p>`;
+  filtrarUsuarios();
+}
+function filtrarUsuarios(){
+  const el = $('#ua-lista'); if (!el) return;
+  const q = norm($('#ua-q').value), pf = $('#ua-perfil').value, st = $('#ua-sit').value;
+  const lista = usuarios.filter(u => (!q || norm(u.nome + ' ' + u.login + ' ' + (u.email || '')).includes(q)) && (!pf || u.perfil === pf) && (!st || situacaoUsuario(u)[0] === st))
+    .sort((a, b) => (a.ativo === b.ativo ? 0 : a.ativo === 'Sim' ? -1 : 1) || a.nome.localeCompare(b.nome, 'pt-BR'));
+  if (!lista.length) { el.innerHTML = '<div class="cartao vazio">Nenhum usuário com esses filtros.</div>'; return; }
+  el.innerHTML = `<div class="tab-wrap"><table class="tab"><thead><tr><th>Nome</th><th>Login</th><th>E-mail</th><th>Perfil</th><th>Situação</th><th>Último acesso</th><th></th></tr></thead><tbody>${lista.map(u => { const [s, cs] = situacaoUsuario(u); return `<tr>
+    <td><span class="u-nome"><span class="u-av" style="background:${COR_PERFIL[u.perfil] || '#64748b'}">${esc(iniciais(u.nome))}</span><span><b>${esc(u.nome)}</b>${u.login === cfg.login ? ' <span class="chip" style="--c:#2563eb">você</span>' : ''}<small>criado ${u.criadoEm ? fmtData(u.criadoEm) : '—'}${u.criadoPor ? ' por ' + esc(u.criadoPor) : ''}</small></span></span></td>
     <td><code>${esc(u.login)}</code></td><td>${esc(u.email || '—')}</td>
     <td><span class="chip" style="--c:${COR_PERFIL[u.perfil] || '#64748b'}">${esc(u.perfil)}</span></td>
-    <td><span class="chip" style="--c:${cs}">${st}</span></td>
-    <td>${u.ultimoAcesso ? fmtData(u.ultimoAcesso) : '—'}</td>
-    <td><div class="u-acoes"><button class="btn btn-s btn-sm" onclick="formUsuario(${arg(u.id)})" title="Editar"><i class="fa-solid fa-pen"></i>Editar</button><button class="btn btn-s btn-sm" onclick="resetarSenha(${arg(u.id)})" title="Gerar senha provisória"><i class="fa-solid fa-key"></i>Redefinir senha</button>${u.login === cfg.login ? '' : `<button class="btn btn-perigo btn-sm btn-i" onclick="excluirUsuario(${arg(u.id)})" title="Excluir"><i class="fa-solid fa-trash-can"></i></button>`}</div></td></tr>`; }).join('')}</tbody></table></div>
-    <p style="font-size:12px;color:var(--mut);margin-top:10px">Senhas nunca aparecem aqui: o sistema guarda só uma versão cifrada. Para um novo acesso ou esquecimento, gere uma <b>senha provisória</b>; a pessoa define a própria no primeiro login.</p>`;
+    <td><span class="chip" style="--c:${cs}">${s}</span>${Number(u.tentativas) && !u.bloqueado ? `<small style="display:block;color:var(--alerta);font-size:11px;margin-top:3px">${u.tentativas} senha(s) errada(s)</small>` : ''}</td>
+    <td>${u.ultimoAcesso ? fmtData(u.ultimoAcesso) : '<span style="color:var(--mut)">nunca</span>'}</td>
+    <td><div class="u-acoes"><button class="btn btn-s btn-sm" onclick="formUsuario(${arg(u.id)})"><i class="fa-solid fa-pen"></i>Editar</button><button class="btn btn-p btn-sm" onclick="acoesUsuario(${arg(u.id)})"><i class="fa-solid fa-key"></i>Senha e acesso</button></div></td></tr>`; }).join('')}</tbody></table></div>`;
+}
+
+// Painel de ações de um usuário (senha, bloqueio, sessões, situação, exclusão)
+function acoesUsuario(id){
+  const u = usuarios.find(x => x.id === id); if (!u) return;
+  const proprio = u.login === cfg.login, [s, cs] = situacaoUsuario(u);
+  const it = (a, ic, t, d, cls) => `<button type="button" data-a="${a}" class="${cls || ''}"><i class="fa-solid ${ic}"></i><span><b>${t}</b><small>${d}</small></span></button>`;
+  const m = document.createElement('div'); m.className = 'modal';
+  m.innerHTML = `<div class="cx" role="dialog" aria-modal="true" style="max-width:460px">
+    <div class="u-nome" style="margin-bottom:4px"><span class="u-av" style="width:42px;height:42px;font-size:14px;background:${COR_PERFIL[u.perfil] || '#64748b'}">${esc(iniciais(u.nome))}</span><span><b style="font-size:15px">${esc(u.nome)}</b><small><code>${esc(u.login)}</code> · ${esc(u.perfil)} · <span style="color:${cs};font-weight:700">${s}</span></small></span></div>
+    <div class="sheet-acoes">
+      ${it('definir', 'fa-key', 'Definir nova senha', 'Você escolhe a senha e informa à pessoa. Pode exigir que ela troque no próximo acesso.')}
+      ${it('provisoria', 'fa-wand-magic-sparkles', 'Gerar senha provisória', 'O sistema cria uma senha aleatória; a pessoa define a própria ao entrar.')}
+      ${u.bloqueado || Number(u.tentativas) ? it('desbloquear', 'fa-lock-open', 'Desbloquear', u.bloqueado ? 'Libera o login agora, sem esperar os 15 minutos.' : 'Zera o contador de senhas erradas.') : ''}
+      ${proprio ? '' : it('sessoes', 'fa-right-from-bracket', 'Encerrar sessões abertas', 'Desconecta a pessoa de todos os computadores e celulares. A senha não muda.')}
+      ${proprio ? '' : it('situacao', u.ativo === 'Sim' ? 'fa-user-slash' : 'fa-user-check', u.ativo === 'Sim' ? 'Desativar acesso' : 'Reativar acesso', u.ativo === 'Sim' ? 'Bloqueia o login sem apagar o usuário. Pode ser reativado depois.' : 'Volta a permitir o login com a senha atual.')}
+      ${it('historico', 'fa-clock-rotate-left', 'Ver registro de acessos', 'Logins, tentativas e alterações desta pessoa.')}
+      ${proprio ? '' : it('excluir', 'fa-trash-can', 'Excluir usuário', 'Remove o acesso de vez. O histórico de alterações é mantido.', 'perigo')}
+    </div>
+    <div class="acoes"><button type="button" class="btn btn-s" data-a="fechar">Fechar</button></div></div>`;
+  m.addEventListener('click', e => {
+    const b = e.target.closest('[data-a]'); if (!b && e.target !== m) return;
+    m.remove(); const a = b && b.dataset.a;
+    if (a === 'definir') definirSenhaUsuario(id);
+    if (a === 'provisoria') resetarSenha(id);
+    if (a === 'desbloquear') acaoSimples(id, 'user_unlock', 'Usuário desbloqueado.');
+    if (a === 'sessoes') confirmar('Encerrar sessões', `Desconectar <b>${esc(u.nome)}</b> de todos os aparelhos? Ela precisará entrar de novo com a senha atual.`, 'Encerrar sessões').then(ok => ok && acaoSimples(id, 'user_logout', 'Sessões encerradas.'));
+    if (a === 'situacao') alternarAtivo(id);
+    if (a === 'historico') { abaAdm('acessos'); setTimeout(() => { const q = $('#ac-q'); if (q) { q.value = u.login; filtrarAcessos(); } }, 400); }
+    if (a === 'excluir') excluirUsuario(id);
+  });
+  document.body.appendChild(m);
+}
+async function acaoSimples(id, action, msg){
+  try { const r = await chamar({ action, id }, 30000); if (r.status !== 'success') throw new Error(r.message); toast(msg); renderUsuarios(); }
+  catch (e) { toast(e.message, 'erro'); }
+}
+async function alternarAtivo(id){
+  const u = usuarios.find(x => x.id === id); if (!u) return;
+  const ativar = u.ativo !== 'Sim';
+  if (!ativar && !await confirmar('Desativar acesso', `<b>${esc(u.nome)}</b> não conseguirá mais entrar e as sessões abertas serão encerradas. Você pode reativar depois.`, 'Desativar', true)) return;
+  try { const r = await chamar({ action:'user_save', usuario:{ id:u.id, nome:u.nome, login:u.login, email:u.email, perfil:u.perfil, ativo: ativar ? 'Sim' : 'Não' } }, 30000); if (r.status !== 'success') throw new Error(r.message); toast(ativar ? 'Acesso reativado.' : 'Acesso desativado.'); renderUsuarios(); }
+  catch (e) { toast(e.message, 'erro'); }
+}
+function sugerirSenha(){
+  const L = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz', N = '23456789', T = L + N + '@#$%&*';
+  const r = n => { const a = new Uint32Array(1); crypto.getRandomValues(a); return a[0] % n; };
+  let s = L[r(L.length)] + N[r(N.length)]; while (s.length < 12) s += T[r(T.length)];
+  return s.split('').sort(() => r(3) - 1).join('');
+}
+function forcaSenha(s){
+  let p = 0; if (s.length >= 8) p++; if (s.length >= 12) p++; if (/[a-z]/.test(s) && /[A-Z]/.test(s)) p++; if (/\d/.test(s)) p++; if (/[^A-Za-z0-9]/.test(s)) p++;
+  return [['Muito fraca', '#dc2626', 15], ['Fraca', '#dc2626', 30], ['Razoável', '#d97706', 55], ['Boa', '#16a34a', 78], ['Forte', '#16a34a', 100], ['Forte', '#16a34a', 100]][p];
+}
+function medirSenha(inp){
+  const [t, c, w] = forcaSenha(inp.value), cx = inp.closest('form').querySelector('[data-forca]');
+  if (!cx) return; cx.querySelector('i').style.cssText = `width:${inp.value ? w : 0}%;background:${c}`; cx.nextElementSibling.textContent = inp.value ? 'Força: ' + t : '';
+}
+function definirSenhaUsuario(id){
+  const u = usuarios.find(x => x.id === id); if (!u) return;
+  const proprio = u.login === cfg.login;
+  let senhaFinal = '';
+  abrirModal({ titulo:'Definir nova senha', rotulo:'Salvar senha', largura:460,
+    html:`<p>Nova senha de <b>${esc(u.nome)}</b> (<code>${esc(u.login)}</code>). As sessões abertas dessa pessoa serão encerradas.</p>
+      <label><span class="rot">Nova senha</span><span class="senha-cx"><input id="ds-senha" class="campo" type="password" autocomplete="new-password" required oninput="medirSenha(this)"><button type="button" class="ver" title="Mostrar senha" onclick="verSenha(this)"><i class="fa-solid fa-eye"></i></button></span></label>
+      <div class="forca" data-forca><i></i></div><small style="font-size:11.5px;color:var(--mut)"></small>
+      <button type="button" class="btn btn-s btn-sm" style="align-self:flex-start" onclick="const i=this.closest('form').querySelector('#ds-senha');i.value=sugerirSenha();i.type='text';medirSenha(i)"><i class="fa-solid fa-dice"></i>Sugerir senha forte</button>
+      <label class="chk"><input type="checkbox" id="ds-trocar" ${proprio ? '' : 'checked'}><span>Exigir que a pessoa crie a própria senha no próximo acesso <small style="display:block;color:var(--mut)">Recomendado: assim só ela conhecerá a senha definitiva.</small></span></label>
+      <p style="font-size:12px">Mínimo de <b>8 caracteres</b>, com letras e números.</p>`,
+    aoConfirmar: async m => {
+      const s = m.querySelector('#ds-senha').value, troca = m.querySelector('#ds-trocar').checked;
+      if (s.length < 8 || !/[A-Za-zÀ-ú]/.test(s) || !/\d/.test(s)) throw new Error('A senha precisa ter pelo menos 8 caracteres, com letras e números.');
+      const r = await chamar({ action:'user_set_password', id, senha:s, exigirTroca:troca }, 30000);
+      if (r.status !== 'success') throw new Error(r.message);
+      senhaFinal = s; return r;
+    }
+  }).then(async r => {
+    if (!r) return;
+    if (proprio) { sessaoEncerrada('Sua senha foi alterada. Entre com a nova senha.'); return; }
+    await abrirModal({ titulo:'Senha definida', rotulo:'Pronto', semCancelar:true,
+      html:`<p>Passe estes dados a <b>${esc(u.nome)}</b>${r.usuario.trocarSenha === 'Sim' ? '. No próximo acesso o GABOrg pedirá uma senha pessoal' : ''}.</p>
+        <p><span class="rot">Usuário</span><code style="font-size:14px">${esc(u.login)}</code></p>
+        <div><span class="rot">Senha</span><div class="senha-prov">${esc(senhaFinal)}</div></div>
+        <button type="button" class="btn btn-s" onclick="navigator.clipboard && navigator.clipboard.writeText(${arg('Endereço: ' + location.href.split('#')[0] + '\nUsuário: ' + u.login + '\nSenha: ' + senhaFinal)}).then(() => toast('Copiado.'))"><i class="fa-regular fa-copy"></i>Copiar usuário e senha</button>` });
+    renderUsuarios();
+  });
+}
+
+/* Registro de acessos */
+async function renderAcessos(recarregar){
+  const c = $('#u-corpo');
+  if (!acessos.length || recarregar !== false) {
+    if (!acessos.length) c.innerHTML = '<div class="cartao vazio"><i class="fa-solid fa-circle-notch fa-spin"></i>Carregando registro...</div>';
+    try { const r = await chamar({ action:'access_log', limite:1000 }, 30000); if (r.status !== 'success') throw new Error(r.message); acessos = r.acessos || []; }
+    catch (e) { c.innerHTML = `<div class="cartao vazio" style="color:var(--perigo)">${esc(e.message)}${/desconhecida/i.test(e.message) ? '<br><small>Atualize o Codigo.gs no Apps Script e publique uma nova versão.</small>' : ''}</div>`; return; }
+  }
+  if (abaAdmAtual !== 'acessos') return;
+  const hoje = new Date().toISOString().slice(0, 10);
+  const deHoje = acessos.filter(a => (a.data || '').slice(0, 10) === hoje);
+  const kpi = (cor, ic, r, v, s) => `<div class="cartao kpi" style="--c:${cor}"><div class="r"><i class="fa-solid ${ic}"></i>${r}</div><div class="v">${v}</div><div class="s">${s}</div></div>`;
+  const eventos = [...new Set(acessos.map(a => a.evento))].sort();
+  c.innerHTML = `<div class="kpis">
+      ${kpi('#16a34a', 'fa-right-to-bracket', 'Logins hoje', deHoje.filter(a => a.evento === 'Login').length, `${new Set(deHoje.filter(a => a.evento === 'Login').map(a => a.login)).size} pessoa(s)`)}
+      ${kpi('#d97706', 'fa-triangle-exclamation', 'Falhas hoje', deHoje.filter(a => /incorreta|recusado|Bloqueado/.test(a.evento)).length, 'senhas erradas e recusas')}
+      ${kpi('#7c3aed', 'fa-key', 'Mudanças de senha', acessos.filter(a => /Senha/.test(a.evento)).length, 'no período carregado')}
+      ${kpi('#475569', 'fa-list', 'Registros', acessos.length, acessos.length ? 'desde ' + fmtData(acessos[acessos.length - 1].data) : '—')}
+    </div>
+    <div class="adm-filtros">
+      <div class="busca"><i class="fa-solid fa-magnifying-glass"></i><input id="ac-q" class="campo" placeholder="Buscar usuário ou detalhe" oninput="filtrarAcessos()"></div>
+      <select id="ac-ev" class="campo" onchange="filtrarAcessos()"><option value="">Todos os eventos</option><option value="__falhas">Só falhas e bloqueios</option>${eventos.map(e => `<option>${esc(e)}</option>`).join('')}</select>
+      <button class="btn btn-s" onclick="exportarAcessos()"><i class="fa-solid fa-file-csv"></i>Exportar CSV</button>
+    </div>
+    <div id="ac-lista"></div>`;
+  filtrarAcessos();
+}
+function acessosFiltrados(){
+  const q = norm(($('#ac-q') || {}).value || ''), ev = ($('#ac-ev') || {}).value || '';
+  return acessos.filter(a => (!q || norm(a.login + ' ' + a.nome + ' ' + a.detalhe + ' ' + a.autor).includes(q)) && (!ev || (ev === '__falhas' ? /incorreta|recusado|Bloqueado/.test(a.evento) : a.evento === ev)));
+}
+function filtrarAcessos(){
+  const el = $('#ac-lista'); if (!el) return;
+  const l = acessosFiltrados();
+  if (!l.length) { el.innerHTML = '<div class="cartao vazio">Nenhum registro.</div>'; return; }
+  el.innerHTML = `<div class="tab-wrap"><table class="tab"><thead><tr><th>Data</th><th>Usuário</th><th>Evento</th><th>Detalhe</th><th>Feito por</th></tr></thead><tbody>${l.slice(0, 500).map(a => `<tr>
+    <td style="white-space:nowrap">${fmtData(a.data)}</td>
+    <td class="ev"><b>${esc(a.nome || '—')}</b><br><small><code>${esc(a.login)}</code></small></td>
+    <td><span class="chip" style="--c:${COR_EVENTO[a.evento] || '#64748b'}">${esc(a.evento)}</span></td>
+    <td class="ev">${esc(a.detalhe || '')}</td>
+    <td class="ev">${esc(a.autor || (a.evento === 'Login' || /incorreta|recusado|Bloqueado/.test(a.evento) ? '' : 'a própria pessoa'))}</td></tr>`).join('')}</tbody></table></div>
+    ${l.length > 500 ? `<p style="font-size:12px;color:var(--mut)">Mostrando os 500 mais recentes de ${l.length}. Use a busca ou exporte o CSV para ver todos.</p>` : ''}`;
+}
+function exportarAcessos(){
+  const l = acessosFiltrados(), q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+  const csv = '﻿' + ['Data;Login;Nome;Evento;Detalhe;Feito por', ...l.map(a => [fmtData(a.data), a.login, a.nome, a.evento, a.detalhe, a.autor].map(q).join(';'))].join('\r\n');
+  const b = new Blob([csv], { type:'text/csv;charset=utf-8' }), u = URL.createObjectURL(b), lk = document.createElement('a');
+  lk.href = u; lk.download = 'gaborg-acessos-' + new Date().toISOString().slice(0, 10) + '.csv'; lk.click(); setTimeout(() => URL.revokeObjectURL(u), 1000);
+}
+
+/* Perfis */
+function renderPerfis(){
+  const linhas = [
+    ['Ver o mapa, a lista e os indicadores', 1, 1, 1], ['Exportar CSV e cópia JSON', 1, 1, 1],
+    ['Criar, alterar, mover e excluir setores', 0, 1, 1], ['Valores, análise, validações e vínculos', 0, 1, 1], ['Alinhar e organizar o mapa', 0, 1, 1],
+    ['Restaurar a estrutura do decreto / importar cópia', 0, 0, 1], ['Gerenciar usuários, senhas e acessos', 0, 0, 1]
+  ];
+  const ok = v => v ? '<i class="fa-solid fa-check" style="color:var(--ok)"></i>' : '<span style="color:var(--mut2)">—</span>';
+  const n = p => usuarios.filter(u => u.perfil === p && u.ativo === 'Sim').length;
+  $('#u-corpo').innerHTML = `<div class="tab-wrap"><table class="tab"><thead><tr><th>Permissão</th><th style="text-align:center">Leitor (${n('Leitor')})</th><th style="text-align:center">Editor (${n('Editor')})</th><th style="text-align:center">Administrador (${n('Administrador')})</th></tr></thead>
+    <tbody>${linhas.map(([t, a, b, c]) => `<tr><td>${t}</td><td style="text-align:center">${ok(a)}</td><td style="text-align:center">${ok(b)}</td><td style="text-align:center">${ok(c)}</td></tr>`).join('')}</tbody></table></div>
+    <div class="cartao bl" style="margin-top:14px"><h3><i class="fa-solid fa-shield-halved"></i>Regras de segurança</h3>
+      <p class="s" style="line-height:1.7">• Senhas com no mínimo 8 caracteres, letras e números, guardadas só de forma cifrada.<br>• 5 senhas erradas seguidas bloqueiam o login por 15 minutos (o administrador pode desbloquear antes).<br>• Sessão de 12 horas, ou 30 dias com "Manter conectado".<br>• Trocar, definir ou redefinir a senha encerra as sessões abertas da pessoa.<br>• Sempre fica pelo menos um administrador ativo.<br>• Perdeu o acesso de administrador? Na planilha: menu 🏛️ GABOrg › Redefinir senha de um usuário.</p></div>`;
 }
 function mostrarSenhaProvisoria(u, senha, nova){
   return abrirModal({ titulo: nova ? 'Usuário criado' : 'Senha redefinida', rotulo:'Pronto', semCancelar:true,

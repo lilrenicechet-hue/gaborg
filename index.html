@@ -324,6 +324,29 @@ body:not(.adm) .so-adm{display:none!important}
 .perfis .cartao{padding:12px 14px;font-size:12.5px;color:var(--txt2);line-height:1.5}
 .perfis b{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--txt);margin-bottom:2px}
 .u-acoes{display:flex;gap:6px;justify-content:flex-end}
+.adm-abas{margin-bottom:14px;max-width:100%;overflow-x:auto}
+.adm-abas button{white-space:nowrap}
+.adm-filtros{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.adm-filtros .campo{width:auto;min-width:150px;flex:0 1 auto}
+.adm-filtros .busca{flex:1 1 220px;min-width:180px;position:relative}
+.adm-filtros .busca i{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--mut2);font-size:12px}
+.adm-filtros .busca input{padding-left:32px;width:100%}
+.u-av{width:30px;height:30px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff;flex-shrink:0}
+.u-nome{display:inline-flex;align-items:center;gap:9px;min-width:0}
+.u-nome small{display:block;color:var(--mut);font-size:11px;font-weight:500}
+.ev{font-size:12px}
+.ev small{color:var(--mut)}
+.sheet-acoes{display:flex;flex-direction:column;gap:2px}
+.sheet-acoes button{display:flex;align-items:flex-start;gap:12px;width:100%;text-align:left;padding:10px;border-radius:10px;color:var(--txt)}
+.sheet-acoes button:hover{background:var(--sup3)}
+.sheet-acoes button i{width:20px;text-align:center;color:var(--mut);margin-top:2px}
+.sheet-acoes button b{display:block;font-size:13.5px}
+.sheet-acoes button small{display:block;font-size:12px;color:var(--mut);font-weight:500;line-height:1.4}
+.sheet-acoes button.perigo b,.sheet-acoes button.perigo i{color:var(--perigo)}
+.forca{height:6px;border-radius:999px;background:var(--sup3);overflow:hidden;margin-top:6px}
+.forca i{display:block;height:100%;width:0;transition:width .2s,background .2s}
+.chk{display:flex;gap:9px;align-items:flex-start;font-size:13px;color:var(--txt2);cursor:pointer}
+.chk input{margin-top:3px}
 .ro-aviso{display:flex;align-items:center;gap:8px;font-size:12.5px;padding:9px 12px;border-radius:10px;background:color-mix(in srgb,var(--marca) 8%,var(--sup));color:var(--txt2);border:1px solid color-mix(in srgb,var(--marca) 22%,var(--linha));margin-bottom:12px}
 .cfg .bl{display:flex;flex-direction:column;gap:12px}
 .cfg .acoes{display:flex;gap:8px;flex-wrap:wrap}
@@ -348,6 +371,7 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background
   .nav-b{flex:1 0 54px;min-width:54px;max-width:96px;padding:0 4px;position:relative}
   .nav-b span:not(.qt){max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .nav-b[data-vista="config"] span{font-size:0}.nav-b[data-vista="config"] span::after{content:'Ajustes';font-size:10px}
+  .nav-b[data-vista="usuarios"] span{font-size:0}.nav-b[data-vista="usuarios"] span::after{content:'Admin';font-size:10px}
   .nav-b[data-vista="painel"] span{font-size:0}.nav-b[data-vista="painel"] span::after{content:'Painel';font-size:10px}
   .lado-pe .av{width:38px;height:38px;cursor:pointer;box-shadow:0 0 0 2px #1e293b}
   .vista{padding-top:env(safe-area-inset-top)}
@@ -371,15 +395,17 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background
   .modal{align-items:flex-end;padding:0}
   .modal .cx{max-width:none!important;border-radius:18px 18px 0 0;padding:20px 18px calc(18px + env(safe-area-inset-bottom));max-height:92vh;overflow:auto}
   .lg-form{padding-bottom:calc(24px + env(safe-area-inset-bottom))}
-  /* Usuários: tabela vira cartões */
-  #u-corpo .tab-wrap{border:0;background:none;overflow:visible}
-  #u-corpo .tab thead{display:none}
-  #u-corpo .tab,#u-corpo .tab tbody{display:block}
-  #u-corpo .tab tr{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:12px;margin-bottom:10px;border:1px solid var(--linha);border-radius:12px;background:var(--sup)}
-  #u-corpo .tab td{display:block;border:0!important;padding:0!important;font-size:12.5px}
-  #u-corpo .tab td:first-child{width:100%}
-  #u-corpo .tab td:last-child{width:100%}
-  #u-corpo .u-acoes{display:flex;gap:6px;flex-wrap:wrap}
+  /* Administração: tabelas viram cartões */
+  #ua-lista .tab-wrap,#ac-lista .tab-wrap{border:0;background:none;overflow:visible}
+  #ua-lista .tab thead,#ac-lista .tab thead{display:none}
+  #ua-lista .tab,#ua-lista .tab tbody,#ac-lista .tab,#ac-lista .tab tbody{display:block}
+  #ua-lista .tab tr,#ac-lista .tab tr{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:12px;margin-bottom:10px;border:1px solid var(--linha);border-radius:12px;background:var(--sup)}
+  #ua-lista .tab td,#ac-lista .tab td{display:block;border:0!important;padding:0!important;font-size:12.5px}
+  #ua-lista .tab td:first-child{width:100%}
+  #ua-lista .tab td:last-child{width:100%}
+  #ua-lista .u-acoes{display:flex;gap:6px;flex-wrap:wrap}
+  .adm-filtros .campo{flex:1 1 140px;min-width:0}
+  .kpis{grid-template-columns:1fr 1fr}
 }
 </style>
 </head>
@@ -434,7 +460,7 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background
       <button class="nav-b" data-vista="painel"><i class="fa-solid fa-chart-simple"></i><span>Indicadores</span></button>
       <button class="nav-b" data-vista="validacoes"><i class="fa-solid fa-stamp"></i><span>Validações</span><span class="qt hidden" id="nav-val"></span></button>
       <h6>SISTEMA</h6>
-      <button class="nav-b so-adm" data-vista="usuarios"><i class="fa-solid fa-users"></i><span>Usuários</span></button>
+      <button class="nav-b so-adm" data-vista="usuarios"><i class="fa-solid fa-user-shield"></i><span>Administração</span></button>
       <button class="nav-b" data-vista="config"><i class="fa-solid fa-gear"></i><span>Configurações</span></button>
     </nav>
     <div class="lado-pe">
@@ -545,15 +571,15 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background
       </div>
     </section>
 
-    <!-- USUÁRIOS -->
+    <!-- ADMINISTRAÇÃO -->
     <section class="vista fora" id="v-usuarios">
-      <div class="topo"><div><h1><i class="fa-solid fa-users"></i>Usuários</h1><p>Quem acessa o GABOrg e o que cada pessoa pode fazer.</p></div>
-        <div class="dir"><button class="btn btn-s" onclick="renderUsuarios()"><i class="fa-solid fa-rotate"></i>Atualizar</button><button class="btn btn-p" onclick="formUsuario()"><i class="fa-solid fa-user-plus"></i>Novo usuário</button></div></div>
+      <div class="topo"><div><h1><i class="fa-solid fa-user-shield"></i>Administração</h1><p>Logins, senhas e perfis de acesso ao GABOrg, e o registro de quem entrou e do que foi feito.</p></div>
+        <div class="dir"><button class="btn btn-s" onclick="renderUsuarios(true)"><i class="fa-solid fa-rotate"></i>Atualizar</button><button class="btn btn-p" onclick="formUsuario()"><i class="fa-solid fa-user-plus"></i>Novo usuário</button></div></div>
       <div class="rolagem">
-        <div class="perfis">
-          <div class="cartao"><b><i class="fa-solid fa-user-shield" style="color:#dc2626"></i>Administrador</b>Altera a estrutura, restaura e importa cópias e gerencia usuários e senhas.</div>
-          <div class="cartao"><b><i class="fa-solid fa-user-pen" style="color:#2563eb"></i>Editor</b>Cria, altera, move e exclui setores, valores, análises, validações e vínculos.</div>
-          <div class="cartao"><b><i class="fa-solid fa-user" style="color:#64748b"></i>Leitor</b>Consulta o mapa, a lista, os indicadores e exporta, sem alterar nada.</div>
+        <div class="adm-abas seg" role="tablist">
+          <button data-aba="usuarios" class="on" onclick="abaAdm('usuarios')"><i class="fa-solid fa-users"></i>Usuários e senhas</button>
+          <button data-aba="acessos" onclick="abaAdm('acessos')"><i class="fa-solid fa-clock-rotate-left"></i>Registro de acessos</button>
+          <button data-aba="perfis" onclick="abaAdm('perfis')"><i class="fa-solid fa-id-badge"></i>Perfis</button>
         </div>
         <div id="u-corpo"></div>
       </div>
