@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.6.0';
+const VERSAO = '1.7.0';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -77,9 +77,10 @@ const CAMPOS = {
   vinculos: ['id','origemId','destinoId','tipo','descricao'],
   historico: ['id','setorId','data','usuario','acao'],
   rubricas: ['id','codigo','nome','categoria','valorMensal','encargos','meses','observacao','ativo','atualizadoEm','atualizadoPor','percEfetivo','fonte'],
-  despesas: ['id','setorId','rubricaId','descricao','quantidade','valorUnitario','meses','cenario','observacao','atualizadoEm','atualizadoPor','vinculo']
+  despesas: ['id','setorId','rubricaId','descricao','quantidade','valorUnitario','meses','cenario','observacao','atualizadoEm','atualizadoPor','vinculo'],
+  propostas: ['id','nome','descricao','status','itens','criadoEm','criadoPor','atualizadoEm','atualizadoPor']
 };
-const TABS_DB = ['setores','validacoes','vinculos','historico','rubricas','despesas'];
+const TABS_DB = ['setores','validacoes','vinculos','historico','rubricas','despesas','propostas'];
 
 /* ===================== ESTRUTURA DO DECRETO Nº 2.236/2026 =====================
    Hierarquia montada a partir do anexo (organograma). Cada nível = 2 espaços.
@@ -300,7 +301,7 @@ function construirDecreto(){
     const nrc = add('Núcleo de Regime de Colaboração da Diretoria Regional de ' + cid, pol);
     V.push(novoReg('vinculos', { id:'dv'+String(++nv).padStart(3,'0'), origemId:nrc, destinoId:d, tipo:'Atuação regional', descricao:'Atua junto à DRE de ' + cid + ' no regime de colaboração com os municípios.' }));
   });
-  return { setores:L, vinculos:V, validacoes:[], historico:[], rubricas:[], despesas:[] };
+  return { setores:L, vinculos:V, validacoes:[], historico:[], rubricas:[], despesas:[], propostas:[] };
 }
 
 /* ===================== UTILITÁRIOS ===================== */
@@ -346,7 +347,7 @@ function confirmar(titulo, texto, rotulo, perigo){
 }
 
 /* ===================== ESTADO ===================== */
-let DB = { setores:[], validacoes:[], vinculos:[], historico:[], rubricas:[], despesas:[] };
+let DB = { setores:[], validacoes:[], vinculos:[], historico:[], rubricas:[], despesas:[], propostas:[] };
 let backendVersao = '';
 const URL_PADRAO = 'https://script.google.com/macros/s/AKfycbzZsM71FJARYYoqpRcFY4tHUAVBV-EdVW2NDL6eLaMId-iXY6Z-bnhuOkxA2nyfrdUz/exec';
 let cfg = Object.assign({ url:URL_PADRAO, login:'', usuario:'', perfil:'', modo:'' }, store.get('gaborg_cfg', {}));
@@ -1220,6 +1221,7 @@ function atualizarVistaAtual(){
   else if (vistaAtual === 'config') renderConfig();
   else if (vistaAtual === 'usuarios') renderUsuarios();
   else if (vistaAtual === 'financeiro') renderFinanceiro();
+  else if (vistaAtual === 'propostas') renderPropostas();
 }
 function redesenharTudo(){ indexar(); atualizarVistaAtual(); if (selId && porId.has(selId)) renderPainel(); else fecharPainel(); }
 function atualizarBadgeVal(){ const n = DB.validacoes.filter(v => !v.status || v.status === 'Pendente').length, b = $('#nav-val'); if (!b) return; b.textContent = n; b.classList.toggle('hidden', !n); }
@@ -1401,7 +1403,7 @@ function exportarCSV(){
 }
 async function restaurarDecreto(){
   if (!await confirmar('Restaurar estrutura do decreto', 'Todos os setores, valores, validações e vínculos atuais serão substituídos pela estrutura original do Decreto nº 2.236/2026. Exporte uma cópia antes, se precisar.', 'Restaurar', true)) return;
-  DB = Object.assign(construirDecreto(), { historico:DB.historico, rubricas:DB.rubricas || [], despesas:DB.despesas || [] });
+  DB = Object.assign(construirDecreto(), { historico:DB.historico, rubricas:DB.rubricas || [], despesas:DB.despesas || [], propostas:DB.propostas || [] });
   indexar();abertos = new Set(raizes().map(r => r.id)); salvarAbertos();
   salvarLocal();
   if (online()) { try { const r = await chamar({ action:'replace_all', dados:DB }, 120000); if (r.status !== 'success') throw new Error(r.message); versaoNuvem = String(r.versao || ''); } catch (e) { toast(e.message, 'erro'); } }
@@ -2080,8 +2082,8 @@ function novaRubrica(){
 }
 async function excluirRubrica(id){
   const r = rubricaDe(id); if (!r || somenteLeitura()) return;
-  const n = DB.despesas.filter(d => d.rubricaId === id).length;
-  if (n) return toast(`Este item é usado em ${n} lançamento(s). Desative-o em vez de excluir.`, 'aviso');
+  const n = DB.despesas.filter(d => d.rubricaId === id).length + (DB.propostas || []).reduce((t, p) => t + itensProp(p).filter(i => i.rubricaId === id).length, 0);
+  if (n) return toast(`Este item é usado em ${n} lançamento(s) ou proposta(s). Desative-o em vez de excluir.`, 'aviso');
   if (!await confirmar('Excluir item', `Excluir <b>${esc(r.codigo || r.nome || 'item')}</b> da tabela de valores?`, 'Excluir', true)) return;
   DB.rubricas = DB.rubricas.filter(x => x !== r); enfileirar('rubricas', r, true); salvarLocal(); renderFinanceiro();
 }
@@ -2132,6 +2134,276 @@ function blocoFinSetor(s){
     <div class="fin-prev"><div>Mensal atual<b>${fmtM0(p.Atual.m)}</b></div><div>Mensal proposto<b>${fmtM0(p.Proposto.m)}</b></div>${temSub ? `<div>Com subordinados · atual<b>${fmtM0(t.Atual.m)}</b></div><div>Com subordinados · proposto<b>${fmtM0(t.Proposto.m)}</b></div>` : ''}</div>
     ${lst.length ? `<div class="tab-wrap" style="margin-top:10px"><table class="tab"><tbody>${lst.map(d => { const c = calcDesp(d); return `<tr><td><b>${esc(c.r.codigo || d.descricao || c.categoria)}</b> × ${c.qtd.toLocaleString('pt-BR')}<br><small style="color:var(--mut)">${esc(d.cenario || 'Atual')}</small></td><td class="fin-num">${fmtM(c.mensal)}/mês</td><td><div class="u-acoes so-edit"><button class="btn btn-s btn-sm btn-i" onclick="formDespesa(${arg(d.id)})" title="Editar"><i class="fa-solid fa-pen"></i></button></div></td></tr>`; }).join('')}</tbody></table></div>` : '<p style="font-size:12.5px;color:var(--mut)">Nenhum lançamento financeiro neste setor.</p>'}
     <div class="acoes" style="margin-top:10px"><button class="btn btn-p btn-sm so-edit" onclick="formDespesa('', ${arg(s.id)})"><i class="fa-solid fa-plus"></i>Lançamento</button><button class="btn btn-s btn-sm" onclick="trocarVista('financeiro');abaFin('lancamentos');setTimeout(()=>{const q=$('#fl-q');if(q){q.value=${arg(s.sigla || s.nome)};filtrarLancamentos()}},50)"><i class="fa-solid fa-arrow-up-right-from-square"></i>Abrir no Financeiro</button></div>`;
+}
+
+/* ===================== PROPOSTAS (cenários de estrutura e valores) ===================== */
+const STATUS_PROP = { 'Rascunho':'#64748b', 'Em análise':'#d97706', 'Aprovada':'#16a34a', 'Aplicada':'#2563eb', 'Arquivada':'#94a3b8' };
+const TIPOS_ALT = {
+  novo:['fa-square-plus', 'Criar setor', '#16a34a'], extinguir:['fa-square-minus', 'Extinguir setor', '#dc2626'], mover:['fa-arrows-up-down-left-right', 'Mudar subordinação', '#7c3aed'],
+  renomear:['fa-pen', 'Renomear / mudar tipo', '#0891b2'], cargo:['fa-user-tie', 'Trocar cargo do titular', '#ea580c'], despesa:['fa-coins', 'Despesa ou bolsa', '#ca8a04']
+};
+let propSel = '', abaPropAtual = 'propostas';
+const itensProp = p => { try { const a = JSON.parse(p.itens || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } };
+function salvarItensProp(p, itens, msgHist){
+  p.itens = JSON.stringify(itens); p.atualizadoEm = agora(); p.atualizadoPor = cfg.usuario || '';
+  enfileirar('propostas', p); salvarLocal();
+}
+function backendSemPropostas(){ return online() && backendVersao && backendVersao.localeCompare('1.6.0', undefined, { numeric:true }) < 0; }
+/* Estrutura resultante da proposta (cópia virtual; nada muda na estrutura real) */
+function estruturaProposta(p){
+  const lista = DB.setores.map(s => Object.assign({}, s, { _marcas:[] })), mapa = new Map(lista.map(s => [s.id, s]));
+  itensProp(p).forEach(it => {
+    if (it.tipo === 'novo') { const s = novoReg('setores', { id:it.novoId, nome:it.nome || 'Novo setor', sigla:it.sigla || '', tipo:it.tipoSetor || 'Coordenadoria', paiId:it.paiId || '', status:'Proposto', ordem:'999' }); s._marcas = ['novo']; lista.push(s); mapa.set(s.id, s); }
+    const s = mapa.get(it.setorId); if (!s) return;
+    if (it.tipo === 'extinguir') { const alvo = [s.id]; if (it.comSub) { const vis = id => lista.filter(x => x.paiId === id).forEach(x => { alvo.push(x.id); vis(x.id); }); vis(s.id); } alvo.forEach(id => { const x = mapa.get(id); x.status = 'Extinto'; x._marcas.push('extinto'); }); }
+    if (it.tipo === 'mover' && it.paiId && it.paiId !== s.id) { s.paiId = it.paiId; s._marcas.push('movido'); }
+    if (it.tipo === 'renomear') { if (it.nome) s.nome = it.nome; if (it.sigla !== undefined && it.sigla !== '') s.sigla = it.sigla; if (it.tipoSetor) s.tipo = it.tipoSetor; s._marcas.push('renomeado'); }
+    if (it.tipo === 'cargo') s._marcas.push('cargo');
+  });
+  return { lista, mapa };
+}
+/* Linhas de custo da proposta: base atual − setores extintos ± trocas de cargo + novas despesas/bolsas */
+function custoProposta(p){
+  const E = estruturaProposta(p), extinto = id => { const s = E.mapa.get(id); return !s || s.status === 'Extinto'; };
+  let linhas = DB.despesas.filter(d => (d.cenario || 'Atual') === 'Atual').map(d => Object.assign({}, d, { _orig:d.id }));
+  itensProp(p).forEach(it => {
+    if (it.tipo === 'novo' && it.rubricaId) linhas.push(novoReg('despesas', { id:'v' + it.id, setorId:it.novoId, rubricaId:it.rubricaId, quantidade:'1', vinculo:it.vinculo || 'Comissionado', descricao:'Titular (novo setor)', observacao:MARCA_CHEFIA }));
+    if (it.tipo === 'cargo' && it.setorId) {
+      const l = linhas.find(x => x.setorId === it.setorId && x.observacao === MARCA_CHEFIA);
+      if (it.rubricaId === '__remover') { if (l) linhas = linhas.filter(x => x !== l); }
+      else if (l) { l.rubricaId = it.rubricaId; l.vinculo = it.vinculo || l.vinculo; l.valorUnitario = ''; }
+      else linhas.push(novoReg('despesas', { id:'v' + it.id, setorId:it.setorId, rubricaId:it.rubricaId, quantidade:'1', vinculo:it.vinculo || 'Comissionado', descricao:'Titular', observacao:MARCA_CHEFIA }));
+    }
+    if (it.tipo === 'despesa') linhas.push(novoReg('despesas', { id:'v' + it.id, setorId:it.setorId || '', rubricaId:it.rubricaId || '', quantidade:String(it.qtd ?? '1'), valorUnitario:it.valor || '', meses:it.meses || '', vinculo:it.vinculo || '', descricao:it.descricao || '' }));
+  });
+  linhas = linhas.filter(l => !l.setorId || !extinto(l.setorId));
+  let m = 0, a = 0; linhas.forEach(l => { const c = calcDesp(l); m += c.mensal; a += c.anual; });
+  return { E, linhas, m, a };
+}
+function baseAtual(){ let m = 0, a = 0; DB.despesas.filter(d => (d.cenario || 'Atual') === 'Atual').forEach(d => { const c = calcDesp(d); m += c.mensal; a += c.anual; }); return { m, a }; }
+function abaProp(a){ abaPropAtual = a; document.querySelectorAll('.prop-abas button').forEach(b => b.classList.toggle('on', b.dataset.aba === a)); renderPropostas(); }
+function renderPropostas(){
+  const c = $('#pr-corpo'); if (!c) return;
+  const aviso = backendSemPropostas() ? `<div class="cartao bl" style="border-color:#f59e0b;margin-bottom:14px"><h3 style="color:#b45309"><i class="fa-solid fa-triangle-exclamation"></i>Atualize o backend</h3><p class="s">A planilha está com o Codigo.gs v${esc(backendVersao)}. Para gravar as propostas na planilha, cole o Codigo.gs novo no Apps Script e publique uma nova versão.</p></div>` : '';
+  if (abaPropAtual === 'bolsas') { c.innerHTML = aviso + renderBolsas(); return; }
+  if (propSel && !DB.propostas.some(p => p.id === propSel)) propSel = '';
+  const base = baseAtual();
+  const lista = [...DB.propostas].sort((a, b) => (b.atualizadoEm || '').localeCompare(a.atualizadoEm || ''));
+  c.innerHTML = aviso + `<div class="prop-grade">
+    <div class="prop-lista">
+      <button class="btn btn-p so-edit" style="width:100%;margin-bottom:10px" onclick="novaProposta()"><i class="fa-solid fa-plus"></i>Nova proposta</button>
+      ${lista.length ? lista.map(p => { const cp = custoProposta(p), dif = cp.m - base.m, n = itensProp(p).length; return `<button class="prop-card ${p.id === propSel ? 'on' : ''}" onclick="propSel=${esc(JSON.stringify(p.id))};renderPropostas()">
+        <span class="chip" style="--c:${STATUS_PROP[p.status] || '#64748b'}">${esc(p.status || 'Rascunho')}</span>
+        <b>${esc(p.nome || 'Sem nome')}</b><small>${n} alteração(ões) · ${p.atualizadoPor ? esc(p.atualizadoPor) + ' · ' : ''}${p.atualizadoEm ? new Date(p.atualizadoEm).toLocaleDateString('pt-BR') : ''}</small>
+        <span class="prop-dif ${dif > 0 ? 'fin-pos' : dif < 0 ? 'fin-neg' : ''}">${dif ? (dif > 0 ? '+' : '−') + fmtM0(Math.abs(dif)) + '/mês' : 'sem impacto financeiro'}</span></button>`; }).join('') : '<div class="cartao vazio">Nenhuma proposta ainda.</div>'}
+    </div>
+    <div class="prop-det">${propSel ? detalheProposta(DB.propostas.find(p => p.id === propSel), base) : `<div class="cartao bl"><h3><i class="fa-solid fa-lightbulb"></i>Propostas de estrutura e valores</h3><p class="s" style="line-height:1.7">Monte cenários sem mexer na estrutura oficial: <b>crie, extinga, mova ou renomeie setores</b>, <b>troque o cargo DGA</b> dos titulares e <b>inclua despesas e bolsas</b> com custos próprios. Cada proposta mostra o custo mensal e anual comparado ao atual, a diferença por item (DGA e bolsas) e a estrutura resultante. Quando uma proposta for aprovada, um administrador pode <b>aplicá-la</b> à estrutura oficial.</p><div class="acoes so-edit"><button class="btn btn-p" onclick="novaProposta()"><i class="fa-solid fa-plus"></i>Criar a primeira proposta</button></div></div>`}</div>
+  </div>`;
+}
+function novaProposta(copiaDe){
+  if (somenteLeitura()) return toast('Seu perfil é somente leitura.', 'aviso');
+  const o = copiaDe ? DB.propostas.find(p => p.id === copiaDe) : null;
+  abrirModal({ titulo: o ? 'Duplicar proposta' : 'Nova proposta', rotulo: o ? 'Duplicar' : 'Criar', largura:480,
+    html:`<label><span class="rot">Nome da proposta</span><input id="np-nome" class="campo" required value="${o ? esc(o.nome + ' (cópia)') : ''}" placeholder="ex.: Reestruturação da SAGP 2027"></label>
+      <label><span class="rot">Descrição / justificativa</span><textarea id="np-desc" class="campo" rows="3">${o ? esc(o.descricao) : ''}</textarea></label>`,
+    aoConfirmar: async m => {
+      const nome = m.querySelector('#np-nome').value.trim(); if (!nome) throw new Error('Dê um nome à proposta.');
+      const p = novoReg('propostas', { id:novoId('pp'), nome, descricao:m.querySelector('#np-desc').value.trim(), status:'Rascunho', itens:o ? o.itens : '[]', criadoEm:agora(), criadoPor:cfg.usuario || '', atualizadoEm:agora(), atualizadoPor:cfg.usuario || '' });
+      DB.propostas.push(p); enfileirar('propostas', p); salvarLocal(); propSel = p.id; return true;
+    }
+  }).then(ok => { if (ok) { abaProp('propostas'); } });
+}
+function nomeVirt(E, id){ const s = E.mapa.get(id); return s ? (s.sigla ? s.sigla + ' · ' : '') + s.nome : '(setor removido)'; }
+function descreverAlt(it, E){
+  const r = it.rubricaId && it.rubricaId !== '__remover' ? rubricaDe(it.rubricaId) : null, rn = r ? (r.codigo || r.nome) : '';
+  if (it.tipo === 'novo') return `<b>${esc(it.nome)}</b>${it.sigla ? ' (' + esc(it.sigla) + ')' : ''} · ${esc(it.tipoSetor || '')} · subordinado a ${esc(nomeVirt(E, it.paiId))}${rn ? ` · titular <b>${esc(rn)}</b>${it.vinculo === 'Efetivo' ? ' (efetivo)' : ''}` : ''}`;
+  if (it.tipo === 'extinguir') return `<b>${esc(nomeVirt(E, it.setorId))}</b>${it.comSub ? ' e todos os subordinados' : ' (subordinados ficam sem superior até serem movidos)'}`;
+  if (it.tipo === 'mover') return `<b>${esc(nomeVirt(E, it.setorId))}</b> passa a responder a <b>${esc(nomeVirt(E, it.paiId))}</b>`;
+  if (it.tipo === 'renomear') { const s = DB.setores.find(x => x.id === it.setorId); return `<b>${esc(s ? s.nome : nomeVirt(E, it.setorId))}</b> → ${esc(it.nome || '(mesmo nome)')}${it.tipoSetor ? ' · tipo ' + esc(it.tipoSetor) : ''}`; }
+  if (it.tipo === 'cargo') return `<b>${esc(nomeVirt(E, it.setorId))}</b>: titular ${it.rubricaId === '__remover' ? '<b>sem cargo em comissão</b>' : `passa a <b>${esc(rn)}</b>${it.vinculo === 'Efetivo' ? ' (efetivo)' : ''}`}`;
+  if (it.tipo === 'despesa') { const c = calcDesp({ rubricaId:it.rubricaId || '', quantidade:String(it.qtd ?? 1), valorUnitario:it.valor || '', meses:it.meses || '', vinculo:it.vinculo || '' }); return `${esc(rn || it.descricao || 'Despesa')} × <b>${numBR(it.qtd).toLocaleString('pt-BR')}</b>${it.descricao && rn ? ' · ' + esc(it.descricao) : ''} em ${esc(nomeVirt(E, it.setorId))} · <b>${fmtM(c.mensal)}/mês</b>${c.meses !== 12 ? ` (${c.meses.toLocaleString('pt-BR')} meses)` : ''}`; }
+  return '';
+}
+function detalheProposta(p, base){
+  const cp = custoProposta(p), itens = itensProp(p), dif = cp.m - base.m, difA = cp.a - base.a, E = cp.E, ro = somenteLeitura();
+  const novos = itens.filter(i => i.tipo === 'novo').length, ext = E.lista.filter(s => s._marcas.includes('extinto')).length;
+  // comparativo por item
+  const porItem = new Map(); const soma = (lst, k) => lst.forEach(l => { const c = calcDesp(l), key = l.rubricaId || '__' + (l.descricao || 'Valor próprio'); const o = porItem.get(key) || { nome:c.r.codigo || l.descricao || 'Valor próprio', cat:c.categoria, qa:0, qp:0, ma:0, mp:0 }; o['q' + k] += c.qtd; o['m' + k] += c.mensal; porItem.set(key, o); });
+  soma(DB.despesas.filter(d => (d.cenario || 'Atual') === 'Atual'), 'a'); soma(cp.linhas, 'p');
+  const linhasItem = [...porItem.values()].filter(o => o.qa || o.qp).sort((a, b) => Object.keys(CATEG_FIN).indexOf(a.cat) - Object.keys(CATEG_FIN).indexOf(b.cat) || String(a.nome).localeCompare(String(b.nome), 'pt-BR', { numeric:true }));
+  const dv = (a, b, moeda) => { const x = b - a; return x ? `<span class="${x > 0 ? 'fin-pos' : 'fin-neg'}">${x > 0 ? '+' : '−'}${moeda ? fmtM(Math.abs(x)) : Math.abs(x).toLocaleString('pt-BR')}</span>` : '<span style="color:var(--mut2)">—</span>'; };
+  const kpi = (cor, ic, r, v, s) => `<div class="cartao kpi" style="--c:${cor}"><div class="r"><i class="fa-solid ${ic}"></i>${r}</div><div class="v" style="font-size:21px">${v}</div><div class="s">${s}</div></div>`;
+  return `<div class="cartao bl prop-cab">
+      <div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap">
+        <div style="flex:1;min-width:220px"><input class="campo prop-nome" ${ro ? 'disabled' : ''} value="${esc(p.nome)}" onchange="editarProp(${arg(p.id)},'nome',this.value)">
+          <textarea class="campo" ${ro ? 'disabled' : ''} rows="2" style="margin-top:6px" placeholder="Descrição / justificativa" onchange="editarProp(${arg(p.id)},'descricao',this.value)">${esc(p.descricao)}</textarea></div>
+        <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
+          <select class="campo" style="width:auto" ${ro ? 'disabled' : ''} onchange="editarProp(${arg(p.id)},'status',this.value)">${Object.keys(STATUS_PROP).map(s => `<option ${s === (p.status || 'Rascunho') ? 'selected' : ''}>${s}</option>`).join('')}</select>
+          <div class="u-acoes"><button class="btn btn-s btn-sm" onclick="exportarProposta(${arg(p.id)})" title="Exportar comparativo (CSV)"><i class="fa-solid fa-file-csv"></i>CSV</button><button class="btn btn-s btn-sm so-edit" onclick="novaProposta(${arg(p.id)})" title="Duplicar"><i class="fa-regular fa-copy"></i>Duplicar</button>${ehAdmin() && p.status !== 'Aplicada' ? `<button class="btn btn-s btn-sm" onclick="aplicarProposta(${arg(p.id)})" title="Aplicar à estrutura oficial"><i class="fa-solid fa-check-double"></i>Aplicar</button>` : ''}<button class="btn btn-perigo btn-sm btn-i so-edit" onclick="excluirProposta(${arg(p.id)})" title="Excluir"><i class="fa-solid fa-trash-can"></i></button></div>
+        </div>
+      </div></div>
+    <div class="kpis">
+      ${kpi('#2563eb', 'fa-calendar-day', 'Custo mensal · atual', fmtM0(base.m), 'lançamentos do cenário Atual')}
+      ${kpi('#7c3aed', 'fa-lightbulb', 'Custo mensal · proposta', fmtM0(cp.m), fmtM0(cp.a) + ' por ano')}
+      ${kpi(dif > 0 ? '#dc2626' : '#16a34a', dif > 0 ? 'fa-arrow-trend-up' : 'fa-arrow-trend-down', 'Diferença', (dif > 0 ? '+' : dif < 0 ? '−' : '') + fmtM0(Math.abs(dif)) + '/mês', (difA > 0 ? '+' : difA < 0 ? '−' : '') + fmtM0(Math.abs(difA)) + ' por ano' + (base.m ? ` · ${(dif / base.m * 100).toLocaleString('pt-BR', { maximumFractionDigits:1 })}%` : ''))}
+      ${kpi('#0891b2', 'fa-sitemap', 'Estrutura', `+${novos} / −${ext}`, 'setores criados / extintos')}
+    </div>
+    <div class="cartao bl"><h3><i class="fa-solid fa-list-check"></i>Alterações da proposta</h3>
+      <div class="prop-add so-edit">${Object.entries(TIPOS_ALT).map(([k, [ic, n, cor]]) => `<button class="btn btn-s btn-sm" style="--c:${cor}" onclick="formAlteracao(${arg(p.id)},'','${k}')"><i class="fa-solid ${ic}" style="color:${cor}"></i>${n}</button>`).join('')}</div>
+      ${itens.length ? `<div class="prop-itens">${itens.map((it, i) => `<div class="prop-it" style="--c:${TIPOS_ALT[it.tipo][2]}"><i class="fa-solid ${TIPOS_ALT[it.tipo][0]}"></i><div><small>${TIPOS_ALT[it.tipo][1]}</small><span>${descreverAlt(it, E)}</span></div>
+        <div class="u-acoes so-edit">${i ? `<button class="btn btn-s btn-sm btn-i" title="Subir" onclick="moverAlt(${arg(p.id)},${i},-1)"><i class="fa-solid fa-arrow-up"></i></button>` : ''}<button class="btn btn-s btn-sm btn-i" title="Editar" onclick="formAlteracao(${arg(p.id)},${arg(it.id)},'${it.tipo}')"><i class="fa-solid fa-pen"></i></button><button class="btn btn-perigo btn-sm btn-i" title="Remover" onclick="removerAlt(${arg(p.id)},${arg(it.id)})"><i class="fa-solid fa-xmark"></i></button></div></div>`).join('')}</div>` : '<p class="s" style="margin-top:10px">Nenhuma alteração ainda. Use os botões acima: criar, extinguir, mover ou renomear setores, trocar o cargo DGA de um titular ou incluir despesas e bolsas.</p>'}
+    </div>
+    <div class="grade2" style="margin-top:14px">
+      <div class="cartao bl"><h3><i class="fa-solid fa-table-list"></i>Comparativo por item</h3>
+        ${linhasItem.length ? `<div class="tab-wrap" style="margin-top:8px"><table class="tab"><thead><tr><th>Item</th><th class="fin-num">Qtd atual</th><th class="fin-num">Qtd proposta</th><th class="fin-num">Δ qtd</th><th class="fin-num">Δ mensal</th></tr></thead><tbody>${linhasItem.map(o => `<tr><td><span class="chip" style="--c:${(CATEG_FIN[o.cat] || CATEG_FIN.Outro)[0]}">${esc(o.nome)}</span></td><td class="fin-num">${o.qa.toLocaleString('pt-BR')}</td><td class="fin-num">${o.qp.toLocaleString('pt-BR')}</td><td class="fin-num">${dv(o.qa, o.qp)}</td><td class="fin-num">${dv(o.ma, o.mp, true)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="s">Sem lançamentos financeiros.</p>'}</div>
+      <div class="cartao bl"><h3><i class="fa-solid fa-sitemap"></i>Estrutura resultante <small style="font-weight:500;color:var(--mut)">só setores afetados e seus superiores</small></h3>${arvoreProposta(E)}</div>
+    </div>`;
+}
+function arvoreProposta(E){
+  const afetados = E.lista.filter(s => s._marcas.length); if (!afetados.length) return '<p class="s">Nenhuma mudança de estrutura.</p>';
+  const mostrar = new Set(); afetados.forEach(s => { let x = s, g = 0; while (x && g++ < 40) { mostrar.add(x.id); x = E.mapa.get(x.paiId); } });
+  const filhos = id => E.lista.filter(s => (s.paiId || '') === id && mostrar.has(s.id));
+  const ROT = { novo:['novo', '#16a34a'], extinto:['extinto', '#dc2626'], movido:['movido', '#7c3aed'], renomeado:['renomeado', '#0891b2'], cargo:['cargo', '#ea580c'] };
+  const raizesV = E.lista.filter(s => (!s.paiId || !E.mapa.has(s.paiId)) && mostrar.has(s.id));
+  const no = (s, d) => `<div class="prop-no" style="padding-left:${d * 18}px;${s.status === 'Extinto' ? 'opacity:.6;text-decoration:line-through' : ''}"><i class="fa-solid ${icTipo(s.tipo)}" style="color:${corTipo(s.tipo)}"></i>${esc(s.sigla ? s.sigla + ' · ' : '')}${esc(s.nome)} ${[...new Set(s._marcas)].map(m => `<span class="chip" style="--c:${ROT[m][1]};text-decoration:none">${ROT[m][0]}</span>`).join(' ')}</div>` + filhos(s.id).map(f => no(f, d + 1)).join('');
+  return `<div class="prop-arvore">${raizesV.map(r => no(r, 0)).join('')}</div>`;
+}
+function editarProp(id, campo, valor){
+  const p = DB.propostas.find(x => x.id === id); if (!p || somenteLeitura()) return;
+  if (campo === 'status' && valor === 'Aplicada' && p.status !== 'Aplicada') { toast('Use o botão "Aplicar" para aplicar a proposta à estrutura.', 'aviso'); renderPropostas(); return; }
+  p[campo] = String(valor); p.atualizadoEm = agora(); p.atualizadoPor = cfg.usuario || ''; enfileirar('propostas', p); salvarLocal();
+  if (campo !== 'descricao') renderPropostas();
+}
+async function excluirProposta(id){
+  const p = DB.propostas.find(x => x.id === id); if (!p || somenteLeitura()) return;
+  if (!await confirmar('Excluir proposta', `Excluir a proposta <b>${esc(p.nome)}</b>? A estrutura oficial não é afetada.`, 'Excluir', true)) return;
+  DB.propostas = DB.propostas.filter(x => x !== p); enfileirar('propostas', p, true); salvarLocal(); propSel = ''; renderPropostas();
+}
+function moverAlt(pid, i, d){ const p = DB.propostas.find(x => x.id === pid); const a = itensProp(p); if (!a[i + d]) return; [a[i], a[i + d]] = [a[i + d], a[i]]; salvarItensProp(p, a); renderPropostas(); }
+function removerAlt(pid, iid){
+  const p = DB.propostas.find(x => x.id === pid); let a = itensProp(p); const it = a.find(x => x.id === iid);
+  if (it && it.tipo === 'novo' && a.some(x => x !== it && (x.paiId === it.novoId || x.setorId === it.novoId))) return toast('Outras alterações dependem deste novo setor. Remova-as primeiro.', 'aviso');
+  a = a.filter(x => x.id !== iid); salvarItensProp(p, a); renderPropostas();
+}
+function opcoesVirt(E, sel, excluir){
+  const ord = []; const visit = (s, d) => { if (excluir && excluir.has(s.id)) return; ord.push([s, d]); E.lista.filter(x => x.paiId === s.id && x.status !== 'Extinto').forEach(k => visit(k, d + 1)); };
+  E.lista.filter(s => (!s.paiId || !E.mapa.has(s.paiId)) && s.status !== 'Extinto').forEach(r => visit(r, 0));
+  return ord.map(([s, d]) => `<option value="${esc(s.id)}" ${s.id === sel ? 'selected' : ''}>${'  '.repeat(Math.min(d, 6))}${s._marcas.includes('novo') ? '★ ' : ''}${esc(s.sigla ? s.sigla + ' · ' : '')}${esc(s.nome)}</option>`).join('');
+}
+function opcoesDGA(sel, comRemover){
+  return (comRemover ? `<option value="__remover" ${sel === '__remover' ? 'selected' : ''}>— Sem cargo em comissão —</option>` : '<option value="">— Sem cargo em comissão —</option>') + DB.rubricas.filter(r => r.categoria === 'Cargo em comissão (DGA)' || r.categoria === 'Função gratificada').sort((a, b) => String(a.codigo).localeCompare(String(b.codigo), 'pt-BR', { numeric:true })).map(r => `<option value="${esc(r.id)}" ${r.id === sel ? 'selected' : ''}>${esc(r.codigo)} — ${fmtM(r.valorMensal)}</option>`).join('');
+}
+function formAlteracao(pid, iid, tipo){
+  if (somenteLeitura()) return;
+  const p = DB.propostas.find(x => x.id === pid); if (!p) return;
+  const itens = itensProp(p), it = itens.find(x => x.id === iid) || { id:novoId('al'), tipo };
+  // estrutura até antes deste item (para que o item possa referenciar setores criados antes dele)
+  const idx = itens.indexOf(it), antes = Object.assign({}, p, { itens:JSON.stringify(idx >= 0 ? itens.slice(0, idx) : itens) }), E = estruturaProposta(antes);
+  const tiposSetor = Object.keys(TIPOS);
+  const vincSel = v => `<label><span class="rot">Ocupante do cargo</span><select id="fa-vinc" class="campo"><option value="Comissionado" ${v !== 'Efetivo' ? 'selected' : ''}>Exclusivamente comissionado (100%)</option><option value="Efetivo" ${v === 'Efetivo' ? 'selected' : ''}>Servidor efetivo (gratificação de %)</option></select></label>`;
+  let html = '';
+  if (tipo === 'novo') html = `<label><span class="rot">Nome do novo setor</span><input id="fa-nome" class="campo" required value="${esc(it.nome)}"></label>
+    <div class="g2"><label><span class="rot">Sigla</span><input id="fa-sigla" class="campo" value="${esc(it.sigla)}"></label><label><span class="rot">Tipo</span><select id="fa-tipo" class="campo">${tiposSetor.map(t => `<option ${t === (it.tipoSetor || 'Coordenadoria') ? 'selected' : ''}>${t}</option>`).join('')}</select></label></div>
+    <label><span class="rot">Subordinado a</span><select id="fa-pai" class="campo">${opcoesVirt(E, it.paiId)}</select></label>
+    <div class="g2"><label><span class="rot">Cargo do titular</span><select id="fa-rub" class="campo">${opcoesDGA(it.rubricaId)}</select></label>${vincSel(it.vinculo)}</div>`;
+  if (tipo === 'extinguir') html = `<label><span class="rot">Setor a extinguir</span><select id="fa-set" class="campo">${opcoesVirt(E, it.setorId)}</select></label>
+    <label class="chk"><input type="checkbox" id="fa-sub" ${it.comSub !== false ? 'checked' : ''}><span>Extinguir também todos os subordinados <small style="display:block;color:var(--mut)">Desmarque se os subordinados forem movidos para outro setor nesta proposta.</small></span></label>
+    <p style="font-size:12px">Os custos lançados nos setores extintos saem do total da proposta.</p>`;
+  if (tipo === 'mover') html = `<label><span class="rot">Setor</span><select id="fa-set" class="campo">${opcoesVirt(E, it.setorId)}</select></label><label><span class="rot">Passa a responder a</span><select id="fa-pai" class="campo">${opcoesVirt(E, it.paiId)}</select></label>`;
+  if (tipo === 'renomear') html = `<label><span class="rot">Setor</span><select id="fa-set" class="campo">${opcoesVirt(E, it.setorId)}</select></label><label><span class="rot">Novo nome <small>vazio = mantém</small></span><input id="fa-nome" class="campo" value="${esc(it.nome)}"></label>
+    <div class="g2"><label><span class="rot">Nova sigla <small>vazio = mantém</small></span><input id="fa-sigla" class="campo" value="${esc(it.sigla)}"></label><label><span class="rot">Novo tipo</span><select id="fa-tipo" class="campo"><option value="">(mantém)</option>${tiposSetor.map(t => `<option ${t === it.tipoSetor ? 'selected' : ''}>${t}</option>`).join('')}</select></label></div>`;
+  if (tipo === 'cargo') html = `<label><span class="rot">Setor (titular)</span><select id="fa-set" class="campo">${opcoesVirt(E, it.setorId)}</select></label>
+    <div class="g2"><label><span class="rot">Novo cargo</span><select id="fa-rub" class="campo">${opcoesDGA(it.rubricaId || '', true)}</select></label>${vincSel(it.vinculo)}</div>
+    <p style="font-size:12px">Substitui o cargo padrão do titular desse setor nesta proposta (ex.: Coordenadoria de DGA-5 para DGA-4).</p>`;
+  if (tipo === 'despesa') html = `<label><span class="rot">Setor</span><select id="fa-set" class="campo">${opcoesVirt(E, it.setorId)}</select></label>
+    <label><span class="rot">Item da tabela (DGA, bolsa, função…)</span><select id="fa-rub" class="campo">${opcoesRubricas(it.rubricaId || '')}</select></label>
+    <div class="acoes" style="margin-top:-4px"><button type="button" class="btn btn-s btn-sm" onclick="formBolsa('', true)"><i class="fa-solid fa-graduation-cap"></i>Cadastrar nova bolsa</button></div>
+    <label><span class="rot">Descrição</span><input id="fa-desc" class="campo" value="${esc(it.descricao)}" placeholder="ex.: Bolsistas formadores do programa X"></label>
+    <div class="g2"><label><span class="rot">Quantidade <small>negativa reduz</small></span><input id="fa-qtd" class="campo" type="number" step="any" value="${esc(it.qtd ?? '1')}"></label><label><span class="rot">Valor mensal próprio <small>vazio = tabela</small></span><input id="fa-val" class="campo" type="number" min="0" step="0.01" value="${esc(it.valor)}"></label></div>
+    <div class="g2"><label><span class="rot">Meses no ano <small>vazio = tabela</small></span><input id="fa-mes" class="campo" type="number" min="0" step="any" value="${esc(it.meses)}"></label>${vincSel(it.vinculo)}</div>
+    <div class="fin-prev" id="fa-prev"></div>`;
+  abrirModal({ titulo:TIPOS_ALT[tipo][1], rotulo: idx >= 0 ? 'Salvar' : 'Incluir na proposta', largura:540, html,
+    aoConfirmar: async m => {
+      const v = id => { const e = m.querySelector(id); return e ? (e.type === 'checkbox' ? e.checked : e.value) : undefined; };
+      const n = Object.assign({}, it);
+      if (tipo === 'novo') { n.nome = v('#fa-nome').trim(); n.sigla = v('#fa-sigla').trim(); n.tipoSetor = v('#fa-tipo'); n.paiId = v('#fa-pai'); n.rubricaId = v('#fa-rub'); n.vinculo = v('#fa-vinc'); n.novoId = n.novoId || novoId('pn'); if (!n.nome) throw new Error('Informe o nome.'); }
+      if (tipo === 'extinguir') { n.setorId = v('#fa-set'); n.comSub = v('#fa-sub'); }
+      if (tipo === 'mover') { n.setorId = v('#fa-set'); n.paiId = v('#fa-pai'); if (n.setorId === n.paiId) throw new Error('Um setor não pode responder a si mesmo.'); const sub = new Set(); const vis = id => E.lista.filter(x => x.paiId === id).forEach(x => { sub.add(x.id); vis(x.id); }); vis(n.setorId); if (sub.has(n.paiId)) throw new Error('O novo superior está dentro do próprio ramo do setor.'); }
+      if (tipo === 'renomear') { n.setorId = v('#fa-set'); n.nome = v('#fa-nome').trim(); n.sigla = v('#fa-sigla').trim(); n.tipoSetor = v('#fa-tipo'); if (!n.nome && !n.sigla && !n.tipoSetor) throw new Error('Informe o que muda.'); }
+      if (tipo === 'cargo') { n.setorId = v('#fa-set'); n.rubricaId = v('#fa-rub'); n.vinculo = v('#fa-vinc'); }
+      if (tipo === 'despesa') { n.setorId = v('#fa-set'); n.rubricaId = v('#fa-rub'); n.descricao = v('#fa-desc').trim(); n.qtd = v('#fa-qtd'); n.valor = v('#fa-val'); n.meses = v('#fa-mes'); n.vinculo = v('#fa-vinc'); if (!n.rubricaId && !n.valor) throw new Error('Escolha um item ou informe o valor.'); if (!n.rubricaId && !n.descricao) throw new Error('Descreva a despesa.'); if (!numBR(n.qtd)) throw new Error('Informe a quantidade.'); }
+      const a = itensProp(p), i = a.findIndex(x => x.id === n.id); if (i >= 0) a[i] = n; else a.push(n);
+      salvarItensProp(p, a); return true;
+    }
+  }).then(ok => { if (ok) renderPropostas(); });
+  if (tipo === 'despesa') {
+    const ms = document.querySelectorAll('.modal'), mm = ms[ms.length - 1];
+    const prev = () => { const c = calcDesp({ rubricaId:mm.querySelector('#fa-rub').value, quantidade:mm.querySelector('#fa-qtd').value, valorUnitario:mm.querySelector('#fa-val').value, meses:mm.querySelector('#fa-mes').value, vinculo:mm.querySelector('#fa-vinc').value }); mm.querySelector('#fa-prev').innerHTML = `<div>Mensal<b>${fmtM(c.mensal)}</b></div><div>Anual (${c.meses.toLocaleString('pt-BR')} meses)<b>${fmtM(c.anual)}</b></div>`; const r = rubricaDe(mm.querySelector('#fa-rub').value); mm.querySelector('#fa-vinc').closest('label').style.display = r && r.percEfetivo !== '' ? '' : 'none'; };
+    mm.querySelectorAll('#fa-rub,#fa-qtd,#fa-val,#fa-mes,#fa-vinc').forEach(x => x.addEventListener('input', prev)); prev();
+    tv.atualizarRubFA = () => { const s = mm.querySelector('#fa-rub'); if (s) { const v = s.value; s.innerHTML = opcoesRubricas(v); prev(); } };
+  }
+}
+async function aplicarProposta(id){
+  const p = DB.propostas.find(x => x.id === id); if (!p || !ehAdmin()) return;
+  const itens = itensProp(p); if (!itens.length) return toast('A proposta não tem alterações.', 'aviso');
+  if (!await confirmar('Aplicar proposta', `Aplicar as <b>${itens.length}</b> alteração(ões) de <b>${esc(p.nome)}</b> à <b>estrutura oficial</b>? Setores serão criados, extintos, movidos ou renomeados, e os lançamentos do cenário Atual serão ajustados. Recomendo exportar uma cópia antes (Configurações).`, 'Aplicar à estrutura', true)) return;
+  const real = new Map(); const R = x => real.get(x) || x;
+  itens.forEach(it => {
+    if (it.tipo === 'novo') {
+      const pai = R(it.paiId), s = novoSetor({ id:novoId('s'), nome:it.nome, sigla:it.sigla || '', tipo:it.tipoSetor || 'Coordenadoria', paiId:pai, ordem:String(Math.max(0, ...filhosDe(pai).map(k => num(k.ordem))) + 1), atualizadoEm:agora(), atualizadoPor:cfg.usuario || '' });
+      DB.setores.push(s); enfileirar('setores', s); real.set(it.novoId, s.id); indexar(); registrar(s.id, `Criado pela proposta "${p.nome}"`);
+      if (it.rubricaId) { const d = novoReg('despesas', { id:novoId('fd'), setorId:s.id, rubricaId:it.rubricaId, quantidade:'1', cenario:'Atual', vinculo:it.vinculo || 'Comissionado', descricao:'Titular', observacao:MARCA_CHEFIA, atualizadoEm:agora(), atualizadoPor:cfg.usuario || '' }); DB.despesas.push(d); enfileirar('despesas', d); }
+    }
+    const s = porId.get(R(it.setorId));
+    if (it.tipo === 'extinguir' && s) { [s.id, ...(it.comSub ? descendentes(s.id) : [])].forEach(i => { const x = porId.get(i); if (x) alterar(x, 'status', 'Extinto', true); }); registrar(s.id, `Extinto pela proposta "${p.nome}"`); DB.despesas.filter(d => (d.cenario || 'Atual') === 'Atual' && porId.get(d.setorId) && porId.get(d.setorId).status === 'Extinto').forEach(d => { DB.despesas = DB.despesas.filter(x => x !== d); enfileirar('despesas', d, true); }); }
+    if (it.tipo === 'mover' && s) { s.dx = ''; s.dy = ''; alterar(s, 'paiId', R(it.paiId)); }
+    if (it.tipo === 'renomear' && s) { if (it.nome) alterar(s, 'nome', it.nome); if (it.sigla) alterar(s, 'sigla', it.sigla); if (it.tipoSetor) alterar(s, 'tipo', it.tipoSetor); }
+    if (it.tipo === 'cargo' && s) {
+      const d = DB.despesas.find(x => x.setorId === s.id && x.observacao === MARCA_CHEFIA && (x.cenario || 'Atual') === 'Atual');
+      if (it.rubricaId === '__remover') { if (d) { DB.despesas = DB.despesas.filter(x => x !== d); enfileirar('despesas', d, true); } }
+      else if (d) { d.rubricaId = it.rubricaId; d.vinculo = it.vinculo || d.vinculo; d.valorUnitario = ''; d.atualizadoEm = agora(); enfileirar('despesas', d); }
+      else { const n = novoReg('despesas', { id:novoId('fd'), setorId:s.id, rubricaId:it.rubricaId, quantidade:'1', cenario:'Atual', vinculo:it.vinculo || 'Comissionado', descricao:'Titular', observacao:MARCA_CHEFIA, atualizadoEm:agora(), atualizadoPor:cfg.usuario || '' }); DB.despesas.push(n); enfileirar('despesas', n); }
+      registrar(s.id, `Cargo do titular alterado pela proposta "${p.nome}"`);
+    }
+    if (it.tipo === 'despesa' && (s || !it.setorId)) { const d = novoReg('despesas', { id:novoId('fd'), setorId:s ? s.id : '', rubricaId:it.rubricaId || '', quantidade:String(it.qtd), valorUnitario:it.valor || '', meses:it.meses || '', vinculo:it.vinculo || '', descricao:it.descricao || '', cenario:'Atual', observacao:'Proposta: ' + p.nome, atualizadoEm:agora(), atualizadoPor:cfg.usuario || '' }); DB.despesas.push(d); enfileirar('despesas', d); }
+  });
+  p.status = 'Aplicada'; p.atualizadoEm = agora(); p.atualizadoPor = cfg.usuario || ''; enfileirar('propostas', p);
+  indexar(); salvarLocal(); toast(`Proposta "${p.nome}" aplicada à estrutura oficial.`); renderPropostas();
+}
+function exportarProposta(id){
+  const p = DB.propostas.find(x => x.id === id); if (!p) return;
+  const cp = custoProposta(p), q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"', n = v => numBR(v).toFixed(2).replace('.', ',');
+  const linhas = ['Proposta;' + q(p.nome), 'Situação;' + q(p.status), '', 'Alterações', ...itensProp(p).map(it => q(TIPOS_ALT[it.tipo][1]) + ';' + q(descreverAlt(it, cp.E).replace(/<[^>]+>/g, ''))), '',
+    'Setor;Item;Tipo;Descrição;Quantidade;Valor unitário;Mensal;Meses;Anual', ...cp.linhas.map(l => { const c = calcDesp(l), s = cp.E.mapa.get(l.setorId); return [s ? s.nome : '', c.r.codigo || '', c.categoria, l.descricao, c.qtd, n(c.unit), n(c.mensal), c.meses, n(c.anual)].map(q).join(';'); }),
+    '', 'Total mensal da proposta;' + n(cp.m), 'Total mensal atual;' + n(baseAtual().m)];
+  baixarArquivo('gaborg-proposta-' + (p.nome || 'sem-nome').replace(/[^\w-]+/g, '_').slice(0, 40) + '.csv', '﻿' + linhas.join('\r\n'), 'text/csv;charset=utf-8');
+}
+/* Bolsas: cadastro próprio com custos diferentes */
+function renderBolsas(){
+  const bolsas = DB.rubricas.filter(r => r.categoria === 'Bolsa'), ro = somenteLeitura() ? 'disabled' : '';
+  const usos = id => DB.despesas.filter(d => d.rubricaId === id).length + DB.propostas.reduce((t, p) => t + itensProp(p).filter(i => i.rubricaId === id).length, 0);
+  return `<div class="cartao bl" style="margin-bottom:14px"><h3><i class="fa-solid fa-graduation-cap"></i>Bolsas</h3><p class="s">Cadastre cada tipo de bolsa com o seu valor mensal e a quantidade de meses pagos no ano (ex.: bolsa de 10 meses). Elas aparecem nos lançamentos do Financeiro e nas alterações das Propostas.</p>
+    <div class="acoes so-edit"><button class="btn btn-p" onclick="formBolsa()"><i class="fa-solid fa-plus"></i>Nova bolsa</button></div></div>
+    ${bolsas.length ? `<div class="tab-wrap"><table class="tab"><thead><tr><th style="min-width:110px">Código</th><th style="min-width:220px">Nome da bolsa</th><th class="fin-num" style="min-width:120px">Valor mensal (R$)</th><th class="fin-num">Meses/ano</th><th class="fin-num">Custo anual por bolsista</th><th class="fin-num">Usos</th><th></th></tr></thead><tbody>${bolsas.sort((a, b) => String(a.nome).localeCompare(String(b.nome), 'pt-BR')).map(r => `<tr>
+      <td><input class="campo fin-edit" ${ro} value="${esc(r.codigo)}" onchange="alterarRubrica(${arg(r.id)},'codigo',this.value);renderPropostas()"></td>
+      <td><input class="campo fin-edit" ${ro} value="${esc(r.nome)}" onchange="alterarRubrica(${arg(r.id)},'nome',this.value);renderPropostas()"></td>
+      <td><input class="campo fin-edit n" ${ro} type="number" min="0" step="0.01" value="${esc(r.valorMensal)}" onchange="alterarRubrica(${arg(r.id)},'valorMensal',this.value);renderPropostas()"></td>
+      <td><input class="campo fin-edit n" ${ro} type="number" min="0" max="13.34" step="any" value="${esc(r.meses)}" placeholder="12" style="min-width:60px" onchange="alterarRubrica(${arg(r.id)},'meses',this.value);renderPropostas()"></td>
+      <td class="fin-num"><b>${fmtM(numBR(r.valorMensal) * (r.meses !== '' ? numBR(r.meses) : 12))}</b></td><td class="fin-num">${usos(r.id)}</td>
+      <td><div class="u-acoes so-edit"><button class="btn btn-perigo btn-sm btn-i" title="Excluir" onclick="excluirRubrica(${arg(r.id)}).then(()=>renderPropostas())"><i class="fa-solid fa-trash-can"></i></button></div></td></tr>`).join('')}</tbody></table></div>` : '<div class="cartao vazio">Nenhuma bolsa cadastrada.</div>'}`;
+}
+function formBolsa(id, deDentro){
+  if (somenteLeitura()) return;
+  abrirModal({ titulo:'Nova bolsa', rotulo:'Cadastrar', largura:460,
+    html:`<label><span class="rot">Nome da bolsa</span><input id="fb-nome" class="campo" required placeholder="ex.: Bolsa Formador Regional"></label>
+      <div class="g2"><label><span class="rot">Código <small>opcional</small></span><input id="fb-cod" class="campo" placeholder="ex.: BOLSA-FR"></label><label><span class="rot">Valor mensal (R$)</span><input id="fb-val" class="campo" type="number" min="0" step="0.01" required></label></div>
+      <label><span class="rot">Meses pagos no ano</span><input id="fb-mes" class="campo" type="number" min="0" max="13.34" step="any" value="12"></label>`,
+    aoConfirmar: async m => {
+      const nome = m.querySelector('#fb-nome').value.trim(), val = m.querySelector('#fb-val').value; if (!nome || val === '') throw new Error('Informe o nome e o valor.');
+      const r = novoReg('rubricas', { id:novoId('rb'), codigo:m.querySelector('#fb-cod').value.trim() || ('BOLSA-' + (DB.rubricas.filter(x => x.categoria === 'Bolsa').length + 1)), nome, categoria:'Bolsa', valorMensal:val, encargos:'', meses:m.querySelector('#fb-mes').value || '12', ativo:'Sim', atualizadoEm:agora(), atualizadoPor:cfg.usuario || '' });
+      DB.rubricas.push(r); enfileirar('rubricas', r); salvarLocal(); toast('Bolsa cadastrada.'); return true;
+    }
+  }).then(ok => { if (!ok) return; if (deDentro && tv.atualizarRubFA) tv.atualizarRubFA(); else renderPropostas(); });
 }
 
 /* ===================== MENU LATERAL: RECOLHER E AJUSTAR LARGURA ===================== */
