@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.9.0';
+const VERSAO = '1.10.0';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -592,7 +592,7 @@ function cardHTML(s){
   const sv = statusVal(s.id), imp = num(s.impacto);
   const ser = num(s.servidores);
   const mk = s._marcas && s._marcas.length ? [...new Set(s._marcas)] : [], qt = num(s.quantidade);
-  return `<div class="no ${qt ? 'grupo' : ''} ${estilo} ${s.status === 'Extinto' ? 'extinto' : ''} ${modos.get(s.id) === 'v' ? 'v-mode' : ''} ${s.id === selId ? 'sel' : ''} ${multi.has(s.id) ? 'msel' : ''} ${mk.length ? 'cen-m cen-' + mk[0] : ''}" data-id="${esc(s.id)}" style="--c:${corDe(s)};transform:translate(${p.x}px,${p.y}px)" title="${esc(s.nome)}">
+  return `<div class="no ${qt ? 'grupo' : ''} ${estilo} ${s.status === 'Extinto' ? 'extinto' : ''} ${modos.get(s.id) === 'v' ? 'v-mode' : ''} ${s.id === selId ? 'sel' : ''} ${multi.has(s.id) ? 'msel' : ''} ${mk.length ? 'cen-m cen-' + mk[0] : ''}" data-id="${esc(s.id)}" style="--c:${corDe(s)};--d:${Math.min(prof.get(s.id) || 0, 8)};transform:translate(${p.x}px,${p.y}px)" title="${esc(s.nome)}">
     <div class="no-tipo"><i class="fa-solid ${icTipo(s.tipo)}"></i>${esc(s.tipo)}${s.sigla ? ' · ' + esc(s.sigla) : ''}</div>
     <div class="no-nome">${esc(s.nome)}</div>
     ${qt ? `<span class="no-qt" title="${fmtN(qt)} ${rotuloUnid(s)} representadas neste cartão"><b>${fmtN(qt)}</b>${rotuloUnid(s)}</span>` : ''}
@@ -607,11 +607,17 @@ function desenharMapa(){
   if (cenMapa) return emCenario(desenharMapaBase);
   desenharMapaBase();
 }
+let primeiroDesenho = true;
 function desenharMapaBase(){
+  if (typeof terminarAnimMapa === 'function') terminarAnimMapa();
+  const antes = new Map(pos), elsAntigos = new Map(elNo);
   calcularLayout();
   $('#nos').innerHTML = visiveis.map(cardHTML).join('');
   elNo.clear(); document.querySelectorAll('#nos .no').forEach(el => elNo.set(el.dataset.id, el));
+  if (primeiroDesenho && typeof semMovimento === 'function' && !semMovimento()) { $('#nos').classList.add('entrando'); setTimeout(() => $('#nos').classList.remove('entrando'), 1400); }
   desenharArestas(); aplicarView(); desenharLegenda(); desenharMini(); atualizarBarraSel();
+  if (!primeiroDesenho && typeof animarLayout === 'function') animarLayout(antes, elsAntigos);
+  primeiroDesenho = false;
 }
 function caminhoAresta(p, c){
   const a = pos.get(p.id), b = pos.get(c.id);
@@ -626,7 +632,7 @@ function desenharArestas(){
   if (cenMapa && !desenharArestas.dentro) { desenharArestas.dentro = true; try { return emCenario(desenharArestas); } finally { desenharArestas.dentro = false; } }
   const ativos = new Set(selId ? [selId, ...caminho(selId).map(s => s.id)] : []);
   let h = '';
-  visiveis.forEach(s => { filhosVis(s.id).forEach(k => { if (pos.has(k.id)) h += `<path d="${caminhoAresta(s, k)}" class="${ativos.has(k.id) ? 'ativa' : ''}"/>`; }); });
+  visiveis.forEach(s => { filhosVis(s.id).forEach(k => { if (pos.has(k.id)) h += `<path d="${caminhoAresta(s, k)}" data-p="${esc(s.id)}" data-f="${esc(k.id)}" class="${ativos.has(k.id) ? 'ativa' : ''}${focoId && vpEl.classList.contains('focando') && elNo.get(k.id)?.classList.contains('rel') && elNo.get(s.id)?.classList.contains('rel') ? ' rel' : ''}"/>`; }); });
   DB.vinculos.forEach(v => {
     const a = pos.get(v.origemId), b = pos.get(v.destinoId); if (!a || !b) return;
     const x1 = a.x + NW / 2, y1 = a.y + NH / 2, x2 = b.x + NW / 2, y2 = b.y + NH / 2, my = Math.min(y1, y2) - 80;
@@ -682,7 +688,7 @@ function desenharLegenda(){
   else if (m === 'impacto') it = IMPACTO.map(x => [x[0], x[1]]);
   else it = Object.entries(STATUS_SETOR);
   if (cenMapa) it = Object.values(ROT_MARCA).map(([n, c]) => [n + ' (proposta)', c]).concat(it);
-  $('#m-leg').innerHTML = it.map(([n, c]) => `<span><i class="q" style="background:${c}"></i>${esc(n)}</span>`).join('')
+  $('#m-leg').innerHTML = `<button class="leg-x" onclick="alternarMapaUI('leg')" title="Esconder a legenda (L)"><i class="fa-solid fa-xmark"></i></button>` + it.map(([n, c]) => `<span><i class="q" style="background:${c}"></i>${esc(n)}</span>`).join('')
     + `<span class="dica"><i class="fa-solid fa-hand"></i> Arraste o fundo para navegar · roda do mouse para zoom · arraste um setor para reposicionar (encaixa nas guias; <b>Alt</b> solta livre) · <b>Ctrl</b> + clique seleciona vários · <b>Ctrl</b> + arrastar o fundo seleciona uma área · setas movem a seleção · <b>Shift</b> + arrastar sobre outro setor para subordinar · duplo clique abre/fecha</span>`;
 }
 /* Minimapa */
@@ -720,7 +726,7 @@ function aditivo(e){ return modoSel || e.ctrlKey || e.metaKey; }
 function raizesDoConjunto(ids){ const set = new Set(ids); return [...set].filter(id => porId.has(id) && !caminho(id).some(a => set.has(a.id))); }
 function aParaMundo(cx, cy){ const r = vpEl.getBoundingClientRect(); return { x:(cx - r.left - view.x) / view.k, y:(cy - r.top - view.y) / view.k }; }
 vpEl.addEventListener('pointerdown', e => {
-  if (e.target.closest('[data-exp]')) return;
+  if (e.button === 2 || e.target.closest('[data-exp]')) return;
   ponteiros.set(e.pointerId, { x:e.clientX, y:e.clientY });
   if (ponteiros.size === 2) { const [a, b] = [...ponteiros.values()]; pinca = { d:Math.hypot(a.x - b.x, a.y - b.y), k:view.k }; drag = null; $('#laco').classList.add('hidden'); return; }
   const no = e.target.closest('.no');
@@ -986,7 +992,7 @@ function irPara(id){
   $('#m-res').classList.add('hidden'); $('#m-busca').value = '';
   if (vistaAtual !== 'mapa') trocarVista('mapa');
   caminho(id).forEach(a => abertos.add(a.id)); salvarAbertos();
-  selId = id; desenharMapa(); renderPainel(); setTimeout(() => centralizar(id), 30);
+  selId = id; desenharMapa(); renderPainel(); setTimeout(() => { centralizar(id); setTimeout(() => pulsar(id), 380); }, 30);
 }
 
 /* ===================== SELEÇÃO E PAINEL LATERAL ===================== */
@@ -994,7 +1000,7 @@ function selecionar(id){
   selId = id;
   document.querySelectorAll('#nos .no.sel').forEach(x => x.classList.remove('sel'));
   elNo.get(id)?.classList.add('sel');
-  if (vistaAtual === 'mapa') desenharArestas();
+  if (vistaAtual === 'mapa') { desenharArestas(); pulsar(id); }
   if (vistaAtual === 'lista') renderLista();
   renderPainel();
 }
@@ -2573,6 +2579,181 @@ function exportarComparativo(){
   baixarArquivo('gaborg-comparativo-' + new Date().toISOString().slice(0, 10) + '.csv', '﻿' + l.join('\r\n'), 'text/csv;charset=utf-8');
 }
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#cmp') && !$('#cmp').classList.contains('hidden') && !document.querySelector('.modal')) { e.stopImmediatePropagation(); fecharComparativo(); } }, true);
+
+/* ===================== MAPA: EXIBIÇÃO, ANIMAÇÕES E INTERATIVIDADE ===================== */
+let mapaUI = Object.assign({ leg:true, mini:true, hover:true, anim:true, dicas:true }, store.get('gaborg_mapa_ui', {}));
+const semMovimento = () => !mapaUI.anim || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+function aplicarMapaUI(){
+  document.body.classList.toggle('sem-leg', !mapaUI.leg);
+  document.body.classList.toggle('sem-mini', !mapaUI.mini);
+  const b = $('#m-btn-leg'); if (b) { b.classList.toggle('on', mapaUI.leg); b.title = mapaUI.leg ? 'Esconder a legenda (L)' : 'Mostrar a legenda (L)'; b.innerHTML = `<i class="fa-solid ${mapaUI.leg ? 'fa-list' : 'fa-eye-slash'}"></i>`; }
+  const m = $('#m-btn-mini'); if (m) { m.classList.toggle('on', mapaUI.mini); m.title = mapaUI.mini ? 'Esconder o minimapa (M)' : 'Mostrar o minimapa (M)'; }
+  store.set('gaborg_mapa_ui', mapaUI);
+  if (mapaUI.mini && vistaAtual === 'mapa') setTimeout(desenharMini, 30);
+}
+function alternarMapaUI(k){ mapaUI[k] = !mapaUI[k]; aplicarMapaUI(); if (k === 'hover' && !mapaUI.hover) limparFoco(); }
+function menuExibicao(ev){
+  const ja = $('#m-exib'); if (ja) { ja.remove(); return; }
+  const op = (k, ic, t, d) => `<label class="exib-op"><i class="fa-solid ${ic}"></i><span><b>${t}</b><small>${d}</small></span><input type="checkbox" ${mapaUI[k] ? 'checked' : ''} onchange="alternarMapaUI('${k}')"></label>`;
+  const el = document.createElement('div'); el.id = 'm-exib'; el.className = 'm-exib';
+  el.innerHTML = `<b class="t">Exibição do mapa</b>${op('leg', 'fa-list', 'Legenda', 'cores e dicas de uso (tecla L)')}${op('mini', 'fa-map', 'Minimapa', 'visão geral no canto (tecla M)')}${op('hover', 'fa-wand-magic-sparkles', 'Destacar ao passar o mouse', 'realça o ramo e esmaece o resto')}${op('dicas', 'fa-message', 'Fichas rápidas', 'resumo do setor ao parar o mouse')}${op('anim', 'fa-film', 'Animações', 'transições ao abrir e fechar ramos')}`;
+  $('#v-mapa').appendChild(el);
+  setTimeout(() => document.addEventListener('pointerdown', function f(e){ if (!e.target.closest('#m-exib,#m-btn-exib')) { el.remove(); document.removeEventListener('pointerdown', f, true); } }, true), 0);
+}
+
+/* Transição do layout: os setores deslizam até a nova posição; os que aparecem saem do superior e os que somem voltam para ele */
+let animMapa = null;
+function animarLayout(antes, elsAntigos){
+  if (animMapa) { cancelAnimationFrame(animMapa.raf); animMapa = null; }
+  if (semMovimento() || !antes || !antes.size || visiveis.length > 700) return;
+  const alvo = new Map(pos), origem = new Map(), novos = new Set();
+  const anc = id => { let a = porId.get((porId.get(id) || {}).paiId), g = 0; while (a && !antes.has(a.id) && g++ < 40) a = porId.get(a.paiId); return a && antes.get(a.id); };
+  visiveis.forEach(n => { let o = antes.get(n.id); if (!o) { o = anc(n.id) || alvo.get(n.id); novos.add(n.id); } origem.set(n.id, o); });
+  let mudou = false; origem.forEach((o, id) => { const f = alvo.get(id); if (Math.abs(o.x - f.x) > .5 || Math.abs(o.y - f.y) > .5) mudou = true; });
+  // setores que saíram: cópias que encolhem até o superior visível
+  const saindo = [];
+  elsAntigos.forEach((el, id) => {
+    if (alvo.has(id)) return;
+    let a = porId.get((porId.get(id) || {}).paiId), g = 0; while (a && !alvo.has(a.id) && g++ < 40) a = porId.get(a.paiId);
+    const de = antes.get(id), para = a ? alvo.get(a.id) : de; if (!de) return;
+    el.classList.add('saindo'); el.classList.remove('sel', 'msel'); $('#nos').appendChild(el); saindo.push({ el, de, para }); mudou = true;
+  });
+  if (!mudou) { saindo.forEach(s => s.el.remove()); return; }
+  const dur = 460, t0 = performance.now(), ease = t => 1 - Math.pow(1 - t, 3);
+  const passo = agora_ => {
+    const t = Math.min(1, (agora_ - t0) / dur), e = ease(t);
+    origem.forEach((o, id) => { const f = alvo.get(id), x = o.x + (f.x - o.x) * e, y = o.y + (f.y - o.y) * e; pos.set(id, { x, y }); const el = elNo.get(id); if (el) { el.style.transform = `translate(${x}px,${y}px)`; if (novos.has(id)) el.style.opacity = String(Math.min(1, e * 1.4)); } });
+    saindo.forEach(s => { const x = s.de.x + (s.para.x - s.de.x) * e, y = s.de.y + (s.para.y - s.de.y) * e; s.el.style.transform = `translate(${x}px,${y}px) scale(${1 - .5 * e})`; s.el.style.opacity = String(1 - e); });
+    desenharArestas();
+    if (t < 1) animMapa.raf = requestAnimationFrame(passo);
+    else { animMapa = null; alvo.forEach((v, k) => pos.set(k, v)); novos.forEach(id => { const el = elNo.get(id); if (el) el.style.opacity = ''; }); saindo.forEach(s => s.el.remove()); desenharArestas(); desenharMini(); }
+  };
+  animMapa = { raf:requestAnimationFrame(passo), alvo };
+}
+function terminarAnimMapa(){ if (!animMapa) return; cancelAnimationFrame(animMapa.raf); animMapa.alvo.forEach((v, k) => pos.set(k, v)); animMapa = null; document.querySelectorAll('#nos .no.saindo').forEach(e => e.remove()); visiveis.forEach(n => { const el = elNo.get(n.id), p = pos.get(n.id); if (el && p) { el.style.transform = `translate(${p.x}px,${p.y}px)`; el.style.opacity = ''; } }); desenharArestas(); }
+
+/* Pulso de destaque num setor */
+function pulsar(id){ const el = elNo.get(id); if (!el || semMovimento()) return; el.classList.remove('pulso'); void el.offsetWidth; el.classList.add('pulso'); setTimeout(() => el.classList.remove('pulso'), 1500); }
+
+/* Destaque do ramo ao passar o mouse */
+let tFoco = null, focoId = '', tDica = null;
+function relacionados(id){ const r = new Set([id]); caminho(id).forEach(a => r.add(a.id)); descendentes(id).forEach(d => r.add(d)); return r; }
+function aplicarFoco(id){
+  if (!mapaUI.hover || drag || animMapa) return;
+  focoId = id; const r = emCenario(() => relacionados(id));
+  vpEl.classList.add('focando');
+  elNo.forEach((el, k) => el.classList.toggle('rel', r.has(k)));
+  document.querySelectorAll('#arestas path[data-f]').forEach(p => p.classList.toggle('rel', r.has(p.dataset.f) && r.has(p.dataset.p)));
+}
+function limparFoco(){ clearTimeout(tFoco); focoId = ''; vpEl.classList.remove('focando'); document.querySelectorAll('#nos .no.rel,#arestas path.rel').forEach(e => e.classList.remove('rel')); }
+/* Ficha rápida */
+function mostrarDica(id, el){
+  if (!mapaUI.dicas || drag) return;
+  const dados = emCenario(() => { const s = porId.get(id); if (!s) return null; return { s, sub:descendentes(id).size, cam:caminho(id).map(nomeCurto).slice(-2).join(' › ') }; }); if (!dados) return;
+  const { s, sub, cam } = dados, f = cenMapa ? null : custoSetorFin(id, false), ft = cenMapa ? null : custoSetorFin(id, true), sv = statusVal(id), imp = num(s.impacto), qt = num(s.quantidade);
+  const d = $('#m-dica');
+  d.innerHTML = `<div class="dc-t" style="--c:${corTipo(s.tipo)}"><i class="fa-solid ${icTipo(s.tipo)}"></i>${esc(s.tipo)}${s.sigla ? ' · ' + esc(s.sigla) : ''}</div><b>${esc(s.nome)}</b>${cam ? `<small>${esc(cam)}</small>` : ''}
+    <div class="dc-g">
+      ${qt ? `<span><b>${fmtN(qt)}</b>${rotuloUnid(s)}</span>` : ''}
+      <span><b>${sub}</b>subordinado(s)</span>
+      ${num(s.servidores) ? `<span><b>${fmtN(s.servidores)}</b>servidores</span>` : ''}
+      ${f && f.Atual.m ? `<span><b>${fmtRc(f.Atual.m)}</b>por mês${sub && ft.Atual.m !== f.Atual.m ? ` · ${fmtRc(ft.Atual.m)} c/ ramo` : ''}</span>` : ''}
+    </div>
+    <div class="dc-r"><i class="fa-solid fa-user"></i>${esc(s.responsavel || 'Sem responsável')}</div>
+    ${imp || sv !== 'Sem validação' ? `<div class="dc-r">${imp ? `<span class="p" style="background:${IMPACTO[imp][1]}"></span>Impacto ${IMPACTO[imp][0].toLowerCase()}` : ''}${sv !== 'Sem validação' ? ` <span class="p" style="background:${STATUS_VAL[sv]}"></span>${esc(sv)}` : ''}</div>` : ''}
+    <div class="dc-h">clique: detalhes · duplo clique: abrir/fechar · botão direito: mais ações</div>`;
+  const r = el.getBoundingClientRect(), vr = vpEl.getBoundingClientRect(), w = 270;
+  let x = r.right - vr.left + 10, y = r.top - vr.top;
+  if (x + w > vr.width - 8) x = r.left - vr.left - w - 10;
+  if (x < 8) { x = Math.max(8, r.left - vr.left); y = r.bottom - vr.top + 10; }
+  d.style.left = x + 'px'; d.style.top = Math.max(8, Math.min(y, vr.height - 190)) + 'px';
+  d.classList.add('on');
+}
+function esconderDica(){ clearTimeout(tDica); const d = $('#m-dica'); if (d) d.classList.remove('on'); }
+$('#nos').addEventListener('mouseover', e => {
+  const no = e.target.closest('.no'); if (!no || no.classList.contains('saindo') || drag) return;
+  const id = no.dataset.id; if (id === focoId) return;
+  clearTimeout(tFoco); clearTimeout(tDica); esconderDica();
+  tFoco = setTimeout(() => aplicarFoco(id), 160);
+  tDica = setTimeout(() => mostrarDica(id, no), 650);
+});
+$('#nos').addEventListener('mouseout', e => {
+  const no = e.target.closest('.no'); if (!no) return;
+  if (e.relatedTarget && no.contains(e.relatedTarget)) return;
+  clearTimeout(tFoco); clearTimeout(tDica); esconderDica();
+  tFoco = setTimeout(limparFoco, 120);
+});
+vpEl.addEventListener('pointerdown', e => { esconderDica(); if (e.button !== 2) limparFoco(); terminarAnimMapa(); if (!e.target.closest('#m-ctx')) fecharMenuNo(); }, true);
+vpEl.addEventListener('wheel', () => esconderDica(), { passive:true });
+
+/* Menu de ações do setor (botão direito ou toque longo) */
+function fecharMenuNo(){ const m = $('#m-ctx'); if (m) m.remove(); }
+function menuNo(id, x, y){
+  fecharMenuNo(); esconderDica();
+  const info = emCenario(() => { const s = porId.get(id); return s ? { s, temF:temFilhos(id), ab:abertos.has(id) } : null; }); if (!info) return;
+  const { s, temF, ab } = info, ed = !somenteLeitura() && !cenMapa, real = !!DB.setores.find(x => x.id === id);
+  const it = (a, ic, t, cond = true) => cond ? `<button data-a="${a}"><i class="fa-solid ${ic}"></i>${t}</button>` : '';
+  const m = document.createElement('div'); m.id = 'm-ctx'; m.className = 'm-ctx';
+  m.innerHTML = `<div class="ct">${esc(s.sigla || nomeCurto(s))}<small>${esc(s.tipo)}</small></div>
+    ${it('det', 'fa-circle-info', 'Ver detalhes')}
+    ${it('focar', 'fa-crosshairs', 'Focar neste ramo')}
+    ${it('abrir', 'fa-angles-down', 'Abrir o ramo inteiro', temF)}
+    ${it('fechar', 'fa-angles-up', 'Recolher o ramo', temF && ab)}
+    ${it('caminho', 'fa-route', 'Mostrar o caminho até o topo')}
+    ${it('irmaos', 'fa-people-group', 'Selecionar os irmãos', ed)}
+    ${ed ? '<hr>' : ''}${it('novo', 'fa-plus', 'Novo subordinado', ed)}${it('fin', 'fa-sack-dollar', 'Lançamento financeiro', ed && real)}${it('auto', 'fa-wand-magic-sparkles', 'Voltar à posição automática', ed && (s.dx || s.dy))}`;
+  $('#v-mapa').appendChild(m);
+  const vr = vpEl.getBoundingClientRect(), w = 230, h = m.offsetHeight;
+  m.style.left = Math.min(x - vr.left, vr.width - w - 8) + 'px'; m.style.top = Math.min(y - vr.top, vr.height - h - 8) + 'px';
+  m.addEventListener('click', e => {
+    const b = e.target.closest('[data-a]'); if (!b) return; fecharMenuNo();
+    const a = b.dataset.a;
+    if (a === 'det') { if (cenMapa) infoCenario(id); else selecionar(id); }
+    if (a === 'focar') focarRamo(id);
+    if (a === 'abrir') { emCenario(() => [id, ...descendentes(id)].forEach(i => { if (temFilhos(i)) abertos.add(i); })); salvarAbertos(); desenharMapa(); setTimeout(() => focarRamo(id), semMovimento() ? 30 : 500); }
+    if (a === 'fechar') alternarAberto(id, false);
+    if (a === 'caminho') mostrarCaminho(id);
+    if (a === 'irmaos') { multi.add(id); selecionarIrmaos(); }
+    if (a === 'novo') novoSetorEm(id);
+    if (a === 'fin') formDespesa('', id);
+    if (a === 'auto') { const r = porId.get(id); guardarPos([r]); r.dx = ''; r.dy = ''; enfileirar('setores', r); desenharMapa(); }
+  });
+  setTimeout(() => document.addEventListener('pointerdown', function f(e){ if (!e.target.closest('#m-ctx')) { fecharMenuNo(); document.removeEventListener('pointerdown', f, true); } }, true), 0);
+}
+vpEl.addEventListener('contextmenu', e => { const alvo = document.elementFromPoint(e.clientX, e.clientY), no = (alvo && alvo.closest('.no')) || e.target.closest('.no'); if (!no) return; e.preventDefault(); menuNo(no.dataset.id, e.clientX, e.clientY); });
+// toque longo no celular
+let tLongo = null;
+vpEl.addEventListener('pointerdown', e => { if (e.pointerType !== 'touch') return; const no = e.target.closest('.no'); if (!no) return; const x = e.clientX, y = e.clientY; clearTimeout(tLongo); tLongo = setTimeout(() => { if (drag && drag.moveu) return; drag = null; menuNo(no.dataset.id, x, y); if (navigator.vibrate) navigator.vibrate(15); }, 550); });
+['pointerup', 'pointercancel', 'pointermove'].forEach(t => vpEl.addEventListener(t, e => { if (t !== 'pointermove' || (drag && drag.moveu)) clearTimeout(tLongo); }));
+
+/* Focar um ramo: aproxima até caber o setor e seus subordinados visíveis */
+function focarRamo(id){
+  const ids = emCenario(() => [id, ...descendentes(id)]).filter(i => pos.has(i)); if (!ids.length) return;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  ids.forEach(i => { const p = pos.get(i); x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y); x1 = Math.max(x1, p.x + NW); y1 = Math.max(y1, p.y + NH); });
+  const vp = vpEl.getBoundingClientRect(), pn = $('#painel').classList.contains('aberto') && window.innerWidth > 820 ? 460 : 0, topo = 120;
+  const k = Math.max(.15, Math.min(1.25, (vp.width - pn - 80) / (x1 - x0), (vp.height - topo - 60) / (y1 - y0)));
+  view = { k, x:(vp.width - pn - (x1 - x0) * k) / 2 - x0 * k, y:topo + (vp.height - topo - 40 - (y1 - y0) * k) / 2 - y0 * k };
+  aplicarView(!semMovimento()); setTimeout(() => pulsar(id), semMovimento() ? 0 : 420);
+}
+/* Caminho até o topo: destaca e anima as ligações */
+function mostrarCaminho(id){
+  const ids = emCenario(() => [id, ...caminho(id).map(a => a.id)]);
+  vpEl.classList.add('focando'); elNo.forEach((el, k) => el.classList.toggle('rel', ids.includes(k)));
+  document.querySelectorAll('#arestas path[data-f]').forEach(p => p.classList.toggle('rel', ids.includes(p.dataset.f) && ids.includes(p.dataset.p)));
+  document.querySelectorAll('#arestas path.rel').forEach(p => p.classList.add('fluxo'));
+  ids.slice().reverse().forEach((i, n) => setTimeout(() => pulsar(i), n * 180));
+  setTimeout(() => { document.querySelectorAll('#arestas path.fluxo').forEach(p => p.classList.remove('fluxo')); limparFoco(); }, 3200 + ids.length * 180);
+}
+/* Duplo clique no fundo: aproxima naquele ponto */
+vpEl.addEventListener('dblclick', e => { if (e.target.closest('.no')) return; const r = vpEl.getBoundingClientRect(), cx = e.clientX - r.left, cy = e.clientY - r.top, k = Math.min(2.5, view.k * 1.6), q = k / view.k; view = { k, x:cx - (cx - view.x) * q, y:cy - (cy - view.y) * q }; aplicarView(!semMovimento()); });
+document.addEventListener('keydown', e => {
+  if (vistaAtual !== 'mapa' || e.ctrlKey || e.metaKey || e.altKey || document.querySelector('.modal') || !$('#tv-modo').classList.contains('hidden') || e.target.closest('input,textarea,select,[contenteditable]')) return;
+  if (e.key === 'l' || e.key === 'L') { alternarMapaUI('leg'); toast(mapaUI.leg ? 'Legenda visível.' : 'Legenda escondida (L para mostrar).'); }
+  if (e.key === 'm' || e.key === 'M') alternarMapaUI('mini');
+  if ((e.key === 'f' || e.key === 'F') && selId) focarRamo(selId);
+});
+aplicarMapaUI();
 
 /* ===================== MENU LATERAL: RECOLHER E AJUSTAR LARGURA ===================== */
 let ladoCfg = Object.assign({ mini:false, w:236 }, store.get('gaborg_lado', {}));

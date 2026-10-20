@@ -330,6 +330,53 @@ body.pode-instalar .btn-instalar{display:inline-flex}
 .no.arrastando{cursor:grabbing;box-shadow:var(--sombra-g);z-index:5;transition:none}
 .no.alvo{box-shadow:0 0 0 3px #8b5cf6,0 0 0 9px rgba(139,92,246,.25)}
 .no.apagado{opacity:.28}
+/* ---- animações e destaque ---- */
+#nos.entrando .no{animation:noEntra .55s cubic-bezier(.2,.8,.2,1) both;animation-delay:calc(var(--d,0) * 70ms)}
+@keyframes noEntra{from{opacity:0;translate:0 14px;scale:.94}}
+.no{transition:box-shadow .2s,border-color .2s,opacity .25s,filter .25s}
+.no:hover:not(.arrastando){filter:brightness(1.03);translate:0 -2px}
+.no.saindo{pointer-events:none;z-index:0}
+.no.pulso::after{content:'';position:absolute;inset:-4px;border-radius:15px;border:3px solid var(--marca);animation:pulso 1.4s ease-out;pointer-events:none}
+@keyframes pulso{0%{opacity:1;transform:scale(1)}70%{opacity:.15;transform:scale(1.14)}100%{opacity:0;transform:scale(1.2)}}
+#vp.focando .no:not(.rel):not(.sel){opacity:.28;filter:saturate(.4)}
+#vp.focando .no.rel{box-shadow:0 0 0 2px color-mix(in srgb,var(--c) 55%,transparent),var(--sombra-g)}
+#vp.focando #arestas path:not(.rel){opacity:.18}
+#arestas path{transition:opacity .25s,stroke .25s}
+#arestas path.rel{stroke:var(--marca);stroke-width:2.6}
+#arestas path.ativa{stroke-dasharray:7 5;animation:fluxo .9s linear infinite}
+#arestas path.fluxo{stroke-dasharray:7 5;stroke-width:3;animation:fluxo .6s linear infinite}
+@keyframes fluxo{to{stroke-dashoffset:-12}}
+@media (prefers-reduced-motion:reduce){#nos.entrando .no,#arestas path.ativa,#arestas path.fluxo,.no.pulso::after{animation:none}}
+.m-dica{position:absolute;z-index:14;width:270px;padding:12px 14px;border-radius:14px;background:color-mix(in srgb,var(--sup) 96%,transparent);backdrop-filter:blur(8px);border:1px solid var(--linha);box-shadow:var(--sombra-g);font-size:12.5px;pointer-events:none;opacity:0;transform:translateY(6px) scale(.98);transition:opacity .18s,transform .18s}
+.m-dica.on{opacity:1;transform:none}
+.m-dica>b{display:block;font-size:14px;line-height:1.3;margin-top:3px}
+.m-dica>small{display:block;color:var(--mut);font-size:11px;margin-top:2px}
+.dc-t{font-size:10.5px;font-weight:800;color:var(--c);display:flex;gap:6px;align-items:center;text-transform:uppercase;letter-spacing:.03em}
+.dc-g{display:flex;flex-wrap:wrap;gap:6px 14px;margin:9px 0 6px}
+.dc-g span{display:flex;flex-direction:column;font-size:10.5px;color:var(--mut)}.dc-g span b{font-size:15px;color:var(--txt);font-variant-numeric:tabular-nums}
+.dc-r{display:flex;align-items:center;gap:6px;color:var(--txt2);font-size:12px;margin-top:3px}.dc-r i{color:var(--mut2);font-size:11px}
+.dc-r .p{width:8px;height:8px;border-radius:50%;display:inline-block}
+.dc-h{margin-top:8px;padding-top:7px;border-top:1px solid var(--linha);font-size:10.5px;color:var(--mut2)}
+.m-ctx{position:absolute;z-index:16;width:230px;padding:6px;border-radius:12px;background:var(--sup);border:1px solid var(--linha);box-shadow:var(--sombra-g);animation:ctxEntra .16s ease-out}
+@keyframes ctxEntra{from{opacity:0;transform:scale(.95) translateY(-4px)}}
+.m-ctx .ct{padding:6px 10px 8px;font-weight:800;font-size:13px;border-bottom:1px solid var(--linha);margin-bottom:4px}.m-ctx .ct small{display:block;font-weight:600;font-size:11px;color:var(--mut)}
+.m-ctx button{display:flex;align-items:center;gap:10px;width:100%;height:34px;padding:0 10px;border-radius:8px;font-size:13px;color:var(--txt);text-align:left}
+.m-ctx button:hover{background:var(--marca-bg);color:var(--marca)}
+.m-ctx button i{width:16px;text-align:center;color:var(--mut)}.m-ctx button:hover i{color:var(--marca)}
+.m-ctx hr{border:0;border-top:1px solid var(--linha);margin:4px 0}
+.m-zoom button.on{color:var(--marca)}
+.m-exib{position:absolute;right:62px;bottom:14px;z-index:15;width:300px;padding:10px;border-radius:14px;background:var(--sup);border:1px solid var(--linha);box-shadow:var(--sombra-g);display:flex;flex-direction:column;gap:2px;animation:ctxEntra .16s ease-out}
+.m-exib .t{font-size:13px;padding:4px 6px 8px}
+.exib-op{display:flex;align-items:center;gap:10px;padding:8px 6px;border-radius:9px;cursor:pointer}
+.exib-op:hover{background:var(--sup3)}
+.exib-op>i{width:18px;text-align:center;color:var(--marca)}
+.exib-op span{flex:1;font-size:13px}.exib-op small{display:block;font-size:11px;color:var(--mut)}
+.m-leg,.m-mini{transition:opacity .25s,transform .25s}
+body.sem-leg .m-leg{opacity:0;transform:translateY(12px);pointer-events:none}
+body.sem-mini .m-mini{opacity:0;transform:translateY(12px);pointer-events:none}
+.leg-x{position:absolute;top:6px;right:6px;width:24px;height:24px;border-radius:7px;color:var(--mut);font-size:12px}
+.leg-x:hover{background:var(--sup3);color:var(--txt)}
+.m-leg{padding-right:34px!important}
 .no.grupo{box-shadow:5px 5px 0 -1px var(--sup),5px 5px 0 0 var(--linha2),10px 10px 0 -1px var(--sup),10px 10px 0 0 var(--linha2),var(--sombra)}
 .no-qt{position:absolute;right:12px;top:22px;display:flex;flex-direction:column;align-items:flex-end;line-height:1;color:var(--c)}
 .no-qt b{font-size:24px;font-weight:900;letter-spacing:-.03em}
@@ -578,7 +625,7 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background
 <body>
 <!-- Vigia de inicialização: se o arquivo.js não carregar ou falhar, mostra o motivo em vez de uma tela vazia -->
 <script>
-window.GABORG_VERSAO_HTML = '1.9.0'; window.GABORG_ERROS = [];
+window.GABORG_VERSAO_HTML = '1.10.0'; window.GABORG_ERROS = [];
 window.addEventListener('error', function (e) {
   var alvo = e.target || {};
   if (alvo.tagName === 'SCRIPT') window.GABORG_ERROS.push('Não foi possível baixar o arquivo ' + (alvo.getAttribute('src') || '') + '.');
@@ -753,7 +800,11 @@ window.addEventListener('load', function () { setTimeout(function () { window.GA
         <span id="m-zv">100%</span>
         <button onclick="zoomPor(1/1.2)" title="Afastar"><i class="fa-solid fa-minus"></i></button>
         <button onclick="ajustar(true)" title="Ajustar à tela"><i class="fa-solid fa-expand"></i></button>
+        <button id="m-btn-leg" class="on" onclick="alternarMapaUI('leg')" title="Esconder a legenda (L)"><i class="fa-solid fa-list"></i></button>
+        <button id="m-btn-mini" class="on" onclick="alternarMapaUI('mini')" title="Esconder o minimapa (M)"><i class="fa-solid fa-map"></i></button>
+        <button id="m-btn-exib" onclick="menuExibicao(event)" title="Opções de exibição"><i class="fa-solid fa-sliders"></i></button>
       </div>
+      <div id="m-dica" class="m-dica"></div>
     </section>
 
     <!-- LISTA -->
@@ -855,6 +906,6 @@ window.addEventListener('load', function () { setTimeout(function () { window.GA
 
 <div id="toast"><i class="fa-solid fa-check"></i><span></span></div>
 
-<script src="arquivo.js?v=1.9.0" onerror="window.GABORG_ERROS.push('O arquivo arquivo.js não foi encontrado no servidor (erro 404).');GABORG_DIAGNOSTICO()"></script>
+<script src="arquivo.js?v=1.10.0" onerror="window.GABORG_ERROS.push('O arquivo arquivo.js não foi encontrado no servidor (erro 404).');GABORG_DIAGNOSTICO()"></script>
 </body>
 </html>
