@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.16.0';
+const VERSAO = '1.17.0';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -3482,6 +3482,44 @@ $('#tv-modo').addEventListener('pointermove', () => { const el = $('#tv-modo'); 
 window.addEventListener('error', e => { if (window.GABORG_INICIADO && e.message && typeof toast === 'function') toast('Erro: ' + e.message + ' — recarregue a página. Se repetir, envie esta mensagem ao suporte.', 'erro'); });
 window.addEventListener('unhandledrejection', e => { const m = e.reason && (e.reason.message || String(e.reason)); if (window.GABORG_INICIADO && m && !/abort/i.test(m) && typeof toast === 'function') console.warn('GABOrg:', m); });
 
+/* ===================== AVISO DE ATUALIZAÇÃO DO APP ===================== */
+/* Consulta o index.html publicado (sem cache). Se a versão lá for mais nova que a que está rodando, avisa e oferece atualizar. */
+const atu = { nova:'', dispensadaEm:0, ultima:0 };
+function compararVersao(a, b){ const x = String(a).split('.').map(Number), y = String(b).split('.').map(Number); for (let i = 0; i < Math.max(x.length, y.length); i++) { const d = (x[i] || 0) - (y[i] || 0); if (d) return d > 0 ? 1 : -1; } return 0; }
+async function verificarAtualizacao(manual){
+  if (!/^https?:$/.test(location.protocol)) { if (manual) toast('A verificação só funciona com o sistema publicado (GitHub Pages).', 'aviso'); return; }
+  atu.ultima = Date.now();
+  try {
+    const r = await fetch(location.pathname.replace(/[^/]*$/, '') + 'index.html?nc=' + Date.now(), { cache:'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const h = await r.text(), m = h.match(/GABORG_VERSAO_HTML\s*=\s*'([\d.]+)'/) || h.match(/arquivo\.js\?v=([\d.]+)/), n = h.match(/GABORG_NOVIDADES\s*=\s*"([^"]*)"/);
+    const nova = m && m[1];
+    if (nova && compararVersao(nova, VERSAO) > 0) { atu.nova = nova; mostrarAtualizacao(nova, n ? n[1] : '', manual); }
+    else if (manual) toast(`Você já está na versão mais recente (${VERSAO}).`);
+  } catch (e) { if (manual) toast('Não foi possível verificar agora: ' + e.message, 'aviso'); }
+}
+function mostrarAtualizacao(nova, novidades, manual){
+  if (!manual && atu.dispensadaEm && Date.now() - atu.dispensadaEm < 30 * 60 * 1000) return;
+  let el = $('#atu-app');
+  if (!el) { el = document.createElement('div'); el.id = 'atu-app'; el.className = 'atu-app'; el.setAttribute('role', 'alert'); document.body.appendChild(el); }
+  const pend = (typeof fila !== 'undefined' && fila.length) ? fila.length : 0;
+  el.innerHTML = `<div class="ic"><i class="fa-solid fa-rotate"></i></div>
+    <div class="tx"><b>Nova versão do GABOrg disponível</b><small>Versão ${esc(nova)} · você está na ${esc(VERSAO)}</small>
+      ${novidades ? `<p>${esc(novidades)}</p>` : ''}
+      ${pend ? `<p class="pd"><i class="fa-solid fa-cloud-arrow-up"></i>${pend} alteração(ões) ainda não enviada(s) ficam guardadas e são enviadas depois de atualizar.</p>` : ''}</div>
+    <div class="bt"><button class="btn btn-p btn-sm" onclick="atualizarApp()"><i class="fa-solid fa-rotate"></i>Atualizar agora</button><button class="btn btn-s btn-sm" onclick="dispensarAtualizacao()">Depois</button></div>`;
+  requestAnimationFrame(() => el.classList.add('on'));
+}
+function dispensarAtualizacao(){ atu.dispensadaEm = Date.now(); const el = $('#atu-app'); if (el) { el.classList.remove('on'); setTimeout(() => el.remove(), 300); } }
+function atualizarApp(){
+  const el = $('#atu-app'); if (el) el.querySelector('.bt').innerHTML = '<span class="s"><i class="fa-solid fa-spinner fa-spin"></i> Atualizando...</span>';
+  try { if (typeof salvarLocal === 'function') salvarLocal(); } catch (e) {}
+  window.GABORG_LIMPAR();
+}
+setTimeout(() => verificarAtualizacao(false), 8000);
+setInterval(() => { if (!document.hidden) verificarAtualizacao(false); }, 15 * 60 * 1000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden && Date.now() - atu.ultima > 5 * 60 * 1000) verificarAtualizacao(false); });
+
 /* ===================== MENU DO USUÁRIO ===================== */
 function menuUsuario(){
   const sync = $('#sync') ? $('#sync').outerHTML : '';
@@ -3490,6 +3528,7 @@ function menuUsuario(){
   m.innerHTML = `<div class="cx" role="dialog" aria-modal="true" style="max-width:380px"><div class="menu-u">
     <div class="cab"><span class="av">${esc(iniciais(cfg.usuario || cfg.login))}</span><div style="min-width:0"><b>${esc(cfg.usuario || cfg.login || 'Usuário')}</b><small>${esc(cfg.login || '')} · ${esc(cfg.perfil || '')}</small>${sync}</div></div>
     ${appInstalavel() ? '<button class="it" data-a="instalar"><i class="fa-solid fa-download"></i>Instalar o GABOrg como app</button>' : ''}
+    <button class="it" data-a="atualizar"><i class="fa-solid fa-rotate"></i>${atu.nova ? `Atualizar para a versão ${esc(atu.nova)}` : 'Verificar atualização'}<small style="margin-left:auto;color:var(--mut2)">v${VERSAO}</small></button>
     <button class="it" data-a="tv"><i class="fa-solid fa-tv"></i>Modo TV (apresentação)</button>
     <button class="it" data-a="tema"><i class="fa-solid fa-circle-half-stroke"></i>${escuro ? 'Tema claro' : 'Tema escuro'}</button>
     <button class="it" data-a="senha"><i class="fa-solid fa-key"></i>Alterar minha senha</button>
@@ -3501,6 +3540,7 @@ function menuUsuario(){
     const b = e.target.closest('[data-a]'); if (!b && e.target !== m) return;
     m.remove(); const a = b && b.dataset.a;
     if (a === 'instalar') instalarApp();
+    if (a === 'atualizar') { if (atu.nova) atualizarApp(); else verificarAtualizacao(true); }
     if (a === 'tv') abrirModoTV();
     if (a === 'tema') alternarTema();
     if (a === 'senha') modalTrocarSenha(false);
