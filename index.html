@@ -200,6 +200,70 @@ body.cen-ativo #vp{background-color:color-mix(in srgb,#f59e0b 6%,var(--bg))}
 .cmp-it>i{color:var(--c);margin-top:3px;width:16px;text-align:center}
 .cmp-it small{display:block;font-size:10.5px;font-weight:800;color:var(--c);text-transform:uppercase;letter-spacing:.04em}
 @media (max-width:900px){#cmp{grid-template-rows:auto 1fr 1fr;overflow:auto}.cmp-mapas{grid-template-columns:1fr;grid-auto-rows:minmax(260px,1fr)}.cmp-dif{grid-template-columns:1fr}}
+/* ===================== MAPA DE MATO GROSSO ===================== */
+.mt-wrap{position:absolute;inset:0;display:grid;grid-template-columns:360px 1fr;transition:grid-template-columns .25s}
+#v-escolas.sem-lado .mt-wrap{grid-template-columns:0 1fr}
+.mt-lado{display:flex;flex-direction:column;gap:10px;min-height:0;overflow:auto;padding:14px;background:var(--sup);border-right:1px solid var(--linha)}
+#v-escolas.sem-lado .mt-lado{padding:0;overflow:hidden;border:0}
+.mt-cab{display:flex;gap:8px;align-items:flex-start;justify-content:space-between}
+.mt-cab h1{margin:0;font-size:17px;font-weight:800;display:flex;gap:8px;align-items:center}.mt-cab h1 i{color:#16a34a}
+.mt-cab p{margin:2px 0 0;font-size:12px;color:var(--mut)}
+.mt-kpi{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.mt-kpi div{padding:8px 10px;border-radius:10px;background:var(--sup2);border:1px solid var(--linha);font-size:11px;color:var(--mut);display:flex;flex-direction:column}
+.mt-kpi div b{font-size:18px;color:var(--txt);font-variant-numeric:tabular-nums}
+.mt-kpi div:last-child{grid-column:1/-1;flex-direction:row;gap:4px;align-items:baseline}.mt-kpi div:last-child b{font-size:13px}
+.mt-busca2{position:relative}.mt-busca2 i{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--mut2);font-size:12px}.mt-busca2 input{padding-left:32px;width:100%}
+.mt-fs{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.mt-sub{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--mut);display:flex;gap:6px;align-items:baseline;margin-top:4px}
+.mt-sub small{font-weight:500;text-transform:none;letter-spacing:0}.mt-sub .lk{margin-left:auto;font-size:11px;color:var(--marca);text-transform:none;letter-spacing:0;font-weight:600}
+.mt-chips{display:flex;flex-wrap:wrap;gap:5px}
+.mt-chip{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 9px;border-radius:999px;border:1px solid var(--linha);background:var(--sup2);font-size:11.5px;font-weight:600;color:var(--mut);transition:all .15s}
+.mt-chip i{width:9px;height:9px;border-radius:50%;background:var(--c);opacity:.35}
+.mt-chip b{font-size:10.5px;color:var(--mut2)}
+.mt-chip.on{border-color:color-mix(in srgb,var(--c) 45%,var(--linha));background:color-mix(in srgb,var(--c) 10%,var(--sup));color:var(--txt)}.mt-chip.on i{opacity:1}.mt-chip.on b{color:var(--c)}
+.mt-foco{border:1px solid color-mix(in srgb,var(--c) 40%,var(--linha));border-left:4px solid var(--c);border-radius:12px;padding:10px 12px;background:color-mix(in srgb,var(--c) 6%,var(--sup));display:flex;flex-direction:column;gap:8px;animation:sobe .25s}
+.mt-foco .h{display:flex;gap:10px;align-items:flex-start}.mt-foco .h>i{color:var(--c);font-size:18px;margin-top:2px}.mt-foco .h>div{flex:1}
+.mt-foco b{font-size:14px}.mt-foco small{display:block;font-size:11.5px;color:var(--mut)}
+.mt-foco .tp{display:flex;flex-wrap:wrap;gap:4px}.mt-foco .tp span{font-size:11px;padding:2px 8px;border-radius:999px;background:var(--sup);border:1px solid var(--linha)}.mt-foco .tp b{font-size:11px;color:var(--c)}
+.mt-foco .mu{font-size:11.5px;color:var(--txt2);line-height:1.5;max-height:80px;overflow:auto}
+.mt-foco .btn{align-self:flex-start}
+.mt-lista{display:flex;flex-direction:column;gap:4px;flex:1 0 auto}
+.mt-grp{border:1px solid var(--linha);border-radius:10px;overflow:hidden}
+.mt-grp.foco{border-color:var(--c);box-shadow:0 0 0 1px var(--c)}
+.mt-grp .gh{display:flex;align-items:center;gap:8px;width:100%;padding:8px 10px;font-size:12.5px;text-align:left;background:var(--sup2)}
+.mt-grp .gh>i{font-size:10px;color:var(--mut2);width:10px}.mt-grp .gh .pt{width:10px;height:10px;border-radius:3px;background:var(--c)}
+.mt-grp .gh b{flex:1}.mt-grp .gh .n{font-weight:800;color:var(--c);font-variant-numeric:tabular-nums}
+.mt-grp .gh .fo{width:24px;height:24px;border-radius:7px;display:flex;align-items:center;justify-content:center;color:var(--mut)}.mt-grp .gh .fo:hover{background:var(--sup);color:var(--c)}
+.mt-grp .gi{display:flex;flex-direction:column;max-height:320px;overflow:auto}
+.mt-grp .ei{display:flex;flex-direction:column;text-align:left;padding:7px 12px 7px 28px;border-top:1px solid var(--linha);font-size:12px}
+.mt-grp .ei:hover{background:color-mix(in srgb,var(--c) 8%,var(--sup))}.mt-grp .ei small{font-size:10.5px;color:var(--mut)}
+.mt-pe{display:flex;gap:6px;flex-wrap:wrap;padding-top:6px;border-top:1px solid var(--linha)}
+.mt-area{position:relative;min-width:0}
+#esc-map{position:absolute;inset:0;background:var(--bg);z-index:0;isolation:isolate}
+.mt-status{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:500;font-size:13px;color:var(--mut)}
+.mt-abre{position:absolute;left:12px;top:12px;z-index:600;display:none;box-shadow:var(--sombra)}
+#v-escolas.sem-lado .mt-abre{display:inline-flex}
+.mt-ctrl{position:absolute;right:12px;top:12px;z-index:600;display:flex;flex-direction:column;gap:6px;align-items:flex-end}
+.mt-base,.mt-cam{display:flex;gap:2px;padding:3px;border-radius:10px;background:var(--sup);border:1px solid var(--linha);box-shadow:var(--sombra)}
+.mt-base button,.mt-cam button{height:30px;padding:0 10px;border-radius:8px;font-size:12px;font-weight:600;color:var(--mut);display:inline-flex;gap:6px;align-items:center}
+.mt-base button.on,.mt-cam button.on{background:var(--marca-bg);color:var(--marca)}
+.mt-dre-ic{background:none;border:0}
+.mt-dre{display:inline-flex;align-items:center;gap:6px;padding:4px 9px 4px 6px;border-radius:999px;background:var(--c);color:#fff;font:700 11.5px/1 Inter,system-ui,sans-serif;white-space:nowrap;box-shadow:0 4px 14px -4px rgba(15,23,42,.5),0 0 0 2px #fff;cursor:pointer;transition:transform .2s,opacity .2s}
+.mt-dre i{width:20px;height:20px;border-radius:50%;background:rgba(255,255,255,.22);display:flex;align-items:center;justify-content:center;font-size:10px}
+.mt-dre b{background:#fff;color:var(--c);border-radius:999px;padding:2px 6px;font-size:10.5px}
+.mt-dre:hover,.mt-dre.on{transform:scale(1.12)}.mt-dre.off{opacity:.35}
+.mt-longe .mt-dre:not(.on):not(:hover) span{display:none}.mt-longe .mt-dre:not(.on):not(:hover){padding-right:5px}
+.mt-tip{font:12px Inter,system-ui,sans-serif;border-radius:8px;padding:5px 8px}
+.mt-popup .leaflet-popup-content-wrapper{border-radius:14px}.mt-popup .leaflet-popup-content{margin:12px 14px;font:12.5px/1.45 Inter,system-ui,sans-serif}
+.mt-pop .t{font-size:10.5px;font-weight:800;color:var(--c);text-transform:uppercase;letter-spacing:.03em;display:flex;gap:6px;align-items:center}
+.mt-pop>b{display:block;font-size:14px;margin:3px 0 1px}.mt-pop>small{color:#64748b}
+.mt-pop .l{display:flex;gap:8px;margin-top:5px}.mt-pop .l i{width:14px;color:#94a3b8;margin-top:3px}
+.mt-pop .a{display:flex;gap:12px;margin-top:9px;padding-top:8px;border-top:1px solid #e2e8f0}.mt-pop .a a{font-weight:600;display:inline-flex;gap:5px;align-items:center}
+html[data-tema="escuro"] .leaflet-popup-content-wrapper,html[data-tema="escuro"] .leaflet-popup-tip{background:#131c2e;color:#e2e8f0}
+html[data-tema="escuro"] .leaflet-tooltip{background:#131c2e;color:#e2e8f0;border-color:#25324a}
+html[data-tema="escuro"] .leaflet-bar a{background:#131c2e;color:#e2e8f0;border-color:#25324a}
+.leaflet-container{font-family:Inter,system-ui,sans-serif}
+@media (max-width:820px){.mt-wrap{grid-template-columns:1fr;grid-template-rows:1fr}.mt-lado{position:absolute;inset:0;z-index:700}#v-escolas.sem-lado .mt-lado{display:none}#v-escolas.sem-lado .mt-wrap,#v-escolas .mt-wrap{grid-template-columns:1fr}#v-escolas:not(.sem-lado) .mt-area{visibility:hidden}.mt-abre span{display:inline}.mt-base button{padding:0 7px}.mt-cam button span{display:none}}
 /* ===================== PROPOSTA EM EDIÇÃO ===================== */
 .cen-barra{position:absolute;top:0;left:0;right:0;z-index:45;min-height:46px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:6px 14px;background:#fef3c7;border-bottom:1px solid #f59e0b;color:#78350f;font-size:13px}
 html[data-tema="escuro"] .cen-barra{background:#3b2a06;color:#fde68a;border-color:#a16207}
@@ -594,6 +658,7 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background
   .nav-b{flex:1 0 54px;min-width:54px;max-width:96px;padding:0 4px;position:relative}
   .nav-b span:not(.qt){max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .nav-b[data-vista="config"] span{font-size:0}.nav-b[data-vista="config"] span::after{content:'Ajustes';font-size:10px}
+  .nav-b[data-vista="escolas"] span{font-size:0}.nav-b[data-vista="escolas"] span::after{content:'Escolas';font-size:10px}
   .nav-b[data-vista="propostas"] span{font-size:0}.nav-b[data-vista="propostas"] span::after{content:'Propostas';font-size:10px}
   .nav-b[data-vista="financeiro"] span{font-size:0}.nav-b[data-vista="financeiro"] span::after{content:'Finanças';font-size:10px}
   .nav-b[data-vista="usuarios"] span{font-size:0}.nav-b[data-vista="usuarios"] span::after{content:'Admin';font-size:10px}
@@ -638,7 +703,7 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background
 <body>
 <!-- Vigia de inicialização: se o arquivo.js não carregar ou falhar, mostra o motivo em vez de uma tela vazia -->
 <script>
-window.GABORG_VERSAO_HTML = '1.11.0'; window.GABORG_ERROS = [];
+window.GABORG_VERSAO_HTML = '1.12.0'; window.GABORG_ERROS = [];
 window.addEventListener('error', function (e) {
   var alvo = e.target || {};
   if (alvo.tagName === 'SCRIPT') window.GABORG_ERROS.push('Não foi possível baixar o arquivo ' + (alvo.getAttribute('src') || '') + '.');
@@ -740,6 +805,7 @@ window.addEventListener('load', function () { setTimeout(function () { window.GA
       <h6>ESTRUTURA</h6>
       <button class="nav-b on" data-vista="mapa"><i class="fa-solid fa-diagram-project"></i><span>Mapa</span></button>
       <button class="nav-b" data-vista="lista"><i class="fa-solid fa-list-ul"></i><span>Setores</span></button>
+      <button class="nav-b" data-vista="escolas"><i class="fa-solid fa-map-location-dot"></i><span>Mapa de MT</span></button>
       <h6>ANÁLISE</h6>
       <button class="nav-b" data-vista="painel"><i class="fa-solid fa-chart-simple"></i><span>Indicadores</span></button>
       <button class="nav-b" data-vista="financeiro"><i class="fa-solid fa-sack-dollar"></i><span>Financeiro</span></button>
@@ -866,6 +932,36 @@ window.addEventListener('load', function () { setTimeout(function () { window.GA
       </div>
     </section>
 
+    <!-- MAPA DE MATO GROSSO -->
+    <section class="vista fora" id="v-escolas">
+      <div class="mt-wrap">
+        <aside class="mt-lado">
+          <div class="mt-cab"><div><h1><i class="fa-solid fa-map-location-dot"></i>Mapa de Mato Grosso</h1><p>Escolas estaduais e Diretorias Regionais de Educação</p></div><button class="btn btn-s btn-sm btn-i" onclick="alternarLadoMT(false)" title="Esconder o painel"><i class="fa-solid fa-angles-left"></i></button></div>
+          <div class="mt-kpi" id="esc-kpi"></div>
+          <div class="busca mt-busca2"><i class="fa-solid fa-magnifying-glass"></i><input id="esc-q" class="campo" placeholder="Buscar escola, código, município ou bairro" oninput="filtroEscMT('q',this.value)"></div>
+          <div class="mt-fs">
+            <select id="esc-tipo" class="campo" onchange="filtroEscMT('tipo',this.value)"><option value="">Todos os tipos</option><option>Regular</option><option>Cívico-militar</option><option>Militar</option><option>Campo</option><option>Indígena</option><option>Quilombola</option><option>Integral</option><option>Especializada</option><option>Confessional</option></select>
+            <select id="esc-loc" class="campo" onchange="filtroEscMT('loc',this.value)"><option value="">Urbanas e rurais</option><option value="URBANA">Urbanas</option><option value="RURAL">Rurais</option></select>
+          </div>
+          <div class="mt-sub">Diretorias Regionais <small>clique para filtrar</small><button class="lk" onclick="limparFiltrosMT()">limpar filtros</button></div>
+          <div class="mt-chips" id="esc-dres"></div>
+          <div id="esc-foco"></div>
+          <div class="mt-sub">Escolas por DRE</div>
+          <div class="mt-lista" id="esc-lista"></div>
+          <div class="mt-pe"><button class="btn btn-s btn-sm" onclick="exportarEscolasMT()"><i class="fa-solid fa-file-csv"></i>Exportar CSV</button><label class="btn btn-s btn-sm so-adm" title="Atualizar com uma planilha .xlsx no mesmo formato"><i class="fa-solid fa-file-arrow-up"></i>Atualizar base<input type="file" accept=".xlsx,.xls" class="sr" onchange="importarEscolasMT(this.files[0]);this.value=''"></label></div>
+        </aside>
+        <div class="mt-area">
+          <div id="esc-map"></div>
+          <div class="mt-status" id="esc-status"></div>
+          <button class="btn btn-s mt-abre" onclick="alternarLadoMT(true)" title="Mostrar o painel"><i class="fa-solid fa-angles-right"></i><span>Painel</span></button>
+          <div class="mt-ctrl">
+            <div class="mt-base"><button data-b="claro" onclick="trocarBaseMT('claro')">Claro</button><button data-b="escuro" onclick="trocarBaseMT('escuro')">Escuro</button><button data-b="ruas" onclick="trocarBaseMT('ruas')">Ruas</button><button data-b="satelite" onclick="trocarBaseMT('satelite')">Satélite</button></div>
+            <div class="mt-cam"><button data-k="regioes" class="on" onclick="alternarCamadaMT('regioes')" title="Colorir os municípios pela DRE"><i class="fa-solid fa-draw-polygon"></i>Regiões</button><button data-k="ligacoes" onclick="alternarCamadaMT('ligacoes')" title="Linhas de cada escola até a sua DRE"><i class="fa-solid fa-diagram-project"></i>Ligações</button><button onclick="mt.foco=-1;desenharEscolasMT();enquadrarMT(true)" title="Ver todo o estado"><i class="fa-solid fa-expand"></i></button></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- FINANCEIRO -->
     <section class="vista fora" id="v-financeiro">
       <div class="topo"><div><h1><i class="fa-solid fa-sack-dollar"></i>Financeiro</h1><p>Cálculo de despesas por setor: cargos em comissão (DGA), funções, bolsas, pessoal e custeio, no cenário atual e no proposto.</p></div>
@@ -920,6 +1016,6 @@ window.addEventListener('load', function () { setTimeout(function () { window.GA
 
 <div id="toast"><i class="fa-solid fa-check"></i><span></span></div>
 
-<script src="arquivo.js?v=1.11.0" onerror="window.GABORG_ERROS.push('O arquivo arquivo.js não foi encontrado no servidor (erro 404).');GABORG_DIAGNOSTICO()"></script>
+<script src="arquivo.js?v=1.12.0" onerror="window.GABORG_ERROS.push('O arquivo arquivo.js não foi encontrado no servidor (erro 404).');GABORG_DIAGNOSTICO()"></script>
 </body>
 </html>
