@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.17.0';
+const VERSAO = '1.18.0';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -2867,7 +2867,8 @@ const MODOS_MT = {
   dre:['fa-circle-dot', 'Unidades por DRE', 'Cada escola na cor da DRE a que é subordinada'],
   sodre:['fa-building-flag', 'Somente as DREs', 'Só as sedes das DREs e as suas regiões, sem as escolas'],
   regioes:['fa-draw-polygon', 'Regiões das DREs', 'Municípios pintados pela DRE, com as escolas por cima'],
-  municipio:['fa-layer-group', 'Municípios', 'Quanto mais escuro, mais escolas no município'],
+  divisao:['fa-map', 'Divisão municipal', 'Cada município com uma cor, suas divisas e o nome'],
+  municipio:['fa-layer-group', 'Escolas por município', 'Quanto mais escuro, mais escolas no município'],
   cluster:['fa-object-group', 'Agrupadas', 'Bolhas com a quantidade de escolas; aproxime para separar'],
   tipo:['fa-shapes', 'Tipo de escola', 'Regular, cívico-militar, campo, indígena, integral...'],
   localidade:['fa-tree-city', 'Urbanas e rurais', 'Localização da escola']
@@ -2956,7 +2957,8 @@ async function renderEscolas(){
     ['malha', 'divisas', 'destaque', 'nomes', 'ligacoes', 'escolas', 'dres'].forEach(c => { mt.camadas[c] = L.layerGroup().addTo(mt.mapa); });
     trocarBaseMT(store.get('gaborg_mt_base3', 'ruas'));
     mt.mapa.on('click', () => { fecharMenuMT(); voltarMT(mt.mun ? 1 : 0); });
-    const zoomCls = () => { el.classList.toggle('mt-longe', mt.mapa.getZoom() < (window.innerWidth > 820 ? 6.6 : 7.4)); el.classList.toggle('mt-perto', mt.mapa.getZoom() >= 8.5); el.classList.toggle('mt-sem-mun', mt.mapa.getZoom() < 7.6); };
+    const zoomCls = () => { el.classList.toggle('mt-longe', mt.mapa.getZoom() < (window.innerWidth > 820 ? 6.6 : 7.4)); el.classList.toggle('mt-perto', mt.mapa.getZoom() >= 8.5); el.classList.toggle('mt-sem-mun', mt.mapa.getZoom() < 7.6); el.classList.toggle('mt-div', mt.modo === 'divisao'); };
+    mt.zoomCls = zoomCls;
     mt.mapa.on('zoomend', zoomCls); zoomCls();
     mt.mapa.on('movestart', fecharMenuMT);
     carregarMalhaMT();
@@ -2990,7 +2992,7 @@ function menuMT(t, btn, manter){
 document.addEventListener('pointerdown', e => { if (!e.target.closest || e.target.closest('.mt-ctrl')) return; fecharMenuMT(); });
 async function modoMT(m){
   if (m === 'cluster' && !(await carregarCluster())) { toast('Não foi possível carregar o agrupamento. Mostrando por DRE.', 'aviso'); m = 'dre'; }
-  mt.modo = m; store.set('gaborg_mt_modo', m); fecharMenuMT(); montarControlesMT();
+  mt.modo = m; store.set('gaborg_mt_modo', m); fecharMenuMT(); montarControlesMT(); if (mt.zoomCls) mt.zoomCls();
   desenharEscolasMT();
 }
 function telaCheiaMT(){ const a = $('.mt-area'); if (document.fullscreenElement) document.exitFullscreen(); else if (a.requestFullscreen) a.requestFullscreen().then(() => setTimeout(() => mt.mapa.invalidateSize(), 200)).catch(() => {}); }
@@ -3011,7 +3013,7 @@ function popupEscola(e, dres){
 function corEscolaMT(e, dres){
   if (mt.modo === 'tipo') return CORES_TIPO[grupoTipo(e.tipo)] || CORES_TIPO.Outro;
   if (mt.modo === 'localidade') return e.localidade === 'RURAL' ? '#65a30d' : '#2563eb';
-  if (mt.modo === 'municipio') return '#0f172a';
+  if (mt.modo === 'municipio' || mt.modo === 'divisao') return '#0f172a';
   return corDRE(dres, e.dre);
 }
 function desenharEscolasMT(){
@@ -3020,8 +3022,8 @@ function desenharEscolasMT(){
   if (mt.camadas.cluster) { mt.mapa.removeLayer(mt.camadas.cluster); mt.camadas.cluster = null; }
   mt.camadas.escolas.clearLayers(); mt.camadas.dres.clearLayers(); mt.camadas.ligacoes.clearLayers(); mt.marcadores.clear();
   const sedes = new Map(dres.map(d => [d, sedeDRE(d, todas)]));
-  if (mt.ligacoes || (foco && modo !== 'sodre')) lista.filter(e => (!foco || e.dre === foco) && (!mun || chaveMun(e.municipio) === mun)).forEach(e => L.polyline([sedes.get(e.dre), [e.latitude, e.longitude]], { color:corDRE(dres, e.dre), weight:foco ? 1.6 : 1.1, opacity:foco ? .7 : .45, renderer:mt.render, interactive:false }).addTo(mt.camadas.ligacoes));
-  const pequeno = modo === 'regioes' || modo === 'municipio';
+  if ((mt.ligacoes && modo !== 'divisao') || (foco && modo !== 'sodre')) lista.filter(e => (!foco || e.dre === foco) && (!mun || chaveMun(e.municipio) === mun)).forEach(e => L.polyline([sedes.get(e.dre), [e.latitude, e.longitude]], { color:corDRE(dres, e.dre), weight:foco ? 1.6 : 1.1, opacity:foco ? .7 : .45, renderer:mt.render, interactive:false }).addTo(mt.camadas.ligacoes));
+  const pequeno = ['regioes', 'municipio', 'divisao'].includes(modo);
   let destino = mt.camadas.escolas;
   if (modo === 'cluster' && L.markerClusterGroup) {
     destino = mt.camadas.cluster = L.markerClusterGroup({ showCoverageOnHover:false, spiderfyOnMaxZoom:true, maxClusterRadius:z => z < 7 ? 70 : 50, chunkedLoading:true,
@@ -3041,7 +3043,7 @@ function desenharEscolasMT(){
     m.bindPopup(() => popupEscola(e, dres), { maxWidth:320, className:'mt-popup' });
     destino.addLayer(m); mt.marcadores.set(e.codigo, m);
   });
-  if (modo !== 'municipio') dres.forEach((d, i) => {
+  if (modo !== 'municipio' && (modo !== 'divisao' || foco)) dres.forEach((d, i) => {
     const n = lista.filter(e => e.dre === d).length; if (!n && (mt.fil.dres.size && !mt.fil.dres.has(d))) return;
     const icone = L.divIcon({ className:'mt-dre-ic', html:`<div class="mt-dre ${foco === d ? 'on' : ''} ${foco && foco !== d ? 'off' : ''}" style="--c:${corDRE(dres, d)}"><i class="fa-solid fa-building-flag"></i><span>${esc(nomeDRE(d))}</span><b>${n}</b></div>`, iconSize:null, iconAnchor:[14, 14] });
     L.marker(sedes.get(d), { icon:icone, zIndexOffset:1000 + (foco === d ? 500 : 0), keyboard:false, title:'Sede da ' + d }).on('click', ev => { L.DomEvent.stopPropagation(ev); focarDREmt(foco === d && !mt.mun ? -1 : i); }).on('mouseover', () => realcarDREmt(i)).on('mouseout', () => realcarDREmt(-1)).addTo(mt.camadas.dres);
@@ -3122,6 +3124,12 @@ function construirMalhaMT(){
   const { topo, obj, geo } = mt.malha, temTopo = !!(topo && window.topojson), todas = escolasLista(), dres = dresDe(todas);
   const porMun = dreDosMunicipios();
   const geoms = temTopo ? obj.geometries : geo.features;
+  const PAL_MUN = ['#fde68a', '#a7f3d0', '#bfdbfe', '#fecaca', '#ddd6fe', '#fed7aa', '#a5f3fc', '#f5d0fe', '#d9f99d'];
+  if (temTopo) {
+    const viz = topojson.neighbors(geoms), ordem = geoms.map((g, i) => i).sort((a, b) => viz[b].length - viz[a].length), cor = [];
+    ordem.forEach(i => { const usadas = new Set(viz[i].map(j => cor[j])); let c = (i * 7) % PAL_MUN.length, t = 0; while (usadas.has(c) && t++ < PAL_MUN.length) c = (c + 1) % PAL_MUN.length; if (usadas.has(c)) { c = PAL_MUN.length; while (usadas.has(c)) c++; } cor[i] = c; });
+    geoms.forEach((g, i) => { g.properties = g.properties || {}; g.properties.cor = PAL_MUN[cor[i] % PAL_MUN.length]; });
+  } else geoms.forEach((g, i) => { g.properties.cor = PAL_MUN[(parseInt(g.properties.codarea, 10) || i) % PAL_MUN.length]; });
   geoms.forEach(g => { const o = porMun.get(chaveMun(g.properties.nome)); g.properties.chave = chaveMun(g.properties.nome) || String(g.properties.codarea); g.properties.dre = o ? Object.entries(o).sort((a, b) => b[1] - a[1])[0][0] : ''; g.properties.n = o ? Object.values(o).reduce((a, b) => a + b, 0) : 0; g.properties.detalhe = o; });
   ['malha', 'divisas', 'destaque', 'nomes'].forEach(c => mt.camadas[c].clearLayers());
   if (mt.camadas.mascara) { mt.mapa.removeLayer(mt.camadas.mascara); mt.camadas.mascara = null; }
@@ -3168,9 +3176,10 @@ function estiloMunMT(f, hover){
   if (mt.modo === 'regioes') op = ap ? .1 : sel ? .75 : .5;
   else if (mt.modo === 'sodre') op = ap ? .08 : sel ? .6 : .38;
   else if (mt.modo === 'municipio') { fill = corEscala(f.properties.n); op = ap ? .25 : .9; }
+  else if (mt.modo === 'divisao') { fill = f.properties.cor || '#e2e8f0'; op = ap ? .15 : sel ? .9 : .62; }
   else if (semFundo) op = ap ? .05 : sel ? .4 : foco ? .24 : .16;
   else op = ap ? .02 : sel ? .3 : foco ? .12 : 0;
-  if (ap && !semFundo) { fill = escuro ? '#020617' : '#0f172a'; op = .2; }
+  if (ap && !semFundo && mt.modo !== 'divisao') { fill = escuro ? '#020617' : '#0f172a'; op = .2; }
   if (mt.mun && !sel && !ap) op *= .55;
   if (hover) op = Math.min(.95, op + (mt.modo === 'municipio' ? .1 : .2));
   return { stroke:hover || sel, color:escuro ? '#f8fafc' : '#0f172a', weight:sel ? 2.6 : 1.8, opacity:1, fillColor:fill, fillOpacity:op, className:'mt-mun' };
@@ -3182,6 +3191,9 @@ function dicaMunMT(f){
     ${l.length ? `<div class="n"><b>${l.length}</b> escola${l.length > 1 ? 's' : ''} estadua${l.length > 1 ? 'is' : 'l'}<small>${u} urbana${u === 1 ? '' : 's'} · ${l.length - u} rura${l.length - u === 1 ? 'l' : 'is'}</small></div>` : '<div class="n"><small>Nenhuma escola estadual na base</small></div>'}
     ${o && Object.keys(o).length > 1 ? `<small class="o">${Object.entries(o).map(([x, n]) => `${esc(nomeDRE(x))}: ${n}`).join(' · ')}</small>` : ''}
     <small class="h">${mt.mun === f.properties.chave ? 'Clique para voltar' : 'Clique para ver as escolas'}</small></div>`;
+}
+function realcarMunMT(k, on){
+  (mt.munL && mt.munL.get(k) || []).forEach(l => { l.setStyle(estiloMunMT(l.feature, on)); if (on) l.bringToFront(); });
 }
 function realcarDREmt(i, doMapa){
   if (!mt.camadas.destaque) return; mt.camadas.destaque.clearLayers();
@@ -3204,8 +3216,10 @@ function estilizarMalhaMT(){
   mt.camadas.divisas.clearLayers(); mt.camadas.nomes.clearLayers();
   const linha = escuro ? '#e2e8f0' : '#0f172a', fina = escuro ? 'rgba(226,232,240,.45)' : (semFundo ? 'rgba(15,23,42,.18)' : 'rgba(15,23,42,.4)');
   if (mt.mesh) {
-    const pintado = ['regioes', 'sodre', 'municipio'].includes(mt.modo);
-    if (mt.divisas || pintado || foco) L.geoJSON(mt.mesh.mun, { pane:'divisas', interactive:false, style:{ color:fina, weight:foco ? 1 : .7 } }).addTo(mt.camadas.divisas);
+    const pintado = ['regioes', 'sodre', 'municipio', 'divisao'].includes(mt.modo), div = mt.modo === 'divisao';
+    if (div) { L.geoJSON(mt.mesh.mun, { pane:'divisas', interactive:false, style:{ color:escuro ? '#0b1220' : '#ffffff', weight:2.6, opacity:.9, lineJoin:'round' } }).addTo(mt.camadas.divisas); L.geoJSON(mt.mesh.dre, { pane:'divisas', interactive:false, style:{ color:escuro ? '#0b1220' : '#ffffff', weight:2.6, opacity:.9, lineJoin:'round' } }).addTo(mt.camadas.divisas); }
+    if (mt.divisas || pintado || foco) L.geoJSON(mt.mesh.mun, { pane:'divisas', interactive:false, style:{ color:div ? (escuro ? 'rgba(226,232,240,.7)' : 'rgba(15,23,42,.55)') : fina, weight:div ? 1 : foco ? 1 : .7 } }).addTo(mt.camadas.divisas);
+    if (div && !mt.divisas) L.geoJSON(mt.mesh.dre, { pane:'divisas', interactive:false, style:{ color:escuro ? 'rgba(226,232,240,.7)' : 'rgba(15,23,42,.55)', weight:1 } }).addTo(mt.camadas.divisas);
     if (mt.divisas || mt.modo === 'regioes' || mt.modo === 'sodre') {
       L.geoJSON(mt.mesh.dre, { pane:'divisas', interactive:false, style:{ color:escuro ? '#0b1220' : '#ffffff', weight:5, opacity:.9, lineCap:'round', lineJoin:'round' } }).addTo(mt.camadas.divisas);
       L.geoJSON(mt.mesh.dre, { pane:'divisas', interactive:false, style:{ color:linha, weight:1.8, opacity:.8, lineCap:'round', lineJoin:'round' } }).addTo(mt.camadas.divisas);
@@ -3222,7 +3236,7 @@ function estilizarMalhaMT(){
     L.marker(c, { keyboard:false, zIndexOffset:-500, icon:L.divIcon({ className:'mt-reg-ic', html:`<span class="mt-reg" style="--c:${corDRE(dres, d)}">${esc(nomeDRE(d))}</span>`, iconSize:null }) })
       .on('click', ev => { L.DomEvent.stopPropagation(ev); focarDREmt(i); }).on('mouseover', () => realcarDREmt(i)).on('mouseout', () => realcarDREmt(-1)).addTo(mt.camadas.nomes);
   });
-  if (mt.rotulos || foco) {
+  if (mt.rotulos || foco || mt.modo === 'divisao') {
     const vistos = new Set();
     mt.munF.forEach((f, k) => {
       if (vistos.has(k) || !f.properties.nome || (foco && f.properties.dre !== foco)) return; vistos.add(k);
@@ -3237,11 +3251,12 @@ function legendaMT(dres, lista){
   let it = [];
   if (mt.modo === 'tipo') { const c = {}; lista.forEach(e => { const g = grupoTipo(e.tipo); c[g] = (c[g] || 0) + 1; }); it = Object.entries(c).sort((a, b) => b[1] - a[1]).map(([k, n]) => [CORES_TIPO[k] || CORES_TIPO.Outro, k, n]); }
   else if (mt.modo === 'localidade') it = [['#2563eb', 'Urbanas', lista.filter(e => e.localidade !== 'RURAL').length], ['#65a30d', 'Rurais', lista.filter(e => e.localidade === 'RURAL').length]];
+  else if (mt.modo === 'divisao') { const ks = mt.munF ? [...mt.munF.values()] : [], com = ks.filter(f => f.properties.n).length; it = [['#fde68a', `${ks.length || 142} municípios`], ['#bfdbfe', `${com} com escola estadual`, undefined], ['#e2e8f0', `${(ks.length || 142) - com} sem escola estadual`]]; }
   else if (mt.modo === 'municipio') it = [['#dbeafe', '1 escola'], ['#93c5fd', '2'], ['#60a5fa', '3 a 4'], ['#3b82f6', '5 a 8'], ['#1d4ed8', '9 a 16'], ['#1e3a8a', 'mais de 16'], ['#e2e8f0', 'sem escola']];
   else it = dres.map((d, i) => [corDRE(dres, d), nomeDRE(d), lista.filter(e => e.dre === d).length, i]);
   el.innerHTML = `<button class="mt-leg-tg" onclick="mt.leg=!mt.leg;store.set('gaborg_mt_leg2',mt.leg);this.parentNode.classList.toggle('fechada',!mt.leg)" title="Mostrar ou esconder a legenda"><i class="fa-solid fa-list"></i><span>Legenda</span></button>
     <div class="mt-leg-c"><b>${esc(MODOS_MT[mt.modo][1])}</b><small>${esc(MODOS_MT[mt.modo][2])}</small><div class="its ${it.length > 8 ? 'duas' : ''}">${it.map(([c, n, q, i]) => i !== undefined ? `<button class="it ${mt.foco === i ? 'on' : ''}" onclick="focarDREmt(${mt.foco === i ? -1 : i})" onmouseenter="realcarDREmt(${i})" onmouseleave="realcarDREmt(-1)"><i style="background:${c}"></i>${esc(n)}<span>${q}</span></button>` : `<div class="it"><i style="background:${c}"></i>${esc(n)}${q !== undefined ? `<span>${q}</span>` : ''}</div>`).join('')}</div>
-    ${mt.modo !== 'municipio' ? '<div class="sede"><span class="mt-dre" style="--c:#475569;transform:scale(.8);transform-origin:left"><i class="fa-solid fa-building-flag"></i><b>n</b></span>sede da DRE (nº de escolas)</div>' : ''}</div>`;
+    ${!['municipio', 'divisao'].includes(mt.modo) ? '<div class="sede"><span class="mt-dre" style="--c:#475569;transform:scale(.8);transform-origin:left"><i class="fa-solid fa-building-flag"></i><b>n</b></span>sede da DRE (nº de escolas)</div>' : ''}</div>`;
 }
 function painelEscolasMT(todas, dres, lista){
   const f = mt.fil, foco = mt.foco >= 0 ? dres[mt.foco] : null;
@@ -3261,6 +3276,13 @@ function painelEscolasMT(todas, dres, lista){
     const f = mt.munF.get(mt.mun), l = todas.filter(e => chaveMun(e.municipio) === mt.mun).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')), d = f.properties.dre;
     fc.innerHTML = `<div class="mt-foco" style="--c:${d ? corDRE(dres, d) : '#94a3b8'}"><div class="h"><i class="fa-solid fa-city"></i><div><b>${esc(f.properties.nome)}</b><small>${d ? esc(d) + ' · ' : ''}${l.length} escola(s)</small></div><button class="btn btn-s btn-sm btn-i" onclick="voltarMT(1)" title="Voltar para a DRE"><i class="fa-solid fa-xmark"></i></button></div>
       <div class="mt-mun-l">${l.map(e => `<button class="ei" onclick="irEscolaMT(${arg(e.codigo)})" onmouseenter="pulsarEscolaMT(${arg(e.codigo)})"><b>${esc(e.nome)}</b><small>${esc(grupoTipo(e.tipo))}${e.localidade === 'RURAL' ? ' · rural' : ''}${e.bairro ? ' · ' + esc(e.bairro) : ''}</small></button>`).join('') || '<small>Nenhuma escola estadual na base.</small>'}</div></div>`;
+  }
+  const sub = $('#esc-sub'); if (sub) sub.textContent = mt.modo === 'divisao' ? 'Municípios' : 'Escolas por DRE';
+  if (mt.modo === 'divisao' && mt.munF) {
+    const q = norm(f.q), vistos = new Set();
+    const ms = [...mt.munF.values()].filter(x => { const k = x.properties.chave; if (vistos.has(k) || !x.properties.nome) return false; vistos.add(k); return (!foco || x.properties.dre === foco) && (!f.dres.size || f.dres.has(x.properties.dre)) && (!q || norm(x.properties.nome).includes(q)); }).sort((a, b) => a.properties.nome.localeCompare(b.properties.nome, 'pt-BR'));
+    $('#esc-lista').innerHTML = ms.length ? `<div class="mt-muns">${ms.map(x => { const p = x.properties; return `<button class="mt-mu ${mt.mun === p.chave ? 'on' : ''}" style="--c:${p.dre ? corDRE(dres, p.dre) : '#94a3b8'};--m:${p.cor}" onclick="selecionarMunMT(${arg(p.chave)})" onmouseenter="realcarMunMT(${arg(p.chave)},true)" onmouseleave="realcarMunMT(${arg(p.chave)},false)"><span class="q"></span><b>${esc(p.nome)}</b><small>${p.dre ? esc(nomeDRE(p.dre)) : 'sem escola'}</small><span class="n">${p.n || '–'}</span></button>`; }).join('')}</div>` : '<div class="cartao vazio">Nenhum município com esses filtros.</div>';
+    return;
   }
   const grupos = dres.map(d => [d, lista.filter(e => e.dre === d)]).filter(([, l]) => l.length);
   const abrirTudo = !!f.q && lista.length <= 80;
