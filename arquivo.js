@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.20.0';
+const VERSAO = '1.21.0';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -80,9 +80,14 @@ const CAMPOS = {
   despesas: ['id','setorId','rubricaId','descricao','quantidade','valorUnitario','meses','cenario','observacao','atualizadoEm','atualizadoPor','vinculo'],
   propostas: ['id','nome','descricao','status','itens','criadoEm','criadoPor','atualizadoEm','atualizadoPor'],
   propSetores: ['id','propostaId','setorId','nome','sigla','tipo','paiId','ordem','status','responsavel','contato','competencias','entregas','orcamento','custoMensal','servidores','comissionados','impacto','impactoDescricao','positivos','negativos','layout','colunas','dx','dy','atualizadoEm','atualizadoPor','quantidade','excluido'],
-  escolas: ['id','codigo','nome','dre','municipio','tipo','localidade','endereco','numero','cep','bairro','telefone','email','latitude','longitude','atualizadoEm','atualizadoPor']
+  escolas: ['id','codigo','nome','dre','municipio','tipo','localidade','endereco','numero','cep','bairro','telefone','email','latitude','longitude','atualizadoEm','atualizadoPor'],
+  chefias: ['id','setorId','titular','situacao','desde','atoNomeacao','substituto','atoSubstituto','contato','observacao','atualizadoEm','atualizadoPor'],
+  etapas: ['id','propostaId','titulo','fase','responsavel','setorId','inicio','prazo','status','observacao','ordem','atualizadoEm','atualizadoPor'],
+  metas: ['id','setorId','objetivo','titulo','indicador','unidade','linhaBase','meta','resultado','prazo','status','observacao','atualizadoEm','atualizadoPor'],
+  reunioes: ['id','titulo','data','participantes','itens','status','observacao','criadoEm','criadoPor','atualizadoEm','atualizadoPor'],
+  parametros: ['id','valor','atualizadoEm','atualizadoPor'],
 };
-const TABS_DB = ['setores','validacoes','vinculos','historico','rubricas','despesas','propostas','propSetores','escolas'];
+const TABS_DB = ['setores','validacoes','vinculos','historico','rubricas','despesas','propostas','propSetores','escolas','chefias','etapas','metas','reunioes','parametros'];
 
 /* ===================== ESTRUTURA DO DECRETO Nº 2.236/2026 =====================
    Hierarquia montada a partir do anexo (organograma). Cada nível = 2 espaços.
@@ -306,7 +311,7 @@ function construirDecreto(){
     V.push(novoReg('vinculos', { id:'dv'+String(++nv).padStart(3,'0'), origemId:nrc, destinoId:d, tipo:'Atuação regional', descricao:'Atua junto à DRE de ' + cid + ' no regime de colaboração com os municípios.' }));
   });
   L.forEach(s => { if (s.tipo === 'Unidades Escolares' && !s.quantidade) s.quantidade = ESCOLAS_PADRAO; });
-  return { setores:L, vinculos:V, validacoes:[], historico:[], rubricas:[], despesas:[], propostas:[], propSetores:[], escolas:[] };
+  return { setores:L, vinculos:V, validacoes:[], historico:[], rubricas:[], despesas:[], propostas:[], propSetores:[], escolas:[], chefias:[], etapas:[], metas:[], reunioes:[], parametros:[] };
 }
 
 /* ===================== UTILITÁRIOS ===================== */
@@ -352,7 +357,7 @@ function confirmar(titulo, texto, rotulo, perigo){
 }
 
 /* ===================== ESTADO ===================== */
-let DB = { setores:[], validacoes:[], vinculos:[], historico:[], rubricas:[], despesas:[], propostas:[], propSetores:[], escolas:[] };
+let DB = { setores:[], validacoes:[], vinculos:[], historico:[], rubricas:[], despesas:[], propostas:[], propSetores:[], escolas:[], chefias:[], etapas:[], metas:[], reunioes:[], parametros:[] };
 let backendVersao = '';
 const URL_PADRAO = 'https://script.google.com/macros/s/AKfycbzZsM71FJARYYoqpRcFY4tHUAVBV-EdVW2NDL6eLaMId-iXY6Z-bnhuOkxA2nyfrdUz/exec';
 let cfg = Object.assign({ url:URL_PADRAO, login:'', usuario:'', perfil:'', modo:'' }, store.get('gaborg_cfg', {}));
@@ -1261,8 +1266,16 @@ function atualizarVistaAtual(){
   else if (vistaAtual === 'financeiro') renderFinanceiro();
   else if (vistaAtual === 'propostas') renderPropostas();
   else if (vistaAtual === 'escolas') renderEscolas();
+  else if (vistaAtual === 'reestruturacao') renderReestruturacao();
+  else if (vistaAtual === 'implantacao') renderImplantacao();
+  else if (vistaAtual === 'chefias') renderChefias();
+  else if (vistaAtual === 'resultados') renderResultados();
+  else if (vistaAtual === 'regional') renderRegional();
+  else if (vistaAtual === 'reunioes') renderReunioes();
+  atualizarBadgeIm();
 }
 function redesenharTudo(){ indexar(); atualizarVistaAtual(); if (selId && porId.has(selId)) renderPainel(); else fecharPainel(); }
+function atualizarBadgeIm(){ const n = (DB.etapas || []).filter(e => e.status !== 'Concluída' && e.prazo && e.prazo < hojeISO()).length, b = $('#nav-im'); if (!b) return; b.textContent = n; b.classList.toggle('hidden', !n); b.title = n + ' etapa(s) atrasada(s)'; }
 function atualizarBadgeVal(){ const n = DB.validacoes.filter(v => !v.status || v.status === 'Pendente').length, b = $('#nav-val'); if (!b) return; b.textContent = n; b.classList.toggle('hidden', !n); }
 function opcoesFiltro(id, rotulo, valores){
   const el = $(id); const atual = el.value;
@@ -2256,7 +2269,7 @@ function filtrarLancamentos(){
     <tr class="fin-tot"><td colspan="5">Proposto (${t.Proposto.n})</td><td class="fin-num">${fmtM(t.Proposto.m)}</td><td></td><td class="fin-num">${fmtM(t.Proposto.a)}</td><td colspan="2"></td></tr>
   </tbody></table></div><p style="font-size:12px;color:var(--mut);margin-top:8px">Mensal = quantidade × valor unitário × (1 + encargos). Anual = mensal × meses. * valor próprio do lançamento, diferente da tabela.</p>`;
 }
-function opcoesSetores(sel){
+function opcoesSetoresFin(sel){
   const ord = []; const visit = (s, d) => { ord.push([s, d]); filhosDe(s.id).forEach(k => visit(k, d + 1)); }; raizes().forEach(r => visit(r, 0));
   return ord.map(([s, d]) => `<option value="${esc(s.id)}" ${s.id === sel ? 'selected' : ''}>${'  '.repeat(Math.min(d, 6))}${esc(s.sigla ? s.sigla + ' · ' : '')}${esc(s.nome)}</option>`).join('');
 }
@@ -2276,7 +2289,7 @@ function formDespesa(id, setorPadrao){
     const c = calcDesp(o); m.querySelector('#fd-prev').innerHTML = `<div>Total mensal${c.enc ? ` (com ${c.enc.toLocaleString('pt-BR')}% de encargos)` : ''}<b>${fmtM(c.mensal)}</b></div><div>Total anual (${c.meses.toLocaleString('pt-BR')} meses)<b>${fmtM(c.anual)}</b></div>`;
   };
   abrirModal({ titulo: id ? 'Editar lançamento' : 'Novo lançamento', rotulo: id ? 'Salvar' : 'Lançar', largura:540,
-    html:`<label><span class="rot">Setor</span><select id="fd-set" class="campo" required>${d.setorId ? '' : '<option value="">Escolha o setor</option>'}${opcoesSetores(d.setorId)}</select></label>
+    html:`<label><span class="rot">Setor</span><select id="fd-set" class="campo" required>${d.setorId ? '' : '<option value="">Escolha o setor</option>'}${opcoesSetoresFin(d.setorId)}</select></label>
       <label><span class="rot">Item da tabela de valores</span><select id="fd-rub" class="campo">${opcoesRubricas(d.rubricaId)}</select></label>
       <label><span class="rot">Descrição <small>opcional</small></span><input id="fd-desc" class="campo" value="${esc(d.descricao)}" placeholder="ex.: Coordenador, bolsistas do programa X"></label>
       <div class="g2"><label><span class="rot">Quantidade</span><input id="fd-qtd" class="campo" type="number" min="0" step="any" value="${esc(d.quantidade)}"></label>
@@ -2370,7 +2383,7 @@ function finCalc(){
   return `<div class="cartao bl"><h3><i class="fa-solid fa-calculator"></i>Calculadora rápida</h3><p class="s">Simule combinações (ex.: 3 × DGA-2 + 10 bolsas) sem gravar nada. Se quiser, lance o resultado num setor.</p>
     <div id="calc-ls" style="margin-top:12px"></div>
     <div class="acoes" style="justify-content:space-between;flex-wrap:wrap"><button class="btn btn-s" onclick="calcLinhas.push({rub:'',qtd:'1',meses:'',vinc:'Comissionado'});desenharCalc()"><i class="fa-solid fa-plus"></i>Adicionar linha</button><div class="fin-prev" id="calc-tot" style="flex:1;max-width:420px"></div></div>
-    <div class="acoes so-edit" style="margin-top:12px;flex-wrap:wrap"><select id="calc-set" class="campo" style="width:auto;max-width:100%"><option value="">Lançar em qual setor?</option>${opcoesSetores(selId)}</select><select id="calc-cen" class="campo" style="width:auto">${CENARIOS.map(c => `<option>${c}</option>`).join('')}</select><button class="btn btn-p" onclick="lancarCalc()"><i class="fa-solid fa-file-import"></i>Lançar no setor</button></div></div>`;
+    <div class="acoes so-edit" style="margin-top:12px;flex-wrap:wrap"><select id="calc-set" class="campo" style="width:auto;max-width:100%"><option value="">Lançar em qual setor?</option>${opcoesSetoresFin(selId)}</select><select id="calc-cen" class="campo" style="width:auto">${CENARIOS.map(c => `<option>${c}</option>`).join('')}</select><button class="btn btn-p" onclick="lancarCalc()"><i class="fa-solid fa-file-import"></i>Lançar no setor</button></div></div>`;
 }
 function desenharCalc(){
   const el = $('#calc-ls'); if (!el) return;
@@ -3611,6 +3624,626 @@ async function importarEscolasMT(f){
   } catch (e) { toast('Falha ao importar: ' + e.message, 'erro'); }
 }
 document.addEventListener('keydown', e => { if (vistaAtual !== 'escolas' || e.key !== 'Escape' || document.querySelector('.modal')) return; const m = $('#mt-menu'); if (m && !m.classList.contains('hidden')) return fecharMenuMT(); if (mt.mun) voltarMT(1); else if (mt.foco >= 0) voltarMT(0); });
+
+/* ===================== GESTÃO: FUNÇÕES COMUNS ===================== */
+function backendSemGestao(){ return online() && backendVersao && backendVersao.localeCompare('1.10.0', undefined, { numeric:true }) < 0; }
+const avisoGestao = () => backendSemGestao() ? `<div class="cartao bl g-aviso"><h3><i class="fa-solid fa-triangle-exclamation"></i>Atualize o backend para gravar estes dados</h3><p class="s">A planilha está com o Codigo.gs ${esc(backendVersao)}. Cole o Codigo.gs 1.10.0 no Apps Script e publique uma nova versão (Implantar › Gerenciar implantações › Editar › Nova versão). Até lá, o que você registrar aqui fica só neste navegador.</p></div>` : '';
+function param(id, padrao){ const r = (DB.parametros || []).find(x => x.id === id); if (!r || r.valor === '') return padrao; try { return JSON.parse(r.valor); } catch (e) { return r.valor; } }
+function salvarParam(id, valor){
+  let r = DB.parametros.find(x => x.id === id);
+  if (!r) { r = novoReg('parametros', { id }); DB.parametros.push(r); }
+  r.valor = typeof valor === 'string' ? valor : JSON.stringify(valor); r.atualizadoEm = agora(); r.atualizadoPor = cfg.usuario || '';
+  enfileirar('parametros', r);
+}
+const hojeISO = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+const somaDias = (n, base) => { const d = base ? new Date(base + 'T12:00:00') : new Date(); d.setDate(d.getDate() + n); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+const tData = v => { if (!v) return NaN; return Date.parse(String(v).length === 10 ? v + 'T12:00:00' : v); };
+const fmtDia = v => { const t = tData(v); return isFinite(t) ? new Date(t).toLocaleDateString('pt-BR') : '—'; };
+const diasAte = v => { const t = tData(v); return isFinite(t) ? Math.round((t - tData(hojeISO())) / 864e5) : null; };
+const diasDesdeData = v => { const d = diasAte(v); return d === null ? null : -d; };
+const podeGestao = () => !somenteLeitura();
+function abasG(lista, atual, fn){ return `<div class="ind-abas">${lista.map(([k, n, ic]) => `<button class="${atual === k ? 'on' : ''}" onclick="${fn}('${k}')"><i class="fa-solid ${ic}"></i><span>${n}</span></button>`).join('')}<span class="esp"></span></div>`; }
+const kpiG = (c, ic, r, v, s, on) => `<div class="cartao kpi ${on ? 'clic' : ''}" style="--c:${c}" ${on ? `onclick="${on}"` : ''}><div class="r"><i class="fa-solid ${ic}"></i>${r}</div><div class="v">${v}</div><div class="s">${s}</div></div>`;
+const chipG = (txt, cor) => `<span class="chip" style="--c:${cor}">${txt}</span>`;
+const nomeSetor = id => { const s = porId.get(id); return s ? s.nome : ''; };
+function csvBaixar(nome, linhas){ const q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"'; baixarArquivo(nome + '-' + hojeISO() + '.csv', '﻿' + linhas.map(r => r.map(q).join(';')).join('\r\n'), 'text/csv;charset=utf-8'); }
+/* Documento Word (.doc em HTML, abre no Word e no LibreOffice) e impressão sem abrir outra janela */
+const ESTILO_DOC = `body{font-family:'Times New Roman',Times,serif;font-size:12pt;line-height:1.5;color:#000}h1{font-size:13pt;text-align:center;margin:0 0 4pt}h2{font-size:12pt;text-align:center;margin:14pt 0 6pt;text-transform:uppercase}h3{font-size:12pt;text-align:center;margin:10pt 0 4pt}p{margin:0 0 6pt;text-align:justify}.ementa{margin:12pt 0 12pt 45%;text-align:justify;font-style:italic}.centro{text-align:center}.ass{margin-top:36pt;text-align:center}.marca{border:1px dashed #999;padding:4pt 8pt;color:#555;font-size:10pt;text-align:center;margin-bottom:12pt}.lista{margin:0 0 4pt 0}.n1{margin-left:0}.n2{margin-left:24pt}.n3{margin-left:48pt}.n4{margin-left:72pt}.n5{margin-left:96pt}table{border-collapse:collapse;width:100%;margin:6pt 0 10pt}td,th{border:1px solid #000;padding:3pt 5pt;font-size:10.5pt;vertical-align:top}th{background:#eee}.dir{text-align:right}.pq{font-size:10pt;color:#444}`;
+function baixarWord(nome, titulo, corpo){ baixarArquivo(nome + '.doc', '﻿' + `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><title>${esc(titulo)}</title><style>@page{size:21cm 29.7cm;margin:2.5cm 2cm 2cm 3cm}${ESTILO_DOC}</style></head><body>${corpo}</body></html>`, 'application/msword'); }
+function imprimirDoc(titulo, corpo){
+  const f = document.createElement('iframe'); f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0'; document.body.appendChild(f);
+  const d = f.contentWindow.document; d.open(); d.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(titulo)}</title><style>@page{size:A4;margin:2.5cm 2cm 2cm 3cm}${ESTILO_DOC}</style></head><body>${corpo}</body></html>`); d.close();
+  setTimeout(() => { try { f.contentWindow.focus(); f.contentWindow.print(); } catch (e) {} setTimeout(() => f.remove(), 2000); }, 300);
+}
+const romano = n => { const m = [[1000,'M'],[900,'CM'],[500,'D'],[400,'CD'],[100,'C'],[90,'XC'],[50,'L'],[40,'XL'],[10,'X'],[9,'IX'],[5,'V'],[4,'IV'],[1,'I']]; let r = ''; m.forEach(([v, s]) => { while (n >= v) { r += s; n -= v; } }); return r; };
+const alinea = n => { let s = ''; n++; while (n > 0) { const r = (n - 1) % 26; s = String.fromCharCode(97 + r) + s; n = Math.floor((n - 1) / 26); } return s; };
+const artN = n => n < 10 ? n + 'º' : n + '.';
+/* Métricas de qualquer estrutura (atual ou de uma proposta) */
+function metricasEstrutura(lista){
+  const ativos = lista.filter(s => s.status !== 'Extinto'), ids = new Set(ativos.map(s => s.id)), fil = new Map();
+  ativos.forEach(s => { const p = ids.has(s.paiId) ? s.paiId : ''; if (!fil.has(p)) fil.set(p, []); fil.get(p).push(s); });
+  const prof = new Map(), vis = (p, d) => (fil.get(p) || []).forEach(s => { if (prof.has(s.id)) return; prof.set(s.id, d); vis(s.id, d + 1); }); vis('', 1);
+  const chefias = ativos.filter(s => CHEFIAS.includes(s.tipo)).map(s => [s, (fil.get(s.id) || []).filter(k => k.tipo !== 'Unidades Escolares').length]);
+  const comSub = chefias.filter(x => x[1] > 0), niveis = Math.max(0, ...prof.values());
+  return { ativos, fil, prof, chefias, comSub, niveis, ampMedia:comSub.length ? comSub.reduce((t, x) => t + x[1], 0) / comSub.length : 0, semResp:chefias.filter(x => !x[0].responsavel).length };
+}
+
+/* ===================== REESTRUTURAÇÃO: SIMULADOR COM METAS, COMPETÊNCIAS E MINUTA ===================== */
+let reAba = store.get('gaborg_re_aba', 'simulador'), reSel = null, reCompAba = 'sobre', reBusca = '';
+const RE_ABAS = [['simulador','Metas e simulador','fa-bullseye'],['competencias','Competências','fa-list-check'],['minuta','Minuta do decreto','fa-file-signature']];
+const METAS_PADRAO = { tetoCusto:'', variacaoMax:'0', maxNiveis:'6', ampMax:'8', ampMin:'2', maxSetores:'', maxSemResp:'' };
+function abaRe(a){ reAba = a; store.set('gaborg_re_aba', a); renderReestruturacao(); }
+function renderReestruturacao(){
+  const el = $('#re-corpo'); if (!el) return;
+  el.innerHTML = avisoGestao() + abasG(RE_ABAS, reAba, 'abaRe') + `<div class="ind-corpo">${reAba === 'competencias' ? reCompetencias() : reAba === 'minuta' ? reMinuta() : reSimulador()}</div>`;
+  if (reAba === 'minuta') atualizarMinuta();
+}
+/* ---------- (4) Metas e simulador ---------- */
+function cenariosRe(){
+  const at = baseAtual(), c = [{ id:'', nome:'Estrutura atual', status:'Oficial', lista:setoresOficiais(), m:at.m, a:at.a, linhas:DB.despesas.filter(d => (d.cenario || 'Atual') === 'Atual') }];
+  (DB.propostas || []).forEach(p => { try { const x = custoProposta(p); c.push({ id:p.id, nome:p.nome, status:p.status || 'Em elaboração', lista:x.E.lista, m:x.m, a:x.a, linhas:x.linhas }); } catch (e) { console.warn(e); } });
+  return c;
+}
+function avaliarCenario(c, M, base, mt){
+  const r = [], n = v => String(v ?? '').trim() === '' ? null : numBR(v);
+  const t = n(mt.tetoCusto), vm = n(mt.variacaoMax), mn = n(mt.maxNiveis), aM = n(mt.ampMax), am = n(mt.ampMin), ms = n(mt.maxSetores), sr = n(mt.maxSemResp);
+  const varPct = base.a ? (c.a - base.a) / base.a * 100 : 0;
+  if (t !== null) r.push({ k:'teto', nome:`Custo anual até ${fmtRc(t)}`, valor:fmtRc(c.a), ok:c.a <= t, falta:c.a - t });
+  if (vm !== null) r.push({ k:'var', nome:`Variação do custo até ${fmtP(vm)} sobre o atual`, valor:(varPct > 0 ? '+' : '') + fmtP(varPct), ok:varPct <= vm + 1e-9 });
+  if (mn !== null) r.push({ k:'niveis', nome:`No máximo ${mn} níveis hierárquicos`, valor:M.niveis + ' níveis', ok:M.niveis <= mn });
+  if (aM !== null) { const x = M.comSub.filter(([, k]) => k > aM); r.push({ k:'ampMax', nome:`Nenhuma chefia com mais de ${aM} subordinados`, valor:x.length ? x.length + ' acima' : 'nenhuma', ok:!x.length, lista:x }); }
+  if (am !== null) { const x = M.comSub.filter(([, k]) => k < am); r.push({ k:'ampMin', nome:`Nenhuma chefia com menos de ${am} subordinados`, valor:x.length ? x.length + ' abaixo' : 'nenhuma', ok:!x.length, lista:x }); }
+  if (ms !== null) r.push({ k:'setores', nome:`No máximo ${fmtN(ms)} setores`, valor:fmtN(M.ativos.length), ok:M.ativos.length <= ms });
+  if (sr !== null) { const p = M.chefias.length ? M.semResp / M.chefias.length * 100 : 0; r.push({ k:'semResp', nome:`Até ${fmtP(sr)} das chefias sem responsável`, valor:fmtP(p), ok:p <= sr + 1e-9 }); }
+  return r;
+}
+function custoChefiaCen(c, setorId){ return c.linhas.filter(l => l.setorId === setorId && l.observacao === MARCA_CHEFIA).reduce((t, l) => t + calcDesp(l).anual, 0); }
+function reSimulador(){
+  const mt = Object.assign({}, METAS_PADRAO, param('metasReestr', {})), C = cenariosRe(), base = C[0];
+  if (reSel === null || !C.some(c => c.id === reSel)) reSel = C.length > 1 ? C[1].id : '';
+  const av = C.map(c => { const M = metricasEstrutura(c.lista); return { c, M, r:avaliarCenario(c, M, base, mt) }; });
+  const metas = av[0].r.map(x => x.k), sel = av.find(x => x.c.id === reSel) || av[0];
+  const campo = (k, rot, ajuda, tipo) => `<label><span class="rot">${rot} <small>${ajuda}</small></span><input class="campo" type="${tipo || 'number'}" step="any" min="0" data-meta="${k}" value="${esc(mt[k])}" ${podeGestao() ? '' : 'disabled'}></label>`;
+  const sug = [];
+  sel.r.forEach(x => {
+    if (x.ok) return;
+    if (x.k === 'ampMax') x.lista.sort((a, b) => b[1] - a[1]).forEach(([s, k]) => sug.push(['fa-people-arrows', `<b>${esc(s.nome)}</b> coordena <b>${k}</b> setores diretamente. Criar um nível intermediário (ex.: agrupar por tema) ou passar parte deles para outra chefia.`, s.id]));
+    if (x.k === 'ampMin') x.lista.forEach(([s, k]) => { const f = (sel.M.fil.get(s.id) || [])[0], ec = custoChefiaCen(sel.c, s.id); sug.push(['fa-compress', `<b>${esc(s.nome)}</b> tem só ${k} setor subordinado${f ? ` (${esc(f.nome)})` : ''}. Avaliar fundir os dois ou subordinar o setor diretamente ao nível acima.${ec ? ` Economia estimada se o cargo deixar de existir: <b>${fmtRc(ec)}/ano</b>.` : ''}`, s.id]); });
+    if (x.k === 'teto' || x.k === 'var') {
+      const porSetor = new Map(); sel.c.linhas.forEach(l => porSetor.set(l.setorId, (porSetor.get(l.setorId) || 0) + calcDesp(l).anual));
+      const fus = sel.M.comSub.filter(([, k]) => k === 1).reduce((t, [s]) => t + custoChefiaCen(sel.c, s.id), 0);
+      sug.push(['fa-sack-dollar', `O custo anual de <b>${fmtRc(sel.c.a)}</b> fura a meta${x.falta ? ` em <b>${fmtRc(x.falta)}</b>` : ''}. ${fus ? `Fundir as chefias que têm só 1 subordinado economizaria cerca de <b>${fmtRc(fus)}/ano</b>. ` : ''}Maiores custos: ${[...porSetor.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([id, v]) => `${esc(nomeCurto(sel.c.lista.find(s => s.id === id) || porId.get(id)))} (${fmtRc(v)})`).join(', ')}.`, '']);
+    }
+    if (x.k === 'niveis') { const fundo = sel.M.ativos.filter(s => sel.M.prof.get(s.id) > numBR(mt.maxNiveis)); sug.push(['fa-layer-group', `${fundo.length} setor(es) ficam abaixo do nível ${mt.maxNiveis}: ${fundo.slice(0, 6).map(s => '<b>' + esc(s.nome) + '</b>').join(', ')}${fundo.length > 6 ? '...' : ''}. Encurtar a cadeia subordinando-os a um nível acima.`, '']); }
+    if (x.k === 'semResp') sug.push(['fa-user-xmark', `${sel.M.semResp} chefias sem responsável. Use a seção <b>Chefias</b> para registrar titulares e substitutos.`, '']);
+    if (x.k === 'setores') sug.push(['fa-sitemap', `A estrutura tem ${fmtN(sel.M.ativos.length)} setores. Fusões das chefias com 1 subordinado e das unidades com competências repetidas (aba Competências) reduzem o total.`, '']);
+  });
+  return `<div class="cartao bl" style="--c:#2563eb"><h3><i class="fa-solid fa-sliders"></i>Metas da reorganização</h3><p class="s">Os limites que toda proposta deve respeitar. Deixe em branco o que não quiser avaliar. As metas valem para todos os usuários.</p>
+      <div class="g-metas">${campo('tetoCusto', 'Teto de custo anual (R$)', 'cargos e despesas')}${campo('variacaoMax', 'Variação máxima do custo (%)', '0 = sem aumento')}${campo('maxNiveis', 'Máximo de níveis', 'hierárquicos')}${campo('ampMax', 'Máximo de subordinados', 'por chefia')}${campo('ampMin', 'Mínimo de subordinados', 'por chefia')}${campo('maxSetores', 'Máximo de setores', 'ativos')}${campo('maxSemResp', 'Chefias sem responsável (%)', 'no máximo')}</div>
+      ${podeGestao() ? `<div class="acoes" style="margin-top:10px"><button class="btn btn-p btn-sm" onclick="salvarMetasRe()"><i class="fa-solid fa-floppy-disk"></i>Salvar metas</button></div>` : ''}</div>
+    ${metas.length ? `<div class="cartao bl" style="--c:#7c3aed"><h3><i class="fa-solid fa-table-columns"></i>Como cada cenário se sai</h3><p class="s">Verde atende, vermelho fura a meta. Clique numa coluna para ver o diagnóstico e as sugestões.</p>
+      <div class="tab-wrap"><table class="tab re-sim"><thead><tr><th>Meta</th>${av.map(x => { const ok = x.r.filter(y => y.ok).length; return `<th class="${x.c.id === reSel ? 'on' : ''}" onclick="reSel=${arg(x.c.id)};renderReestruturacao()"><b>${esc(x.c.nome)}</b><small>${esc(x.c.status)}</small>${chipG(`${ok}/${x.r.length} metas`, ok === x.r.length ? '#16a34a' : ok >= x.r.length / 2 ? '#d97706' : '#dc2626')}</th>`; }).join('')}</tr></thead>
+      <tbody>${metas.map((k, i) => `<tr><td class="nm">${esc(av[0].r[i].nome)}</td>${av.map(x => { const y = x.r[i]; return `<td class="${y.ok ? 'ok' : 'nok'} ${x.c.id === reSel ? 'on' : ''}" onclick="reSel=${arg(x.c.id)};renderReestruturacao()"><i class="fa-solid ${y.ok ? 'fa-circle-check' : 'fa-circle-xmark'}"></i>${esc(y.valor)}</td>`; }).join('')}</tr>`).join('')}
+      <tr class="info"><td class="nm">Setores · chefias · amplitude média</td>${av.map(x => `<td>${fmtN(x.M.ativos.length)} · ${x.M.chefias.length} · ${x.M.ampMedia.toLocaleString('pt-BR', { maximumFractionDigits:1 })}</td>`).join('')}</tr>
+      <tr class="info"><td class="nm">Custo anual</td>${av.map(x => `<td>${fmtRc(x.c.a)}${x.c.id ? ` <small class="${x.c.a > base.a ? 'fin-pos' : x.c.a < base.a ? 'fin-neg' : ''}">${x.c.a >= base.a ? '+' : ''}${fmtRs(x.c.a - base.a)}</small>` : ''}</td>`).join('')}</tr></tbody></table></div></div>` : '<div class="cartao vazio">Defina ao menos uma meta para comparar os cenários.</div>'}
+    ${metas.length ? `<div class="cartao bl" style="--c:${sel.r.every(x => x.ok) ? '#16a34a' : '#dc2626'}"><h3><i class="fa-solid fa-stethoscope"></i>Diagnóstico: ${esc(sel.c.nome)}</h3><p class="s">${sel.r.every(x => x.ok) ? 'Este cenário atende todas as metas.' : `Fura ${sel.r.filter(x => !x.ok).length} de ${sel.r.length} metas. Sugestões para chegar lá:`}</p>
+      <div class="pend re-sug">${sug.slice(0, 40).map(([ic, t, id]) => `<div class="it"><i class="fa-solid ${ic}"></i><span>${t}</span>${id && porId.has(id) ? `<button class="btn btn-g btn-sm" onclick="irPara(${arg(id)})">abrir</button>` : ''}</div>`).join('') || '<div class="vazio">Nada a sugerir.</div>'}</div>
+      <div class="acoes" style="margin-top:10px">${sel.c.id ? `<button class="btn btn-s btn-sm" onclick="verPropostaNoMapa(${arg(sel.c.id)});trocarVista('mapa')"><i class="fa-solid fa-diagram-project"></i>Editar no mapa da proposta</button><button class="btn btn-s btn-sm" onclick="abrirComparativo('',${arg(sel.c.id)})"><i class="fa-solid fa-code-compare"></i>Comparar com a atual</button><button class="btn btn-s btn-sm" onclick="reSel=${arg(sel.c.id)};abaRe('minuta')"><i class="fa-solid fa-file-signature"></i>Gerar minuta</button>` : `<button class="btn btn-s btn-sm" onclick="trocarVista('propostas')"><i class="fa-solid fa-lightbulb"></i>Criar uma proposta</button>`}</div></div>` : ''}`;
+}
+function salvarMetasRe(){
+  const o = {}; document.querySelectorAll('[data-meta]').forEach(i => o[i.dataset.meta] = i.value.trim());
+  salvarParam('metasReestr', o); toast('Metas salvas.'); renderReestruturacao();
+}
+/* ---------- (3) Competências: sobreposições e lacunas ---------- */
+const STOP_COMP = new Set('de da do das dos e em para com por a o as os ao aos no na nos nas um uma que se sua seu suas seus ou entre sobre demais outras outros outro outra bem como quando junto pela pelo pelas pelos sob conforme mediante cada todos todas ambito area areas acoes atividades relativas relativos referentes demandas'.split(' '));
+const limparComp = t => String(t).replace(/^\s*([IVXLC]+|\d+|[a-z])\s*[–\-.)]\s*/i, '').trim();
+const tokensComp = t => [...new Set(norm(t).replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(w => w.length >= 4 && !STOP_COMP.has(w)).map(w => w.slice(0, 6)))];
+function baseCompetencias(){
+  let sig = setoresOficiais().length; setoresOficiais().forEach(s => { const t = s.id + (s.competencias || '') + s.status; for (let i = 0; i < t.length; i += 3) sig = (sig * 31 + t.charCodeAt(i)) | 0; });
+  if (baseCompetencias.c && baseCompetencias.c.sig === sig) return baseCompetencias.c;
+  const C = [];
+  setoresOficiais().filter(s => s.status !== 'Extinto').forEach(s => String(s.competencias || '').split(/\n|;\s*/).map(limparComp).filter(t => t.length > 12).forEach(t => { const k = tokensComp(t); if (k.length >= 2) C.push({ s, t, k }); }));
+  const idx = new Map(); C.forEach((c, i) => c.k.forEach(w => { if (!idx.has(w)) idx.set(w, []); idx.get(w).push(i); }));
+  const pares = [];
+  C.forEach((c, i) => { const cont = new Map(); c.k.forEach(w => idx.get(w).forEach(j => { if (j > i && C[j].s.id !== c.s.id) cont.set(j, (cont.get(j) || 0) + 1); }));
+    cont.forEach((n, j) => { if (n < 3) return; const sim = n / (c.k.length + C[j].k.length - n); if (sim >= .45) pares.push({ a:c, b:C[j], sim, n }); }); });
+  pares.sort((x, y) => y.sim - x.sim);
+  return baseCompetencias.c = { sig, C, idx, pares };
+}
+function melhorSetorPara(texto, B){
+  const k = tokensComp(texto); if (!k.length) return null; const cont = new Map();
+  k.forEach(w => (B.idx.get(w) || []).forEach(j => cont.set(j, (cont.get(j) || 0) + 1)));
+  let best = null; cont.forEach((n, j) => { const sim = n / (k.length + B.C[j].k.length - n); if (!best || sim > best.sim) best = { c:B.C[j], sim, n }; });
+  return best;
+}
+function reCompetencias(){
+  const B = baseCompetencias(), chef = setoresOficiais().filter(s => s.status !== 'Extinto' && CHEFIAS.includes(s.tipo)), semComp = chef.filter(s => !String(s.competencias || '').trim());
+  const ref = String(param('atribuicoes', '') || ''), refL = ref.split('\n').map(limparComp).filter(t => t.length > 8);
+  const cob = refL.map(t => ({ t, m:melhorSetorPara(t, B) })), lac = cob.filter(x => !x.m || x.m.sim < .3 || x.m.n < 2);
+  const parSet = new Map(); B.pares.forEach(p => { const k = [p.a.s.id, p.b.s.id].sort().join('|'); parSet.set(k, (parSet.get(k) || 0) + 1); });
+  const topPares = [...parSet.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
+  const cor = sim => sim >= .7 ? '#dc2626' : sim >= .55 ? '#f97316' : '#d97706';
+  const sub = [['sobre','Sobreposições','fa-clone'],['lacunas','Lacunas','fa-circle-question'],['ref','Atribuições de referência','fa-scroll'],['busca','Buscar competência','fa-magnifying-glass']];
+  let corpo = '';
+  if (reCompAba === 'sobre') corpo = `<div class="grade2 ind-g12"><div class="cartao bl" style="--c:#f97316"><h3><i class="fa-solid fa-clone"></i>Competências parecidas em setores diferentes <span class="ct">${B.pares.length}</span></h3><p class="s">Atribuições escritas de forma semelhante em mais de um setor: possível retrabalho ou conflito de responsabilidade. A porcentagem mostra o quanto os textos se parecem.</p>
+      <div class="re-pares">${B.pares.slice(0, 80).map(p => `<div class="par"><div class="pc">${chipG(Math.round(p.sim * 100) + '%', cor(p.sim))}</div><div class="lado"><button onclick="irPara(${arg(p.a.s.id)})">${esc(p.a.s.nome)}</button><p>${esc(p.a.t)}</p></div><div class="lado"><button onclick="irPara(${arg(p.b.s.id)})">${esc(p.b.s.nome)}</button><p>${esc(p.b.t)}</p></div></div>`).join('') || '<div class="vazio">Nenhuma sobreposição encontrada. Quanto mais setores tiverem competências cadastradas, mais completa fica esta análise.</div>'}</div></div>
+    <div class="cartao bl" style="--c:#dc2626"><h3><i class="fa-solid fa-people-arrows"></i>Pares de setores com mais repetição</h3><p class="s">Candidatos a fusão ou a uma divisão mais clara de papéis</p><div class="pend">${topPares.map(([k, n]) => { const [a, b] = k.split('|'); return `<button onclick="irPara(${arg(a)})">${chipG(n, '#dc2626')}<span>${esc(nomeCurto(porId.get(a)))} ↔ ${esc(nomeCurto(porId.get(b)))}</span></button>`; }).join('') || '<div class="vazio">Nenhum.</div>'}</div></div></div>`;
+  else if (reCompAba === 'lacunas') corpo = `<div class="grade2"><div class="cartao bl" style="--c:#dc2626"><h3><i class="fa-solid fa-circle-question"></i>Atribuições sem setor responsável <span class="ct">${refL.length ? lac.length : '—'}</span></h3><p class="s">${refL.length ? 'Itens da lista de referência que nenhum setor tem entre as suas competências' : 'Cadastre a lista de referência (aba ao lado) com as atribuições do decreto ou do regimento para encontrar lacunas.'}</p><div class="pend">${lac.map(x => `<div class="it"><i class="fa-solid fa-circle-exclamation" style="color:#dc2626"></i><span>${esc(x.t)}${x.m ? `<small>mais próximo: ${esc(nomeCurto(x.m.c.s))} (${Math.round(x.m.sim * 100)}%)</small>` : ''}</span></div>`).join('') || (refL.length ? '<div class="vazio">Todas as atribuições têm um setor correspondente.</div>' : '')}</div></div>
+    <div class="cartao bl" style="--c:#7c3aed"><h3><i class="fa-solid fa-file-circle-xmark"></i>Chefias sem competências cadastradas <span class="ct">${semComp.length}</span></h3><p class="s">Sem as competências, não dá para checar sobreposição nem lacuna dessas unidades</p><div class="pend">${semComp.slice(0, 60).map(s => `<button onclick="irPara(${arg(s.id)})"><i class="fa-solid ${icTipo(s.tipo)}" style="color:${corTipo(s.tipo)}"></i><span>${esc(s.nome)}</span><small>${esc(s.tipo)}</small></button>`).join('') || '<div class="vazio">Todas têm competências.</div>'}</div></div></div>`;
+  else if (reCompAba === 'ref') corpo = `<div class="cartao bl" style="--c:#2563eb"><h3><i class="fa-solid fa-scroll"></i>Atribuições de referência</h3><p class="s">Cole aqui, uma por linha, as atribuições que a Secretaria precisa cobrir (do decreto, do regimento ou de uma lei). O sistema procura qual setor cuida de cada uma.</p>
+      <textarea id="re-ref" class="campo" style="min-height:220px" ${podeGestao() ? '' : 'disabled'} placeholder="Ex.:&#10;Formular e coordenar a política estadual de educação básica&#10;Gerir a rede física das unidades escolares&#10;Promover a formação continuada dos profissionais da educação">${esc(ref)}</textarea>
+      ${podeGestao() ? '<div class="acoes" style="margin-top:8px"><button class="btn btn-p btn-sm" onclick="salvarParam(\'atribuicoes\', $(\'#re-ref\').value);toast(\'Lista salva.\');renderReestruturacao()"><i class="fa-solid fa-floppy-disk"></i>Salvar e analisar</button></div>' : ''}
+      ${refL.length ? `<div class="tab-wrap" style="margin-top:12px"><table class="tab"><thead><tr><th>Atribuição</th><th>Setor que mais se aproxima</th><th>Semelhança</th></tr></thead><tbody>${cob.map(x => `<tr><td style="white-space:normal">${esc(x.t)}</td><td style="white-space:normal">${x.m ? `<a href="#" onclick="event.preventDefault();irPara(${arg(x.m.c.s.id)})">${esc(x.m.c.s.nome)}</a><small style="display:block;color:var(--mut)">${esc(x.m.c.t)}</small>` : '—'}</td><td>${x.m ? chipG(Math.round(x.m.sim * 100) + '%', x.m.sim >= .3 && x.m.n >= 2 ? '#16a34a' : '#dc2626') : chipG('sem setor', '#dc2626')}</td></tr>`).join('')}</tbody></table></div>` : ''}</div>`;
+  else { const q = norm(reBusca), res = q.length > 2 ? B.C.filter(c => norm(c.t).includes(q)) : [];
+    corpo = `<div class="cartao bl" style="--c:#0891b2"><h3><i class="fa-solid fa-magnifying-glass"></i>Quem cuida de quê</h3><p class="s">Digite um tema (ex.: "transporte escolar", "merenda", "formação") para ver todos os setores com essa competência.</p>
+      <input class="campo" id="re-busca" value="${esc(reBusca)}" placeholder="Tema ou palavra" oninput="reBusca=this.value;clearTimeout(window.tReB);window.tReB=setTimeout(()=>{renderReestruturacao();const i=$('#re-busca');i.focus();i.setSelectionRange(i.value.length,i.value.length)},350)">
+      <div class="pend" style="margin-top:10px">${res.slice(0, 80).map(c => `<button onclick="irPara(${arg(c.s.id)})"><i class="fa-solid ${icTipo(c.s.tipo)}" style="color:${corTipo(c.s.tipo)}"></i><span><b>${esc(c.s.nome)}</b><small style="display:block;white-space:normal">${esc(c.t)}</small></span></button>`).join('') || (q.length > 2 ? '<div class="vazio">Nenhum setor com essa competência.</div>' : '')}</div></div>`; }
+  const comC = new Set(B.C.map(c => c.s.id)).size;
+  return `<div class="kpis">${kpiG('#2563eb', 'fa-list-check', 'Competências cadastradas', fmtN(B.C.length), `em ${comC} setores`)}${kpiG('#f97316', 'fa-clone', 'Sobreposições', fmtN(B.pares.length), 'pares de competências parecidas', "reCompAba='sobre';renderReestruturacao()")}${kpiG('#dc2626', 'fa-circle-question', 'Lacunas', refL.length ? fmtN(lac.length) : '—', refL.length ? `de ${refL.length} atribuições de referência` : 'cadastre a lista de referência', "reCompAba='lacunas';renderReestruturacao()")}${kpiG('#7c3aed', 'fa-file-circle-xmark', 'Chefias sem competências', fmtN(semComp.length), `de ${chef.length} chefias`, "reCompAba='lacunas';renderReestruturacao()")}</div>
+    <div class="g-subabas">${sub.map(([k, n, ic]) => `<button class="${reCompAba === k ? 'on' : ''}" onclick="reCompAba='${k}';renderReestruturacao()"><i class="fa-solid ${ic}"></i>${n}</button>`).join('')}</div>${corpo}`;
+}
+/* ---------- (2) Minuta do decreto ---------- */
+const MINUTA_PADRAO = { numero:'', data:'', ato:'Decreto nº 2.236, de 27 de agosto de 2026', base:'no uso das atribuições que lhe confere o art. [__], inciso [__], da Constituição Estadual', comp:true, cargos:true, motivos:true, cenario:'' };
+function reMinuta(){
+  const o = Object.assign({}, MINUTA_PADRAO, param('minuta', {}));
+  if (reSel !== null && reSel !== undefined && reSel !== o._ultimo) o.cenario = reSel;
+  const C = [['', 'Estrutura atual (regimento consolidado)'], ...(DB.propostas || []).map(p => [p.id, p.nome + (p.status ? ' · ' + p.status : '')])];
+  return `<div class="re-min"><div class="cartao bl re-min-cfg" style="--c:#a16207"><h3><i class="fa-solid fa-gear"></i>Dados da minuta</h3><p class="s">O texto é montado a partir da estrutura escolhida. Revise com a assessoria jurídica antes de enviar.</p>
+      <label><span class="rot">Estrutura</span><select id="mi-cen" class="campo" onchange="atualizarMinuta()">${C.map(([v, n]) => `<option value="${esc(v)}" ${v === o.cenario ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></label>
+      <div class="g2"><label><span class="rot">Número</span><input id="mi-num" class="campo" value="${esc(o.numero)}" placeholder="[número]" oninput="atualizarMinuta()"></label><label><span class="rot">Data</span><input id="mi-data" type="date" class="campo" value="${esc(o.data)}" oninput="atualizarMinuta()"></label></div>
+      <label><span class="rot">Ato que será alterado ou revogado</span><input id="mi-ato" class="campo" value="${esc(o.ato)}" oninput="atualizarMinuta()"></label>
+      <label><span class="rot">Fundamento legal <small>texto após "O GOVERNADOR DO ESTADO DE MATO GROSSO,"</small></span><textarea id="mi-base" class="campo" oninput="atualizarMinuta()">${esc(o.base)}</textarea></label>
+      <label class="lg-lembrar"><input type="checkbox" id="mi-comp" ${o.comp ? 'checked' : ''} onchange="atualizarMinuta()">Incluir as competências das unidades</label>
+      <label class="lg-lembrar"><input type="checkbox" id="mi-cargos" ${o.cargos ? 'checked' : ''} onchange="atualizarMinuta()">Incluir o anexo de cargos em comissão</label>
+      <label class="lg-lembrar"><input type="checkbox" id="mi-mot" ${o.motivos ? 'checked' : ''} onchange="atualizarMinuta()">Incluir a exposição de motivos com o impacto financeiro</label>
+      <div class="acoes" style="flex-wrap:wrap;margin-top:6px"><button class="btn btn-p btn-sm" onclick="exportarMinuta('word')"><i class="fa-solid fa-file-word"></i>Baixar Word</button><button class="btn btn-s btn-sm" onclick="exportarMinuta('print')"><i class="fa-solid fa-print"></i>Imprimir / PDF</button><button class="btn btn-s btn-sm" onclick="exportarMinuta('copiar')"><i class="fa-solid fa-copy"></i>Copiar texto</button>${podeGestao() ? '<button class="btn btn-g btn-sm" onclick="guardarMinuta()"><i class="fa-solid fa-floppy-disk"></i>Guardar dados</button>' : ''}</div></div>
+    <div class="re-papel"><div id="mi-doc" class="re-folha"></div></div></div>`;
+}
+function dadosMinutaForm(){ const v = id => { const e = $(id); return e ? (e.type === 'checkbox' ? e.checked : e.value) : ''; }; return { cenario:v('#mi-cen'), numero:v('#mi-num').trim(), data:v('#mi-data'), ato:v('#mi-ato').trim(), base:v('#mi-base').trim(), comp:v('#mi-comp'), cargos:v('#mi-cargos'), motivos:v('#mi-mot') }; }
+function guardarMinuta(){ const o = dadosMinutaForm(); o._ultimo = o.cenario; salvarParam('minuta', o); toast('Dados da minuta guardados.'); }
+function atualizarMinuta(){ const d = $('#mi-doc'); if (!d) return; const o = dadosMinutaForm(); reSel = o.cenario; d.innerHTML = gerarMinuta(o); }
+function gerarMinuta(o){
+  const p = o.cenario && DB.propostas.find(x => x.id === o.cenario), A = setoresOficiais(), B = p ? estruturaProposta(p).lista : A;
+  const ativo = s => s && s.status !== 'Extinto', mA = new Map(A.map(s => [s.id, s])), mB = new Map(B.map(s => [s.id, s]));
+  const M = metricasEstrutura(B), nomeS = s => s.nome + (s.sigla && !s.nome.includes(s.sigla) ? ' – ' + s.sigla : '');
+  const dataTxt = o.data ? new Date(o.data + 'T12:00:00').toLocaleDateString('pt-BR', { day:'numeric', month:'long', year:'numeric' }) : '[data]';
+  let art = 0; const A_ = () => `<b>Art. ${artN(++art)}</b>`;
+  // estrutura em incisos, alíneas e itens
+  const linhasEst = []; const vis = (pai, nivel, pref) => (M.fil.get(pai) || []).slice().sort((a, b) => num(a.ordem) - num(b.ordem) || a.nome.localeCompare(b.nome, 'pt-BR')).forEach((s, i) => {
+    const marca = nivel === 1 ? romano(i + 1) + ' –' : nivel === 2 ? alinea(i) + ')' : nivel === 3 ? (i + 1) + '.' : pref + (i + 1) + '.';
+    const qt = s.tipo === 'Unidades Escolares' && num(s.quantidade) ? ` (${fmtN(s.quantidade)} unidades)` : '';
+    linhasEst.push(`<p class="lista n${Math.min(nivel, 5)}">${marca} ${esc(nomeS(s))}${qt};</p>`);
+    vis(s.id, nivel + 1, nivel >= 3 ? (nivel === 3 ? (i + 1) + '.' : pref + (i + 1) + '.') : '');
+  }); vis('', 1, '');
+  if (linhasEst.length) linhasEst[linhasEst.length - 1] = linhasEst[linhasEst.length - 1].replace(/;<\/p>$/, '.</p>');
+  let h = `<div class="marca">MINUTA – documento de trabalho gerado pelo GABOrg em ${new Date().toLocaleDateString('pt-BR')}, sujeito a revisão jurídica</div>
+    <h1>DECRETO Nº ${esc(o.numero || '[número]')}, DE ${esc(dataTxt.toUpperCase())}</h1>
+    <p class="ementa">${p ? `Altera a estrutura organizacional da Secretaria de Estado de Educação – SEDUC${o.ato ? ', de que trata o ' + esc(o.ato) : ''}, e dá outras providências.` : 'Dispõe sobre a estrutura organizacional da Secretaria de Estado de Educação – SEDUC e dá outras providências.'}</p>
+    <p><b>O GOVERNADOR DO ESTADO DE MATO GROSSO</b>, ${esc(o.base || '[fundamento legal]')},</p><p class="centro"><b>D E C R E T A:</b></p>`;
+  // alterações (proposta)
+  if (p) {
+    const novos = B.filter(s => ativo(s) && !ativo(mA.get(s.id))), ext = A.filter(s => ativo(s) && !ativo(mB.get(s.id)));
+    const mov = B.filter(s => ativo(s) && ativo(mA.get(s.id)) && (mA.get(s.id).paiId || '') !== (s.paiId || ''));
+    const ren = B.filter(s => ativo(s) && ativo(mA.get(s.id)) && (mA.get(s.id).nome !== s.nome || (mA.get(s.id).sigla || '') !== (s.sigla || '')));
+    const pai = (m, s) => { const x = m.get(s.paiId); return x ? x.nome : 'Gabinete do Secretário de Estado de Educação'; };
+    const bloco = (intro, l, f) => l.length ? `<p>${A_()} ${intro}</p>` + l.map((s, i) => `<p class="lista n2">${romano(i + 1)} – ${f(s)}${i === l.length - 1 ? '.' : ';'}</p>`).join('') : '';
+    h += `<h2>Capítulo I<br>Das alterações na estrutura</h2>`
+      + bloco('Ficam criadas, na estrutura organizacional da Secretaria de Estado de Educação, as seguintes unidades administrativas:', novos, s => `${esc(nomeS(s))}, subordinada ao(à) ${esc(pai(mB, s))}`)
+      + bloco('Ficam extintas as seguintes unidades administrativas:', ext, s => esc(nomeS(s)))
+      + bloco('Passam a subordinar-se às unidades indicadas:', mov, s => `${esc(nomeS(s))}, ao(à) ${esc(pai(mB, s))}`)
+      + bloco('Ficam alteradas as denominações das seguintes unidades:', ren, s => `${esc(nomeS(mA.get(s.id)))}, que passa a denominar-se ${esc(nomeS(s))}`);
+    if (!novos.length && !ext.length && !mov.length && !ren.length) h += `<p>${A_()} [A proposta não altera unidades; descreva aqui as alterações.]</p>`;
+    h += `<p>${A_()} Em decorrência do disposto neste Decreto, a estrutura organizacional da Secretaria de Estado de Educação passa a ser a seguinte:</p>`;
+  } else h += `<h2>Capítulo I<br>Da estrutura organizacional</h2><p>${A_()} A estrutura organizacional da Secretaria de Estado de Educação – SEDUC compreende as seguintes unidades administrativas:</p>`;
+  h += linhasEst.join('');
+  // competências
+  if (o.comp) {
+    const alvo = M.ativos.filter(s => CHEFIAS.includes(s.tipo) && String(s.competencias || '').trim() && (!p || !ativo(mA.get(s.id)) || String(mA.get(s.id).competencias || '') !== String(s.competencias || '')));
+    if (alvo.length) { h += `<h2>Capítulo II<br>Das competências</h2>`;
+      alvo.sort((a, b) => (M.prof.get(a.id) || 0) - (M.prof.get(b.id) || 0)).forEach(s => { const it = String(s.competencias).split(/\n|;\s*/).map(limparComp).filter(Boolean);
+        h += `<p>${A_()} Compete ao(à) ${esc(nomeS(s))}:</p>` + it.map((t, i) => `<p class="lista n2">${romano(i + 1)} – ${esc(t.replace(/[.;]+$/, ''))}${i === it.length - 1 ? '.' : ';'}</p>`).join(''); }); }
+  }
+  // cargos
+  const linhas = p ? custoProposta(p).linhas : DB.despesas.filter(d => (d.cenario || 'Atual') === 'Atual');
+  const cargos = linhas.filter(l => l.observacao === MARCA_CHEFIA && ativo(mB.get(l.setorId)));
+  const porSimb = new Map(); cargos.forEach(l => { const c = calcDesp(l), k = c.r.codigo || 'Sem símbolo', x = porSimb.get(k) || { q:0, unit:c.unit, m:0 }; x.q += c.qtd; x.m += c.mensal; porSimb.set(k, x); });
+  if (o.cargos && cargos.length) h += `<p>${A_()} Os cargos em comissão das unidades de que trata este Decreto são os constantes do Anexo Único.</p>`;
+  const at = baseAtual(), nv = p ? custoProposta(p) : at, dif = nv.a - at.a;
+  h += `<h2>Capítulo ${o.comp ? 'III' : 'II'}<br>Das disposições finais</h2>
+    <p>${A_()} As despesas decorrentes da execução deste Decreto correrão à conta das dotações orçamentárias próprias da Secretaria de Estado de Educação${p && dif > 0 ? ', observados os limites da legislação orçamentária e da Lei de Responsabilidade Fiscal' : ''}.</p>
+    <p>${A_()} Ato do Secretário de Estado de Educação disporá sobre o regimento interno, o detalhamento das competências e a lotação das unidades no prazo de [__] dias.</p>
+    <p>${A_()} Ficam revogadas as disposições em contrário${o.ato && !p ? ', em especial o ' + esc(o.ato) : ''}.</p>
+    <p>${A_()} Este Decreto entra em vigor na data de sua publicação.</p>
+    <p class="centro" style="margin-top:14pt">Palácio Paiaguás, em Cuiabá, ${esc(dataTxt)}.</p>
+    <p class="ass">______________________________<br><b>GOVERNADOR DO ESTADO</b></p><p class="ass">______________________________<br><b>SECRETÁRIO(A) DE ESTADO DE EDUCAÇÃO</b></p>`;
+  if (o.cargos && cargos.length) h += `<h2 style="page-break-before:always">Anexo Único<br>Quadro de cargos em comissão</h2>
+    <table><thead><tr><th>Unidade</th><th>Cargo</th><th>Símbolo</th><th>Qtd.</th></tr></thead><tbody>${cargos.slice().sort((a, b) => (M.prof.get(a.setorId) || 0) - (M.prof.get(b.setorId) || 0)).map(l => { const c = calcDesp(l), s = mB.get(l.setorId); return `<tr><td>${esc(s ? nomeS(s) : '')}</td><td>${esc(l.descricao || 'Titular')}</td><td>${esc(c.r.codigo || '')}</td><td class="dir">${c.qtd}</td></tr>`; }).join('')}</tbody></table>
+    <h3>Resumo por símbolo</h3><table><thead><tr><th>Símbolo</th><th>Quantidade</th><th>Valor unitário mensal</th><th>Total mensal</th></tr></thead><tbody>${[...porSimb.entries()].sort((a, b) => String(a[0]).localeCompare(String(b[0]), 'pt-BR', { numeric:true })).map(([k, x]) => `<tr><td>${esc(k)}</td><td class="dir">${x.q}</td><td class="dir">${fmtM(x.unit)}</td><td class="dir">${fmtM(x.m)}</td></tr>`).join('')}<tr><th>Total</th><th class="dir">${[...porSimb.values()].reduce((t, x) => t + x.q, 0)}</th><th></th><th class="dir">${fmtM([...porSimb.values()].reduce((t, x) => t + x.m, 0))}</th></tr></tbody></table>`;
+  if (o.motivos) {
+    const Ma = metricasEstrutura(A);
+    h += `<h2 style="page-break-before:always">Exposição de motivos</h2>
+      <p>Submete-se à apreciação a ${p ? `proposta "${esc(p.nome)}" de alteração da` : 'consolidação da'} estrutura organizacional da Secretaria de Estado de Educação${p && p.descricao ? `, com o seguinte objetivo: ${esc(p.descricao)}` : ''}.</p>
+      <table><thead><tr><th>Indicador</th><th>Estrutura atual</th>${p ? '<th>Proposta</th><th>Diferença</th>' : ''}</tr></thead><tbody>
+      ${[['Unidades administrativas', Ma.ativos.length, M.ativos.length], ['Chefias', Ma.chefias.length, M.chefias.length], ['Níveis hierárquicos', Ma.niveis, M.niveis], ['Amplitude média de controle', Ma.ampMedia.toFixed(1).replace('.', ','), M.ampMedia.toFixed(1).replace('.', ',')]].map(([n, a, b]) => `<tr><td>${n}</td><td class="dir">${a}</td>${p ? `<td class="dir">${b}</td><td class="dir">${typeof a === 'number' ? (b - a > 0 ? '+' : '') + (b - a) : ''}</td>` : ''}</tr>`).join('')}
+      <tr><td>Custo mensal (cargos e despesas lançados)</td><td class="dir">${fmtM(at.m)}</td>${p ? `<td class="dir">${fmtM(nv.m)}</td><td class="dir">${nv.m - at.m >= 0 ? '+' : ''}${fmtM(nv.m - at.m)}</td>` : ''}</tr>
+      <tr><td>Custo anual</td><td class="dir">${fmtM(at.a)}</td>${p ? `<td class="dir">${fmtM(nv.a)}</td><td class="dir">${dif >= 0 ? '+' : ''}${fmtM(dif)}${at.a ? ` (${fmtP(dif / at.a * 100)})` : ''}</td>` : ''}</tr></tbody></table>
+      <p>${p ? (dif > 0 ? `A proposta acarreta aumento de despesa de ${fmtM(dif)} por ano, que deverá ser compensado ou ter a fonte de custeio indicada, nos termos da Lei de Responsabilidade Fiscal.` : dif < 0 ? `A proposta reduz a despesa em ${fmtM(-dif)} por ano.` : 'A proposta não altera a despesa com os cargos lançados.') : 'Os valores refletem os cargos e despesas lançados no módulo Financeiro do GABOrg.'}</p>
+      <p class="pq">Valores calculados a partir da Tabela de valores do GABOrg (cargos DGA e demais despesas). Conferir com a folha de pagamento antes do envio.</p>`;
+  }
+  return h;
+}
+function exportarMinuta(modo){
+  const o = dadosMinutaForm(), html = gerarMinuta(o), p = o.cenario && DB.propostas.find(x => x.id === o.cenario), nome = 'minuta-decreto-' + (p ? norm(p.nome).replace(/[^a-z0-9]+/g, '-').slice(0, 40) : 'estrutura-seduc') + '-' + hojeISO();
+  if (modo === 'word') baixarWord(nome, 'Minuta de decreto', html);
+  else if (modo === 'print') imprimirDoc('Minuta de decreto', html);
+  else { const t = document.createElement('div'); t.innerHTML = html; navigator.clipboard.writeText(t.innerText).then(() => toast('Texto copiado.'), () => toast('Não foi possível copiar.', 'aviso')); }
+}
+
+/* ===================== IMPLANTAÇÃO DA NOVA ESTRUTURA ===================== */
+let imProp = store.get('gaborg_im_prop', '*'), imVer = 'fases';
+const FASES_IM = ['Preparação', 'Aprovação', 'Publicação', 'Pessoas', 'Instalação das unidades', 'Sistemas e comunicação'];
+const STATUS_IM = { 'A fazer':'#64748b', 'Em andamento':'#2563eb', 'Concluída':'#16a34a', 'Bloqueada':'#dc2626' };
+const PLANO_PADRAO = [
+  ['Preparação', 'Validar a proposta com as secretarias adjuntas e as áreas afetadas', 0, 10],
+  ['Preparação', 'Levantar a lotação atual e os cargos envolvidos', 0, 10],
+  ['Preparação', 'Consolidar a minuta do decreto e a exposição de motivos', 7, 15],
+  ['Aprovação', 'Parecer da assessoria jurídica sobre a minuta', 15, 25],
+  ['Aprovação', 'Análise do impacto financeiro e da fonte de custeio', 15, 25],
+  ['Aprovação', 'Aprovação do(a) Secretário(a) de Estado de Educação', 25, 30],
+  ['Publicação', 'Envio da minuta à Casa Civil', 30, 32],
+  ['Publicação', 'Publicação do decreto no Diário Oficial', 32, 45],
+  ['Pessoas', 'Exonerações e nomeações dos cargos em comissão', 45, 60],
+  ['Pessoas', 'Remanejamento e lotação dos servidores nas novas unidades', 45, 75],
+  ['Sistemas e comunicação', 'Atualizar sistemas de folha, protocolo, e-mails e permissões', 45, 75],
+  ['Sistemas e comunicação', 'Atualizar o organograma oficial e comunicar a rede', 50, 70],
+  ['Sistemas e comunicação', 'Publicar o regimento interno atualizado', 60, 90]
+];
+function etapasDe(pid){ return (DB.etapas || []).filter(e => pid === '*' || (e.propostaId || '') === pid); }
+function atrasada(e){ return e.status !== 'Concluída' && e.prazo && diasAte(e.prazo) < 0; }
+function renderImplantacao(){
+  const el = $('#im-corpo'); if (!el) return;
+  const P = DB.propostas || [], L = etapasDe(imProp).slice().sort((a, b) => FASES_IM.indexOf(a.fase) - FASES_IM.indexOf(b.fase) || num(a.ordem) - num(b.ordem) || String(a.prazo).localeCompare(String(b.prazo)));
+  const conc = L.filter(e => e.status === 'Concluída').length, atr = L.filter(atrasada), prox = L.filter(e => e.status !== 'Concluída' && e.prazo && diasAte(e.prazo) >= 0 && diasAte(e.prazo) <= 7), bloq = L.filter(e => e.status === 'Bloqueada');
+  const opt = `<select class="campo" style="width:auto;height:34px" onchange="imProp=this.value;store.set('gaborg_im_prop',imProp);renderImplantacao()"><option value="*" ${imProp === '*' ? 'selected' : ''}>Todas as etapas</option>${P.map(p => `<option value="${esc(p.id)}" ${imProp === p.id ? 'selected' : ''}>${esc(p.nome)}</option>`).join('')}<option value="" ${imProp === '' ? 'selected' : ''}>Sem proposta vinculada</option></select>`;
+  const prop = P.find(p => p.id === imProp);
+  const linha = e => { const d = e.prazo ? diasAte(e.prazo) : null, at = atrasada(e);
+    return `<tr class="${at ? 'atr' : ''}"><td style="width:150px" onclick="event.stopPropagation()">${podeGestao() ? `<select class="campo im-st" style="--c:${STATUS_IM[e.status] || '#64748b'}" onchange="mudarEtapa(${arg(e.id)},'status',this.value)">${Object.keys(STATUS_IM).map(k => `<option ${k === (e.status || 'A fazer') ? 'selected' : ''}>${k}</option>`).join('')}</select>` : chipG(esc(e.status || 'A fazer'), STATUS_IM[e.status] || '#64748b')}</td>
+      <td class="nm" style="white-space:normal" onclick="formEtapa(${arg(e.id)})"><b>${esc(e.titulo)}</b>${e.observacao ? `<small style="display:block;color:var(--mut)">${esc(e.observacao)}</small>` : ''}${imProp === '*' && e.propostaId ? `<small style="display:block;color:var(--marca)">${esc((P.find(p => p.id === e.propostaId) || {}).nome || '')}</small>` : ''}</td>
+      <td onclick="formEtapa(${arg(e.id)})">${esc(e.responsavel || '—')}${e.setorId ? `<small style="display:block;color:var(--mut)">${esc(nomeCurto(porId.get(e.setorId)))}</small>` : ''}</td>
+      <td onclick="formEtapa(${arg(e.id)})">${fmtDia(e.inicio)}</td><td onclick="formEtapa(${arg(e.id)})">${fmtDia(e.prazo)}${d !== null && e.status !== 'Concluída' ? `<small style="display:block;color:${at ? '#dc2626' : d <= 7 ? '#d97706' : 'var(--mut)'}">${at ? `atrasada ${-d} dia(s)` : d === 0 ? 'vence hoje' : `faltam ${d} dia(s)`}</small>` : ''}</td>
+      <td class="so-edit" style="width:44px" onclick="event.stopPropagation()"><button class="btn btn-g btn-sm btn-i" title="Excluir" onclick="excluirEtapa(${arg(e.id)})"><i class="fa-solid fa-trash"></i></button></td></tr>`; };
+  // linha do tempo
+  const comDatas = L.filter(e => e.inicio && e.prazo), t0 = Math.min(...comDatas.map(e => tData(e.inicio)), tData(hojeISO())), t1 = Math.max(...comDatas.map(e => tData(e.prazo)), tData(hojeISO()) + 864e5);
+  const pos = t => ((t - t0) / (t1 - t0) * 100).toFixed(2), hoje = pos(tData(hojeISO()));
+  const gantt = comDatas.length ? `<div class="cartao bl" style="--c:#0f766e"><h3><i class="fa-solid fa-chart-gantt"></i>Linha do tempo</h3><p class="s">De ${fmtDia(new Date(t0).toISOString())} a ${fmtDia(new Date(t1).toISOString())}. A linha vertical é hoje.</p><div class="im-gantt">${comDatas.map(e => `<div class="lg"><span class="n" title="${esc(e.titulo)}">${esc(e.titulo)}</span><span class="tr"><i class="hj" style="left:${hoje}%"></i><b style="left:${pos(tData(e.inicio))}%;width:${Math.max(1, pos(tData(e.prazo)) - pos(tData(e.inicio)))}%;background:${atrasada(e) ? '#dc2626' : STATUS_IM[e.status] || '#64748b'}" onclick="formEtapa(${arg(e.id)})"></b></span></div>`).join('')}</div></div>` : '';
+  const pctC = L.length ? Math.round(conc * 100 / L.length) : 0;
+  el.innerHTML = avisoGestao() + `<div class="ind-filtro"><span><i class="fa-solid fa-filter"></i>Plano</span>${opt}
+      ${podeGestao() ? `<button class="btn btn-p btn-sm" onclick="formEtapa('')"><i class="fa-solid fa-plus"></i>Nova etapa</button>${imProp !== '*' ? `<button class="btn btn-s btn-sm" onclick="gerarPlano(${arg(imProp)})"><i class="fa-solid fa-wand-magic-sparkles"></i>Gerar plano ${prop ? 'desta proposta' : 'padrão'}</button>` : ''}` : ''}
+      <button class="btn btn-s btn-sm" onclick="exportarEtapas()"><i class="fa-solid fa-file-csv"></i>Exportar</button></div>
+    <div class="kpis">${kpiG('#0f766e', 'fa-list-check', 'Etapas', fmtN(L.length), `${conc} concluídas`)}${kpiG(pctC >= 75 ? '#16a34a' : '#2563eb', 'fa-percent', 'Andamento', pctC + '%', `<span class="im-prog"><i style="width:${pctC}%"></i></span>`)}${kpiG('#dc2626', 'fa-hourglass-end', 'Atrasadas', fmtN(atr.length), atr.length ? 'prazo vencido e não concluídas' : 'nenhuma etapa atrasada')}${kpiG('#d97706', 'fa-calendar-week', 'Vencem em 7 dias', fmtN(prox.length), 'atenção aos próximos prazos')}${kpiG('#7f1d1d', 'fa-ban', 'Bloqueadas', fmtN(bloq.length), 'dependem de outra decisão')}</div>
+    ${!L.length ? `<div class="cartao vazio" style="padding:40px"><i class="fa-solid fa-list-check"></i>Nenhuma etapa ${imProp === '*' ? 'cadastrada' : 'neste plano'}.<br><span style="font-size:12.5px">${prop ? 'Use <b>Gerar plano desta proposta</b>: o sistema cria as etapas padrão (jurídico, financeiro, publicação, nomeações, sistemas) e uma etapa para cada unidade criada, extinta ou movida.' : 'Escolha uma proposta no filtro e use <b>Gerar plano</b>, ou cadastre etapas uma a uma.'}</span></div>` :
+    FASES_IM.concat([...new Set(L.map(e => e.fase).filter(f => !FASES_IM.includes(f)))]).map(f => { const l = L.filter(e => (e.fase || FASES_IM[0]) === f); if (!l.length) return ''; const c = l.filter(e => e.status === 'Concluída').length;
+      return `<div class="cartao bl im-fase" style="--c:#0f766e"><h3><i class="fa-solid fa-flag"></i>${esc(f)} <span class="ct">${c}/${l.length}</span><span class="im-prog" style="margin-left:10px;flex:0 0 120px"><i style="width:${Math.round(c * 100 / l.length)}%"></i></span></h3>
+        <div class="tab-wrap"><table class="tab im-tab"><thead><tr><th>Situação</th><th>Etapa</th><th>Responsável</th><th>Início</th><th>Prazo</th><th class="so-edit"></th></tr></thead><tbody>${l.map(linha).join('')}</tbody></table></div></div>`; }).join('')}
+    ${gantt}`;
+}
+function gerarPlano(pid){
+  const p = (DB.propostas || []).find(x => x.id === pid), ja = etapasDe(pid);
+  const passos = PLANO_PADRAO.map(([f, t, i, d]) => ({ fase:f, titulo:t, inicio:somaDias(i), prazo:somaDias(d) }));
+  if (p) { const A = setoresOficiais(), mA = new Map(A.map(s => [s.id, s])), B = estruturaProposta(p).lista, mB = new Map(B.map(s => [s.id, s])), at = s => s && s.status !== 'Extinto';
+    B.filter(s => at(s) && !at(mA.get(s.id))).forEach(s => passos.push({ fase:'Instalação das unidades', titulo:`Instalar ${s.nome}: nomear a chefia, lotar a equipe e definir o espaço`, inicio:somaDias(45), prazo:somaDias(75), setorId:'' }));
+    A.filter(s => at(s) && !at(mB.get(s.id))).forEach(s => passos.push({ fase:'Instalação das unidades', titulo:`Desativar ${s.nome}: remanejar equipe, processos e acervo`, inicio:somaDias(45), prazo:somaDias(75), setorId:s.id }));
+    B.filter(s => at(s) && at(mA.get(s.id)) && (mA.get(s.id).paiId || '') !== (s.paiId || '')).forEach(s => passos.push({ fase:'Instalação das unidades', titulo:`Atualizar a subordinação de ${s.nome} nos sistemas e fluxos`, inicio:somaDias(45), prazo:somaDias(60), setorId:s.id })); }
+  const novos = passos.filter(x => !ja.some(e => e.titulo === x.titulo));
+  if (!novos.length) return toast('Todas as etapas do plano já existem.');
+  novos.forEach((x, i) => { const e = novoReg('etapas', Object.assign({ id:novoId('im'), propostaId:pid || '', status:'A fazer', ordem:String(i + 1), atualizadoEm:agora(), atualizadoPor:cfg.usuario || '' }, x)); DB.etapas.push(e); enfileirar('etapas', e); });
+  toast(`${novos.length} etapa(s) criada(s). Ajuste responsáveis e prazos.`); renderImplantacao();
+}
+function mudarEtapa(id, k, v){ const e = DB.etapas.find(x => x.id === id); if (!e) return; e[k] = v; e.atualizadoEm = agora(); e.atualizadoPor = cfg.usuario || ''; enfileirar('etapas', e); renderImplantacao(); }
+async function excluirEtapa(id){ const e = DB.etapas.find(x => x.id === id); if (!e || !await confirmar('Excluir etapa', `Excluir "<b>${esc(e.titulo)}</b>"?`, 'Excluir', true)) return; DB.etapas = DB.etapas.filter(x => x !== e); enfileirar('etapas', e, true); renderImplantacao(); }
+function formEtapa(id){
+  if (!podeGestao()) return toast('Seu perfil é somente leitura.', 'aviso');
+  const e = DB.etapas.find(x => x.id === id) || novoReg('etapas', { propostaId:imProp === '*' ? '' : imProp, status:'A fazer', fase:FASES_IM[0], inicio:hojeISO() });
+  abrirModal({ titulo:id ? 'Editar etapa' : 'Nova etapa', rotulo:'Salvar', largura:560,
+    html:`<label><span class="rot">Etapa</span><input id="et-t" class="campo" required value="${esc(e.titulo)}" placeholder="O que precisa ser feito"></label>
+      <div class="g2"><label><span class="rot">Fase</span><select id="et-f" class="campo">${FASES_IM.map(f => `<option ${f === e.fase ? 'selected' : ''}>${f}</option>`).join('')}</select></label><label><span class="rot">Situação</span><select id="et-s" class="campo">${Object.keys(STATUS_IM).map(k => `<option ${k === e.status ? 'selected' : ''}>${k}</option>`).join('')}</select></label></div>
+      <div class="g2"><label><span class="rot">Responsável</span><input id="et-r" class="campo" value="${esc(e.responsavel)}" placeholder="Nome"></label><label><span class="rot">Setor responsável</span><select id="et-set" class="campo"><option value="">—</option>${opcoesSetoresFin(e.setorId)}</select></label></div>
+      <div class="g2"><label><span class="rot">Início</span><input id="et-i" type="date" class="campo" value="${esc(e.inicio)}"></label><label><span class="rot">Prazo</span><input id="et-p" type="date" class="campo" value="${esc(e.prazo)}"></label></div>
+      <label><span class="rot">Proposta</span><select id="et-prop" class="campo"><option value="">Nenhuma</option>${(DB.propostas || []).map(p => `<option value="${esc(p.id)}" ${p.id === e.propostaId ? 'selected' : ''}>${esc(p.nome)}</option>`).join('')}</select></label>
+      <label><span class="rot">Observação</span><textarea id="et-o" class="campo">${esc(e.observacao)}</textarea></label>`,
+    aoConfirmar: async m => {
+      const v = k => m.querySelector(k).value.trim(), o = { titulo:v('#et-t'), fase:v('#et-f'), status:v('#et-s'), responsavel:v('#et-r'), setorId:v('#et-set'), inicio:v('#et-i'), prazo:v('#et-p'), propostaId:v('#et-prop'), observacao:v('#et-o') };
+      if (!o.titulo) throw new Error('Descreva a etapa.');
+      if (o.inicio && o.prazo && o.prazo < o.inicio) throw new Error('O prazo não pode ser antes do início.');
+      Object.assign(e, o, { atualizadoEm:agora(), atualizadoPor:cfg.usuario || '' });
+      if (!DB.etapas.includes(e)) { e.id = novoId('im'); e.ordem = String(DB.etapas.length + 1); DB.etapas.push(e); }
+      enfileirar('etapas', e); renderImplantacao();
+    } });
+}
+function exportarEtapas(){ csvBaixar('gaborg-implantacao', [['Proposta', 'Fase', 'Etapa', 'Situação', 'Responsável', 'Setor', 'Início', 'Prazo', 'Atrasada', 'Observação']].concat(etapasDe(imProp).map(e => [((DB.propostas || []).find(p => p.id === e.propostaId) || {}).nome || '', e.fase, e.titulo, e.status, e.responsavel, nomeSetor(e.setorId), fmtDia(e.inicio), fmtDia(e.prazo), atrasada(e) ? 'Sim' : '', e.observacao]))); }
+
+/* ===================== CHEFIAS E SUCESSÃO ===================== */
+let chFil = { area:'', sit:'', q:'' };
+const SIT_CH = { 'Titular':'#16a34a', 'Interino':'#d97706', 'Em nomeação':'#2563eb', 'Vago':'#dc2626', 'Não informado':'#94a3b8' };
+function simboloChefia(setorId){ const l = DB.despesas.find(d => d.setorId === setorId && d.observacao === MARCA_CHEFIA && (d.cenario || 'Atual') === 'Atual'); if (!l) return ''; const r = rubricaDe(l.rubricaId); return r ? r.codigo : ''; }
+function chefiaDe(s){
+  const r = (DB.chefias || []).find(c => c.setorId === s.id);
+  if (r) return r;
+  return novoReg('chefias', { setorId:s.id, titular:s.responsavel, situacao:s.responsavel ? 'Titular' : 'Não informado', contato:s.contato });
+}
+function alertasChefia(s, c){
+  const a = [], d = c.desde ? diasDesdeData(c.desde) : null, simb = simboloChefia(s.id), alto = /^DGA-?[1-3]$/i.test(simb) || (prof.get(s.id) || 0) <= 1;
+  if (c.situacao === 'Vago') a.push(['#dc2626', d !== null ? `vago há ${d} dia(s)` : 'cargo vago']);
+  if (c.situacao === 'Interino' && d !== null && d > 90) a.push(['#d97706', `interino há ${d} dias`]);
+  if (c.situacao === 'Em nomeação' && d !== null && d > 30) a.push(['#d97706', `em nomeação há ${d} dias`]);
+  if (c.situacao === 'Não informado') a.push(['#94a3b8', 'sem registro']);
+  if (alto && c.situacao !== 'Vago' && !c.substituto) a.push(['#7c3aed', 'sem substituto formal']);
+  if (['Titular', 'Interino'].includes(c.situacao) && !c.atoNomeacao) a.push(['#64748b', 'sem ato de nomeação']);
+  return a;
+}
+function renderChefias(){
+  const el = $('#ch-corpo'); if (!el) return;
+  const todas = setoresOficiais().filter(s => s.status !== 'Extinto' && CHEFIAS.includes(s.tipo));
+  const linhas = todas.map(s => { const c = chefiaDe(s); return { s, c, a:alertasChefia(s, c), simb:simboloChefia(s.id) }; });
+  const q = norm(chFil.q), L = linhas.filter(x => (!chFil.area || areaDe.get(x.s.id) === chFil.area) && (!chFil.sit || x.c.situacao === chFil.sit) && (!q || norm([x.s.nome, x.s.sigla, x.c.titular, x.c.substituto].join(' ')).includes(q)))
+    .sort((a, b) => (prof.get(a.s.id) || 0) - (prof.get(b.s.id) || 0) || a.s.nome.localeCompare(b.s.nome, 'pt-BR'));
+  const cnt = k => linhas.filter(x => x.c.situacao === k).length, semSub = linhas.filter(x => x.a.some(a => a[1] === 'sem substituto formal')).length;
+  const vagLong = linhas.filter(x => x.c.situacao === 'Vago' && x.c.desde && diasDesdeData(x.c.desde) > 30).length;
+  const crit = linhas.filter(x => x.a.some(a => a[0] === '#dc2626' || a[0] === '#d97706')).slice(0, 20);
+  el.innerHTML = avisoGestao() + `<div class="kpis">${kpiG('#1e3a8a', 'fa-user-tie', 'Chefias', fmtN(linhas.length), 'gabinetes, superintendências, coordenadorias...')}${kpiG('#16a34a', 'fa-user-check', 'Com titular', fmtN(cnt('Titular')), pct(cnt('Titular'), linhas.length) + '% das chefias', "chFil.sit='Titular';renderChefias()")}${kpiG('#d97706', 'fa-user-clock', 'Interinos', fmtN(cnt('Interino')), `${cnt('Em nomeação')} em nomeação`, "chFil.sit='Interino';renderChefias()")}${kpiG('#dc2626', 'fa-user-slash', 'Vagos', fmtN(cnt('Vago')), `${vagLong} há mais de 30 dias`, "chFil.sit='Vago';renderChefias()")}${kpiG('#7c3aed', 'fa-people-arrows', 'Sem substituto', fmtN(semSub), 'nas chefias de nível mais alto')}${kpiG('#94a3b8', 'fa-circle-question', 'Sem registro', fmtN(cnt('Não informado')), 'ainda não cadastradas aqui', "chFil.sit='Não informado';renderChefias()")}</div>
+    ${crit.length ? `<div class="cartao bl" style="--c:#dc2626"><h3><i class="fa-solid fa-bell"></i>Riscos de continuidade</h3><p class="s">Vagas longas, interinidades prolongadas e nomeações paradas</p><div class="pend">${crit.map(x => `<button onclick="formChefia(${arg(x.s.id)})"><span>${esc(x.s.nome)}</span>${x.a.filter(a => a[0] !== '#94a3b8').map(a => chipG(esc(a[1]), a[0])).join(' ')}</button>`).join('')}</div></div>` : ''}
+    <div class="filtros"><div class="busca"><i class="fa-solid fa-magnifying-glass"></i><input class="campo" placeholder="Buscar chefia, titular ou substituto" value="${esc(chFil.q)}" oninput="chFil.q=this.value;clearTimeout(window.tCh);window.tCh=setTimeout(()=>{renderChefias();const i=document.querySelector('#ch-corpo .busca input');i.focus();i.setSelectionRange(i.value.length,i.value.length)},300)"></div>
+      <select class="campo" onchange="chFil.area=this.value;renderChefias()"><option value="">Todas as áreas</option>${areas.map(a => `<option value="${esc(a)}" ${a === chFil.area ? 'selected' : ''}>${esc(nomeCurto(porId.get(a)))}</option>`).join('')}</select>
+      <select class="campo" onchange="chFil.sit=this.value;renderChefias()"><option value="">Todas as situações</option>${Object.keys(SIT_CH).map(k => `<option ${k === chFil.sit ? 'selected' : ''}>${k}</option>`).join('')}</select>
+      <button class="btn btn-s btn-sm" onclick="exportarChefias()"><i class="fa-solid fa-file-csv"></i>Exportar</button></div>
+    <div class="tab-wrap"><table class="tab ch-tab"><thead><tr><th>Unidade</th><th>Símbolo</th><th>Titular</th><th>Situação</th><th>Desde</th><th>Ato</th><th>Substituto</th><th>Atenção</th></tr></thead><tbody>
+    ${L.map(x => `<tr onclick="formChefia(${arg(x.s.id)})"><td class="nm" style="white-space:normal"><i class="fa-solid ${icTipo(x.s.tipo)}" style="color:${corTipo(x.s.tipo)};margin-right:6px"></i><b>${esc(x.s.nome)}</b><small style="display:block;color:var(--mut)">${esc(caminho(x.s.id).map(nomeCurto).join(' › ') || 'nível mais alto')}</small></td>
+      <td>${x.simb ? chipG(esc(x.simb), '#7c3aed') : '—'}</td><td>${esc(x.c.titular || '—')}</td><td>${chipG(esc(x.c.situacao), SIT_CH[x.c.situacao] || '#94a3b8')}</td><td>${x.c.desde ? fmtDia(x.c.desde) + `<small style="display:block;color:var(--mut)">${diasDesdeData(x.c.desde)} dia(s)</small>` : '—'}</td>
+      <td style="white-space:normal;max-width:180px">${esc(x.c.atoNomeacao || '—')}</td><td>${esc(x.c.substituto || '—')}</td><td style="white-space:normal">${x.a.map(a => chipG(esc(a[1]), a[0])).join(' ')}</td></tr>`).join('') || '<tr><td colspan="8" class="vazio">Nenhuma chefia com esses filtros.</td></tr>'}</tbody></table></div>`;
+}
+function formChefia(setorId){
+  const s = porId.get(setorId); if (!s) return;
+  if (!podeGestao()) return irPara(setorId);
+  const c = chefiaDe(s);
+  abrirModal({ titulo:'Chefia: ' + (s.sigla || s.nome), rotulo:'Salvar', largura:560,
+    html:`<p style="margin-top:0">${esc(s.nome)}${simboloChefia(s.id) ? ' · cargo ' + esc(simboloChefia(s.id)) : ''}</p>
+      <div class="g2"><label><span class="rot">Situação</span><select id="ch-sit" class="campo">${Object.keys(SIT_CH).filter(k => k !== 'Não informado').map(k => `<option ${k === c.situacao ? 'selected' : ''}>${k}</option>`).join('')}</select></label><label><span class="rot">Desde <small>nomeação, interinidade ou vacância</small></span><input id="ch-desde" type="date" class="campo" value="${esc(c.desde)}"></label></div>
+      <label><span class="rot">Titular / ocupante</span><input id="ch-tit" class="campo" value="${esc(c.titular)}" placeholder="Nome de quem ocupa o cargo"></label>
+      <label><span class="rot">Ato de nomeação</span><input id="ch-ato" class="campo" value="${esc(c.atoNomeacao)}" placeholder="ex.: Ato nº 1.234/2026, DOE de 10/03/2026"></label>
+      <div class="g2"><label><span class="rot">Substituto</span><input id="ch-sub" class="campo" value="${esc(c.substituto)}"></label><label><span class="rot">Ato do substituto</span><input id="ch-atos" class="campo" value="${esc(c.atoSubstituto)}"></label></div>
+      <label><span class="rot">Contato</span><input id="ch-cont" class="campo" value="${esc(c.contato)}"></label>
+      <label><span class="rot">Observação</span><textarea id="ch-obs" class="campo">${esc(c.observacao)}</textarea></label>
+      <p class="s" style="margin:0;font-size:12px;color:var(--mut)">O titular também passa a ser o responsável do setor no mapa.</p>`,
+    aoConfirmar: async m => {
+      const v = k => m.querySelector(k).value.trim(), o = { situacao:v('#ch-sit'), desde:v('#ch-desde'), titular:v('#ch-tit'), atoNomeacao:v('#ch-ato'), substituto:v('#ch-sub'), atoSubstituto:v('#ch-atos'), contato:v('#ch-cont'), observacao:v('#ch-obs') };
+      if (o.situacao === 'Vago') o.titular = '';
+      if (['Titular', 'Interino'].includes(o.situacao) && !o.titular) throw new Error('Informe o nome do titular ou mude a situação para Vago.');
+      Object.assign(c, o, { setorId:s.id, atualizadoEm:agora(), atualizadoPor:cfg.usuario || '' });
+      if (!DB.chefias.includes(c)) { c.id = 'ch_' + s.id; DB.chefias.push(c); }
+      enfileirar('chefias', c);
+      const novoResp = o.situacao === 'Vago' ? '' : o.titular;
+      if ((s.responsavel || '') !== novoResp) { const antes = s.responsavel; s.responsavel = novoResp; if (o.contato && !s.contato) s.contato = o.contato; s.atualizadoEm = agora(); s.atualizadoPor = cfg.usuario || ''; enfileirar('setores', s); registrar(s.id, `Chefia: ${antes || '(vago)'} → ${novoResp || '(vago)'} (${o.situacao})`); }
+      renderChefias();
+    } });
+}
+function exportarChefias(){
+  const todas = setoresOficiais().filter(s => s.status !== 'Extinto' && CHEFIAS.includes(s.tipo));
+  csvBaixar('gaborg-chefias', [['Unidade', 'Sigla', 'Tipo', 'Área', 'Símbolo', 'Titular', 'Situação', 'Desde', 'Ato de nomeação', 'Substituto', 'Ato do substituto', 'Contato', 'Alertas']].concat(todas.map(s => { const c = chefiaDe(s); return [s.nome, s.sigla, s.tipo, nomeCurto(porId.get(areaDe.get(s.id))), simboloChefia(s.id), c.titular, c.situacao, fmtDia(c.desde), c.atoNomeacao, c.substituto, c.atoSubstituto, c.contato, alertasChefia(s, c).map(a => a[1]).join('; ')]; })));
+}
+
+/* ===================== PACTO DE RESULTADOS ===================== */
+let rsFil = { obj:'', area:'', st:'' };
+const OBJETIVOS_PADRAO = ['Melhorar a aprendizagem dos estudantes', 'Reduzir o abandono e a evasão escolar', 'Ampliar a educação em tempo integral', 'Fortalecer a gestão escolar e regional', 'Garantir infraestrutura e condições adequadas nas escolas', 'Valorizar e formar os profissionais da educação', 'Aumentar a eficiência na gestão de recursos'];
+const STATUS_META = { 'Não iniciada':'#94a3b8', 'No prazo':'#16a34a', 'Atenção':'#d97706', 'Atrasada':'#dc2626', 'Concluída':'#2563eb' };
+const objetivosRS = () => { const o = param('objetivos', null); return Array.isArray(o) && o.length ? o : OBJETIVOS_PADRAO; };
+function progressoMeta(m){ const b = numBR(m.linhaBase), alvo = numBR(m.meta), r = numBR(m.resultado); if (String(m.meta).trim() === '' || String(m.resultado).trim() === '' || alvo === b) return m.status === 'Concluída' ? 1 : null; return Math.max(0, Math.min(1, (r - b) / (alvo - b))); }
+function situacaoMeta(m){ if (m.status === 'Concluída') return 'Concluída'; if (m.prazo && diasAte(m.prazo) < 0) return 'Atrasada'; return m.status || 'Não iniciada'; }
+function renderResultados(){
+  const el = $('#rs-corpo'); if (!el) return;
+  const O = objetivosRS(), M = (DB.metas || []).filter(m => (!rsFil.obj || m.objetivo === rsFil.obj) && (!rsFil.area || areaDe.get(m.setorId) === rsFil.area) && (!rsFil.st || situacaoMeta(m) === rsFil.st));
+  const todas = DB.metas || [], chef = setoresOficiais().filter(s => s.status !== 'Extinto' && CHEFIAS.includes(s.tipo) && (prof.get(s.id) || 0) <= 3 && s.tipo !== 'Núcleo Regional');
+  const comMeta = new Set(todas.map(m => m.setorId)), semMeta = chef.filter(s => !comMeta.has(s.id)), objSem = O.filter(o => !todas.some(m => m.objetivo === o));
+  const prs = todas.map(progressoMeta).filter(x => x !== null), med = prs.length ? Math.round(prs.reduce((a, b) => a + b, 0) / prs.length * 100) : 0;
+  const atr = todas.filter(m => situacaoMeta(m) === 'Atrasada');
+  const barra = p => p === null ? '<span style="color:var(--mut2)">—</span>' : `<span class="im-prog" style="width:90px;display:inline-block;vertical-align:middle"><i style="width:${Math.round(p * 100)}%;background:${p >= 1 ? '#2563eb' : p >= .6 ? '#16a34a' : p >= .3 ? '#d97706' : '#dc2626'}"></i></span> ${Math.round(p * 100)}%`;
+  const porObj = O.map(o => { const l = todas.filter(m => m.objetivo === o), p = l.map(progressoMeta).filter(x => x !== null); return { o, n:l.length, set:new Set(l.map(m => m.setorId)).size, p:p.length ? p.reduce((a, b) => a + b, 0) / p.length : null, atr:l.filter(m => situacaoMeta(m) === 'Atrasada').length }; });
+  el.innerHTML = avisoGestao() + `<div class="kpis">${kpiG('#be185d', 'fa-bullseye', 'Metas', fmtN(todas.length), `${comMeta.size} setores com meta`)}${kpiG('#16a34a', 'fa-gauge', 'Atingimento médio', prs.length ? med + '%' : '—', 'resultado atual em relação à meta')}${kpiG('#dc2626', 'fa-hourglass-end', 'Atrasadas', fmtN(atr.length), 'prazo vencido e não concluídas', "rsFil.st='Atrasada';renderResultados()")}${kpiG('#7c3aed', 'fa-sitemap', 'Chefias sem meta', fmtN(semMeta.length), `de ${chef.length} chefias dos 3 primeiros níveis`)}${kpiG('#d97706', 'fa-flag', 'Objetivos sem meta', fmtN(objSem.length), `de ${O.length} objetivos estratégicos`)}</div>
+    <div class="cartao bl" style="--c:#be185d"><h3><i class="fa-solid fa-flag"></i>Objetivos estratégicos ${podeGestao() ? '<button class="btn btn-g btn-sm" style="margin-left:auto" onclick="formObjetivos()"><i class="fa-solid fa-pen"></i>Editar objetivos</button>' : ''}</h3><p class="s">Cada meta de setor se liga a um objetivo. Clique num objetivo para filtrar.</p>
+      <div class="rs-objs">${porObj.map(x => `<button class="rs-obj ${rsFil.obj === x.o ? 'on' : ''} ${x.n ? '' : 'vz'}" onclick="rsFil.obj=rsFil.obj===${arg(x.o)}?'':${arg(x.o)};renderResultados()"><b>${esc(x.o)}</b><span>${x.n} meta(s) · ${x.set} setor(es)${x.atr ? ` · <em>${x.atr} atrasada(s)</em>` : ''}</span>${barra(x.p)}</button>`).join('')}</div></div>
+    <div class="filtros"><select class="campo" onchange="rsFil.area=this.value;renderResultados()"><option value="">Todas as áreas</option>${areas.map(a => `<option value="${esc(a)}" ${a === rsFil.area ? 'selected' : ''}>${esc(nomeCurto(porId.get(a)))}</option>`).join('')}</select>
+      <select class="campo" onchange="rsFil.st=this.value;renderResultados()"><option value="">Todas as situações</option>${Object.keys(STATUS_META).map(k => `<option ${k === rsFil.st ? 'selected' : ''}>${k}</option>`).join('')}</select>
+      ${rsFil.obj || rsFil.area || rsFil.st ? `<button class="btn btn-g btn-sm" onclick="rsFil={obj:'',area:'',st:''};renderResultados()">limpar filtros</button>` : ''}
+      ${podeGestao() ? '<button class="btn btn-p btn-sm" onclick="formMeta(\'\')"><i class="fa-solid fa-plus"></i>Nova meta</button>' : ''}<button class="btn btn-s btn-sm" onclick="exportarMetas()"><i class="fa-solid fa-file-csv"></i>Exportar</button></div>
+    <div class="tab-wrap"><table class="tab"><thead><tr><th>Meta</th><th>Setor</th><th>Objetivo</th><th>Base → Meta</th><th>Resultado</th><th>Atingimento</th><th>Prazo</th><th>Situação</th></tr></thead><tbody>
+    ${M.slice().sort((a, b) => O.indexOf(a.objetivo) - O.indexOf(b.objetivo) || String(a.prazo).localeCompare(String(b.prazo))).map(m => { const st = situacaoMeta(m); return `<tr onclick="formMeta(${arg(m.id)})"><td class="nm" style="white-space:normal"><b>${esc(m.titulo)}</b>${m.indicador ? `<small style="display:block;color:var(--mut)">${esc(m.indicador)}</small>` : ''}</td><td>${esc(nomeCurto(porId.get(m.setorId)))}</td><td style="white-space:normal;max-width:220px"><small>${esc(m.objetivo)}</small></td>
+      <td>${esc(m.linhaBase || '—')} → <b>${esc(m.meta || '—')}</b> ${esc(m.unidade)}</td><td>${esc(m.resultado || '—')} ${m.resultado ? esc(m.unidade) : ''}</td><td>${barra(progressoMeta(m))}</td><td>${fmtDia(m.prazo)}</td><td>${chipG(st, STATUS_META[st] || '#94a3b8')}</td></tr>`; }).join('') || `<tr><td colspan="8" class="vazio">${todas.length ? 'Nenhuma meta com esses filtros.' : 'Nenhuma meta cadastrada. Cadastre as metas pactuadas com cada setor e ligue-as a um objetivo estratégico.'}</td></tr>`}</tbody></table></div>
+    ${semMeta.length ? `<div class="cartao bl" style="--c:#7c3aed;margin-top:14px"><h3><i class="fa-solid fa-sitemap"></i>Chefias sem meta pactuada <span class="ct">${semMeta.length}</span></h3><p class="s">Setores dos três primeiros níveis que ainda não têm meta. Sem meta, a discussão sobre a estrutura fica só pelo tamanho.</p><div class="pend">${semMeta.slice(0, 40).map(s => `<button onclick="${podeGestao() ? `formMeta('',${arg(s.id)})` : `irPara(${arg(s.id)})`}"><i class="fa-solid ${icTipo(s.tipo)}" style="color:${corTipo(s.tipo)}"></i><span>${esc(s.nome)}</span><small>${podeGestao() ? '+ meta' : ''}</small></button>`).join('')}</div></div>` : ''}`;
+}
+function formObjetivos(){
+  abrirModal({ titulo:'Objetivos estratégicos', rotulo:'Salvar', largura:560, html:`<p style="margin-top:0">Um objetivo por linha. Use os objetivos do planejamento estratégico da SEDUC (PPA, plano estadual de educação). Os iniciais são só sugestões.</p><textarea id="ob-t" class="campo" style="min-height:220px">${esc(objetivosRS().join('\n'))}</textarea>`,
+    aoConfirmar: async m => { const l = m.querySelector('#ob-t').value.split('\n').map(x => x.trim()).filter(Boolean); if (!l.length) throw new Error('Informe ao menos um objetivo.'); salvarParam('objetivos', l); renderResultados(); } });
+}
+function formMeta(id, setorPadrao){
+  if (!podeGestao()) return toast('Seu perfil é somente leitura.', 'aviso');
+  const m0 = DB.metas.find(x => x.id === id) || novoReg('metas', { setorId:setorPadrao || '', objetivo:rsFil.obj || objetivosRS()[0], status:'Não iniciada' });
+  abrirModal({ titulo:id ? 'Editar meta' : 'Nova meta', rotulo:'Salvar', largura:600,
+    html:`<label><span class="rot">Meta</span><input id="mt-t" class="campo" required value="${esc(m0.titulo)}" placeholder="ex.: Reduzir o tempo médio de lotação de professores"></label>
+      <div class="g2"><label><span class="rot">Setor responsável</span><select id="mt-s" class="campo" required><option value="">Escolha</option>${opcoesSetoresFin(m0.setorId)}</select></label><label><span class="rot">Objetivo estratégico</span><select id="mt-o" class="campo">${objetivosRS().map(o => `<option ${o === m0.objetivo ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></label></div>
+      <label><span class="rot">Indicador <small>como é medido</small></span><input id="mt-i" class="campo" value="${esc(m0.indicador)}" placeholder="ex.: dias entre a vaga e a lotação"></label>
+      <div class="g2"><label><span class="rot">Linha de base</span><input id="mt-b" class="campo" value="${esc(m0.linhaBase)}" inputmode="decimal"></label><label><span class="rot">Valor da meta</span><input id="mt-m" class="campo" value="${esc(m0.meta)}" inputmode="decimal"></label></div>
+      <div class="g2"><label><span class="rot">Resultado atual</span><input id="mt-r" class="campo" value="${esc(m0.resultado)}" inputmode="decimal"></label><label><span class="rot">Unidade</span><input id="mt-u" class="campo" value="${esc(m0.unidade)}" placeholder="%, dias, escolas..."></label></div>
+      <div class="g2"><label><span class="rot">Prazo</span><input id="mt-p" type="date" class="campo" value="${esc(m0.prazo)}"></label><label><span class="rot">Situação</span><select id="mt-st" class="campo">${Object.keys(STATUS_META).map(k => `<option ${k === m0.status ? 'selected' : ''}>${k}</option>`).join('')}</select></label></div>
+      <label><span class="rot">Observação</span><textarea id="mt-ob" class="campo">${esc(m0.observacao)}</textarea></label>`,
+    aoConfirmar: async m => {
+      const v = k => m.querySelector(k).value.trim(), o = { titulo:v('#mt-t'), setorId:v('#mt-s'), objetivo:v('#mt-o'), indicador:v('#mt-i'), linhaBase:v('#mt-b'), meta:v('#mt-m'), resultado:v('#mt-r'), unidade:v('#mt-u'), prazo:v('#mt-p'), status:v('#mt-st'), observacao:v('#mt-ob') };
+      if (!o.titulo || !o.setorId) throw new Error('Informe a meta e o setor responsável.');
+      Object.assign(m0, o, { atualizadoEm:agora(), atualizadoPor:cfg.usuario || '' });
+      if (!DB.metas.includes(m0)) { m0.id = novoId('mt'); DB.metas.push(m0); }
+      enfileirar('metas', m0); renderResultados();
+    } }).then(ok => { if (!ok || !id) return; });
+}
+function exportarMetas(){ csvBaixar('gaborg-metas', [['Objetivo', 'Meta', 'Indicador', 'Setor', 'Linha de base', 'Meta', 'Resultado', 'Unidade', 'Atingimento %', 'Prazo', 'Situação', 'Observação']].concat((DB.metas || []).map(m => { const p = progressoMeta(m); return [m.objetivo, m.titulo, m.indicador, nomeSetor(m.setorId), m.linhaBase, m.meta, m.resultado, m.unidade, p === null ? '' : Math.round(p * 100), fmtDia(m.prazo), situacaoMeta(m), m.observacao]; }))); }
+
+/* ===================== GESTÃO REGIONAL (DREs) ===================== */
+const REG_PADRAO = { custoKm:'1.20', visitas:'4' };
+function dadosRegionais(){
+  const X = distanciasMT(), E = escolasLista(), pr = Object.assign({}, REG_PADRAO, param('regional', {})), ck = numBR(pr.custoKm), vis = numBR(pr.visitas);
+  return X.dres.map(d => {
+    const s = setorDaDRE(d), equipe = s ? [s, ...[...descendentes(s.id)].map(i => porId.get(i)).filter(x => x && x.status !== 'Extinto')] : [];
+    const l = X.lista.filter(o => o.e.dre === d), ser = equipe.reduce((t, x) => t + num(x.servidores), 0), km = l.reduce((t, o) => t + o.km, 0);
+    const circuito = km * 2 * FATOR_ESTRADA, mun = new Set(l.map(o => o.e.municipio));
+    // possível polo: município distante cujo entorno (80 km) concentra escolas da mesma DRE
+    let polo = null; [...mun].forEach(m => { const lm = l.filter(o => o.e.municipio === m); const dm = lm.reduce((t, o) => t + o.km, 0) / lm.length; if (dm < 150) return;
+      const c = [lm.reduce((t, o) => t + o.e.latitude, 0) / lm.length, lm.reduce((t, o) => t + o.e.longitude, 0) / lm.length], viz = l.filter(o => kmEntre(c, [o.e.latitude, o.e.longitude]) <= 80);
+      if (viz.length >= 5 && (!polo || viz.length > polo.n)) polo = { m, n:viz.length, km:dm, mun:new Set(viz.map(o => o.e.municipio)).size }; });
+    return { d, s, equipe, ser, chef:equipe.filter(x => CHEFIAS.includes(x.tipo)).length, n:l.length, mun:mun.size, rur:l.filter(o => o.e.localidade === 'RURAL').length, med:l.length ? km / l.length : 0, max:l.reduce((a, o) => o.km > a.km ? o : a, l[0] || { km:0 }), circuito, custo:circuito * ck * vis, horas:circuito / VEL_MEDIA * vis, outra:l.filter(o => o.prox && o.km - o.prox.km >= 40 && o.prox.km < o.km * .7), polo, escSer:ser ? l.length / ser : null };
+  });
+}
+function renderRegional(){
+  const el = $('#rg-corpo'); if (!el) return;
+  const R = dadosRegionais(), dres = R.map(x => x.d), pr = Object.assign({}, REG_PADRAO, param('regional', {}));
+  if (!R.length) { el.innerHTML = '<div class="cartao vazio">Sem base de escolas.</div>'; return; }
+  const tot = R.reduce((t, x) => t + x.n, 0), totSer = R.reduce((t, x) => t + x.ser, 0), totCusto = R.reduce((t, x) => t + x.custo, 0), medN = tot / R.length;
+  const comSer = R.filter(x => x.escSer !== null), medEsc = comSer.length ? comSer.map(x => x.escSer).sort((a, b) => a - b)[Math.floor(comSer.length / 2)] : null;
+  const sug = [];
+  R.forEach(x => {
+    if (x.escSer !== null && medEsc && x.escSer > medEsc * 1.5) sug.push(['#dc2626', 'fa-user-plus', `<b>${esc(nomeDRE(x.d))}</b>: ${x.escSer.toLocaleString('pt-BR', { maximumFractionDigits:1 })} escolas por servidor, contra ${medEsc.toLocaleString('pt-BR', { maximumFractionDigits:1 })} na mediana das DREs. Avaliar reforço da equipe.`]);
+    else if (x.escSer === null && x.n > medN * 1.3) sug.push(['#d97706', 'fa-users', `<b>${esc(nomeDRE(x.d))}</b> atende ${x.n} escolas (${(x.n / medN).toLocaleString('pt-BR', { maximumFractionDigits:1 })}× a média). Informe os servidores da DRE para medir a carga por pessoa.`]);
+    if (x.polo) sug.push(['#7c3aed', 'fa-location-dot', `<b>${esc(nomeDRE(x.d))}</b>: avaliar um polo de apoio em <b>${esc(x.polo.m)}</b>. O município fica a ~${fmtKm(x.polo.km)} da sede e, num raio de 80 km, há ${x.polo.n} escolas da DRE em ${x.polo.mun} município(s).`]);
+    if (x.outra.length >= 2) { const para = {}; x.outra.forEach(o => { para[o.prox.dre] = (para[o.prox.dre] || 0) + 1; }); sug.push(['#0891b2', 'fa-shuffle', `<b>${esc(nomeDRE(x.d))}</b>: ${x.outra.length} escola(s) ficam bem mais perto de outra sede (${Object.entries(para).map(([dd, n]) => `${n} da ${esc(nomeDRE(dd))}`).join(', ')}). Avaliar acompanhamento compartilhado ou nova subordinação.`]); }
+  });
+  const semR = R.filter(x => x.s && !x.s.responsavel); if (semR.length) sug.push(['#64748b', 'fa-user-xmark', `${semR.length === R.length ? 'Nenhuma DRE tem' : semR.length + ' DRE(s) sem'} responsável indicado${semR.length === R.length ? '' : ': ' + semR.map(x => '<b>' + esc(nomeDRE(x.d)) + '</b>').join(', ')}. Registre os titulares na seção <b>Chefias</b>.`]);
+  const mxC = Math.max(...R.map(x => x.custo)), cardsOrd = R.slice().sort((a, b) => b.n - a.n);
+  el.innerHTML = avisoGestao() + `<div class="kpis">${kpiG('#16a34a', 'fa-school', 'Escolas', fmtN(tot), `${R.length} DREs · média de ${Math.round(medN)} por DRE`)}${kpiG('#0891b2', 'fa-users', 'Servidores nas DREs', totSer ? fmtN(totSer) : '—', totSer ? `${(tot / totSer).toLocaleString('pt-BR', { maximumFractionDigits:1 })} escolas por servidor` : 'informe no campo Servidores das DREs')}${kpiG('#f97316', 'fa-road', 'Circuito anual estimado', fmtN(Math.round(R.reduce((t, x) => t + x.circuito, 0) * numBR(pr.visitas))) + ' km', `${pr.visitas} visita(s) por escola no ano`)}${kpiG('#dc2626', 'fa-gas-pump', 'Custo de deslocamento', fmtRc(totCusto), `a R$ ${String(pr.custoKm).replace('.', ',')}/km, por ano`)}${kpiG('#7c3aed', 'fa-lightbulb', 'Sugestões', fmtN(sug.length), 'reforço, polos e redistribuição')}</div>
+    <div class="cartao bl" style="--c:#f97316"><h3><i class="fa-solid fa-sliders"></i>Parâmetros de deslocamento</h3><p class="s">Usados para estimar o custo de acompanhamento das escolas. As distâncias por estrada são estimadas (1,3 × linha reta).</p>
+      <div class="g-metas" style="grid-template-columns:repeat(auto-fit,minmax(200px,260px))"><label><span class="rot">Custo por km rodado (R$) <small>combustível, veículo, manutenção</small></span><input id="rg-ck" class="campo" type="number" step="0.01" min="0" value="${esc(pr.custoKm)}" ${podeGestao() ? '' : 'disabled'}></label><label><span class="rot">Visitas por escola no ano</span><input id="rg-vis" class="campo" type="number" step="1" min="0" value="${esc(pr.visitas)}" ${podeGestao() ? '' : 'disabled'}></label>
+      ${podeGestao() ? `<div style="align-self:end"><button class="btn btn-p btn-sm" onclick="salvarParam('regional',{custoKm:$('#rg-ck').value,visitas:$('#rg-vis').value});renderRegional()"><i class="fa-solid fa-floppy-disk"></i>Aplicar</button></div>` : ''}</div></div>
+    ${sug.length ? `<div class="cartao bl" style="--c:#7c3aed"><h3><i class="fa-solid fa-lightbulb"></i>Sugestões para a rede regional</h3><p class="s">Pontos para discutir; confira com a equipe da DRE antes de decidir</p><div class="pend re-sug">${sug.map(([c, ic, t]) => `<div class="it"><i class="fa-solid ${ic}" style="color:${c}"></i><span>${t}</span></div>`).join('')}</div></div>` : ''}
+    <div class="rg-cards">${cardsOrd.map(x => `<div class="cartao rg-card" style="--c:${corDRE(dres, x.d)}"><div class="h"><span class="pt"></span><b>${esc(nomeDRE(x.d))}</b>${x.s && x.s.responsavel ? `<small>${esc(x.s.responsavel)}</small>` : '<small class="sem">sem responsável</small>'}</div>
+      <div class="nums"><div><b>${x.n}</b>escolas</div><div><b>${x.mun}</b>municípios</div><div><b>${x.ser || '—'}</b>servidores</div><div><b>${x.escSer !== null ? x.escSer.toLocaleString('pt-BR', { maximumFractionDigits:1 }) : '—'}</b>escolas/servidor</div></div>
+      <div class="lin"><span>Distância média</span><b style="color:${faixaDist(x.med)[2]}">${fmtKm(x.med)}</b></div><div class="lin"><span>Escola mais distante</span><b>${fmtKm(x.max.km)}</b></div><div class="lin"><span>Rurais</span><b>${x.rur} (${pct(x.rur, x.n)}%)</b></div>
+      <div class="lin"><span>Deslocamento/ano</span><b>${fmtRc(x.custo)}</b></div><span class="im-prog"><i style="width:${mxC ? x.custo / mxC * 100 : 0}%;background:${corDRE(dres, x.d)}"></i></span>
+      <div class="acoes"><button class="btn btn-s btn-sm" onclick="trocarVista('escolas');setTimeout(()=>{modoMT('distancia');focarDREmt(${dres.indexOf(x.d)})},400)"><i class="fa-solid fa-map-location-dot"></i>Mapa</button>${x.s ? `<button class="btn btn-s btn-sm" onclick="trocarVista('mapa');setTimeout(()=>irPara(${arg(x.s.id)}),60)"><i class="fa-solid fa-sitemap"></i>Estrutura</button>` : ''}<button class="btn btn-g btn-sm" onclick="trocarVista('painel');abaInd('dist');indDistDRE=${arg(x.d)};renderPainelInd()"><i class="fa-solid fa-route"></i>Distâncias</button></div></div>`).join('')}</div>
+    <div class="cartao bl" style="--c:#0e7490;margin-top:14px"><h3><i class="fa-solid fa-table"></i>Quadro regional</h3><div class="tab-wrap"><table class="tab ind-heat"><thead><tr><th>DRE</th><th>Escolas</th><th>Municípios</th><th>Servidores</th><th>Chefias</th><th>Escolas/servidor</th><th>Dist. média</th><th>Circuito (km)</th><th>Horas/ano</th><th>Custo/ano</th><th>Mais perto de outra</th></tr></thead><tbody>
+      ${R.slice().sort((a, b) => b.custo - a.custo).map(x => `<tr onclick="trocarVista('escolas');setTimeout(()=>focarDREmt(${dres.indexOf(x.d)}),400)"><td class="nm"><span class="pt" style="background:${corDRE(dres, x.d)}"></span>${esc(nomeDRE(x.d))}</td><td>${x.n}</td><td>${x.mun}</td><td>${x.ser || '—'}</td><td>${x.chef}</td><td>${x.escSer !== null ? x.escSer.toLocaleString('pt-BR', { maximumFractionDigits:1 }) : '—'}</td><td>${fmtKm(x.med)}</td><td>${fmtN(Math.round(x.circuito))}</td><td>${fmtN(Math.round(x.horas))}</td><td style="background:linear-gradient(90deg,color-mix(in srgb,#f97316 22%,transparent) ${mxC ? x.custo / mxC * 100 : 0}%,transparent 0)"><b>${fmtRc(x.custo)}</b></td><td>${x.outra.length || '—'}</td></tr>`).join('')}</tbody></table></div></div>`;
+}
+
+/* ===================== REUNIÕES: PAUTA, APRESENTAÇÃO E DECISÕES ===================== */
+let ruSel = '', ap = null;
+const DECISOES = { '':'#94a3b8', 'Aprovado':'#16a34a', 'Aprovado com ajustes':'#0891b2', 'Adiado':'#d97706', 'Rejeitado':'#dc2626', 'Apenas informe':'#64748b' };
+const TIPOS_ITEM = { estrutura:['fa-gauge-high', 'Situação da estrutura'], proposta:['fa-lightbulb', 'Proposta'], implantacao:['fa-list-check', 'Andamento da implantação'], chefias:['fa-user-tie', 'Chefias vagas e interinas'], regional:['fa-map-location-dot', 'Gestão regional'], resultados:['fa-bullseye', 'Pacto de resultados'], livre:['fa-comment', 'Assunto'] };
+const itensReu = r => { try { const a = JSON.parse(r.itens || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } };
+function gravarReu(r, itens){ if (itens) r.itens = JSON.stringify(itens); r.atualizadoEm = agora(); r.atualizadoPor = cfg.usuario || ''; enfileirar('reunioes', r); }
+const tituloItem = it => it.tipo === 'proposta' ? 'Proposta: ' + (((DB.propostas || []).find(p => p.id === it.ref) || {}).nome || it.titulo || '(removida)') : it.titulo || TIPOS_ITEM[it.tipo][1];
+function renderReunioes(){
+  const el = $('#ru-corpo'); if (!el) return;
+  const R = (DB.reunioes || []).slice().sort((a, b) => String(b.data).localeCompare(String(a.data)));
+  const r = R.find(x => x.id === ruSel);
+  const enc = []; R.forEach(x => itensReu(x).forEach(it => { if (it.encaminhamento && !it.feito) enc.push({ r:x, it }); }));
+  enc.sort((a, b) => String(a.it.prazo || '9999').localeCompare(String(b.it.prazo || '9999')));
+  const lista = `<div class="ru-lista">${podeGestao() ? '<button class="btn btn-p" onclick="formReuniao(\'\')" style="width:100%;justify-content:center"><i class="fa-solid fa-plus"></i>Nova reunião</button>' : ''}
+    ${R.map(x => { const it = itensReu(x), dec = it.filter(i => i.decisao).length; return `<button class="ru-it ${x.id === ruSel ? 'on' : ''}" onclick="ruSel=${arg(x.id)};renderReunioes()"><b>${esc(x.titulo)}</b><small>${fmtData(x.data)}</small><span>${chipG(esc(x.status || 'Planejada'), x.status === 'Realizada' ? '#16a34a' : x.status === 'Cancelada' ? '#94a3b8' : '#2563eb')} ${it.length} item(ns) · ${dec} decisão(ões)</span></button>`; }).join('') || '<div class="vazio">Nenhuma reunião ainda.</div>'}</div>`;
+  let det = '';
+  if (r) { const it = itensReu(r);
+    det = `<div class="cartao bl" style="--c:#6d28d9"><div class="ru-cab"><div><h3 style="margin:0"><i class="fa-solid fa-people-group"></i>${esc(r.titulo)}</h3><p class="s" style="margin:4px 0 0">${fmtData(r.data)}${r.participantes ? ' · ' + esc(r.participantes) : ''}</p></div>
+      <div class="acoes" style="flex-wrap:wrap"><button class="btn btn-p btn-sm" onclick="apresentarReuniao(${arg(r.id)})" ${it.length ? '' : 'disabled'}><i class="fa-solid fa-display"></i>Apresentar</button><button class="btn btn-s btn-sm" onclick="exportarAta(${arg(r.id)},'word')"><i class="fa-solid fa-file-word"></i>Ata (Word)</button><button class="btn btn-s btn-sm" onclick="exportarAta(${arg(r.id)},'print')"><i class="fa-solid fa-print"></i>Imprimir</button>
+      ${podeGestao() ? `<button class="btn btn-g btn-sm" onclick="formReuniao(${arg(r.id)})"><i class="fa-solid fa-pen"></i>Editar</button>${r.status !== 'Realizada' ? `<button class="btn btn-g btn-sm" onclick="statusReu(${arg(r.id)},'Realizada')"><i class="fa-solid fa-check"></i>Marcar como realizada</button>` : ''}<button class="btn btn-g btn-sm" onclick="excluirReuniao(${arg(r.id)})"><i class="fa-solid fa-trash"></i></button>` : ''}</div></div>
+      <div class="ru-itens">${it.map((x, i) => `<div class="ru-item"><span class="n">${i + 1}</span><div class="t"><b><i class="fa-solid ${TIPOS_ITEM[x.tipo] ? TIPOS_ITEM[x.tipo][0] : 'fa-comment'}"></i>${esc(tituloItem(x))}</b>${x.notas ? `<small>${esc(x.notas)}</small>` : ''}
+        ${x.decisao || x.encaminhamento ? `<div class="dec">${x.decisao ? chipG(esc(x.decisao), DECISOES[x.decisao]) : ''}${x.encaminhamento ? ` <span>${esc(x.encaminhamento)}</span>` : ''}${x.responsavel ? ` <small>· ${esc(x.responsavel)}</small>` : ''}${x.prazo ? ` <small>· até ${fmtDia(x.prazo)}</small>` : ''}</div>` : ''}</div>
+        ${podeGestao() ? `<div class="b"><button class="btn btn-g btn-sm btn-i" title="Subir" onclick="moverItemReu(${arg(r.id)},${i},-1)" ${i ? '' : 'disabled'}><i class="fa-solid fa-arrow-up"></i></button><button class="btn btn-g btn-sm btn-i" title="Descer" onclick="moverItemReu(${arg(r.id)},${i},1)" ${i < it.length - 1 ? '' : 'disabled'}><i class="fa-solid fa-arrow-down"></i></button><button class="btn btn-g btn-sm btn-i" title="Decisão" onclick="formDecisao(${arg(r.id)},${i})"><i class="fa-solid fa-gavel"></i></button><button class="btn btn-g btn-sm btn-i" title="Remover" onclick="removerItemReu(${arg(r.id)},${i})"><i class="fa-solid fa-xmark"></i></button></div>` : ''}</div>`).join('') || '<div class="vazio">Pauta vazia.</div>'}</div>
+      ${podeGestao() ? `<div class="ru-add"><select id="ru-tipo" class="campo" onchange="$('#ru-ref').style.display=this.value==='proposta'?'':'none';$('#ru-tit').style.display=this.value==='livre'?'':'none'">${Object.entries(TIPOS_ITEM).map(([k, [, n]]) => `<option value="${k}">${n}</option>`).join('')}</select><select id="ru-ref" class="campo" style="display:none">${(DB.propostas || []).map(p => `<option value="${esc(p.id)}">${esc(p.nome)}</option>`).join('')}</select><input id="ru-tit" class="campo" style="display:none" placeholder="Assunto"><button class="btn btn-s btn-sm" onclick="addItemReu(${arg(r.id)})"><i class="fa-solid fa-plus"></i>Incluir na pauta</button></div>` : ''}</div>`;
+  } else det = `<div class="cartao vazio" style="padding:40px"><i class="fa-solid fa-people-group"></i>${R.length ? 'Escolha uma reunião ao lado.' : 'Crie uma reunião: o sistema monta a pauta com a situação da estrutura, as propostas em discussão, a implantação, as chefias e a gestão regional.'}<br><span style="font-size:12.5px">Na apresentação, cada assunto vira uma tela, e a decisão e o encaminhamento ficam registrados ali mesmo.</span></div>`;
+  el.innerHTML = avisoGestao() + `<div class="ru-grade">${lista}<div>${det}
+    <div class="cartao bl" style="--c:#d97706;margin-top:14px"><h3><i class="fa-solid fa-arrow-right-to-bracket"></i>Encaminhamentos em aberto <span class="ct">${enc.length}</span></h3><p class="s">Decisões que pedem uma ação, de todas as reuniões. Marque quando estiver feito.</p>
+      <div class="pend">${enc.slice(0, 40).map(({ r: x, it }) => { const d = it.prazo ? diasAte(it.prazo) : null; return `<div class="it"><input type="checkbox" ${podeGestao() ? '' : 'disabled'} onchange="feitoEnc(${arg(x.id)},${arg(it.id)},this.checked)" title="Feito"><span><b>${esc(it.encaminhamento)}</b><small style="display:block;color:var(--mut)">${esc(tituloItem(it))} · ${esc(x.titulo)}${it.responsavel ? ' · ' + esc(it.responsavel) : ''}</small></span>${it.prazo ? chipG(d < 0 ? `atrasado ${-d}d` : fmtDia(it.prazo), d < 0 ? '#dc2626' : d <= 7 ? '#d97706' : '#64748b') : ''}</div>`; }).join('') || '<div class="vazio">Nenhum encaminhamento em aberto.</div>'}</div></div></div></div>`;
+}
+function formReuniao(id){
+  if (!podeGestao()) return;
+  const r = (DB.reunioes || []).find(x => x.id === id), d = new Date(); d.setMinutes(0); d.setHours(d.getHours() + 1);
+  const dl = r ? String(r.data).slice(0, 16) : new Date(d.getTime() - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 16);
+  const P = (DB.propostas || []).filter(p => p.status !== 'Arquivada');
+  abrirModal({ titulo:r ? 'Editar reunião' : 'Nova reunião', rotulo:r ? 'Salvar' : 'Criar reunião', largura:580,
+    html:`<label><span class="rot">Título</span><input id="ru-t" class="campo" required value="${esc(r ? r.titulo : 'Reunião de estrutura organizacional')}"></label>
+      <div class="g2"><label><span class="rot">Data e hora</span><input id="ru-d" type="datetime-local" class="campo" value="${esc(dl)}"></label><label><span class="rot">Situação</span><select id="ru-s" class="campo">${['Planejada', 'Realizada', 'Cancelada'].map(k => `<option ${r && r.status === k ? 'selected' : ''}>${k}</option>`).join('')}</select></label></div>
+      <label><span class="rot">Participantes</span><input id="ru-p" class="campo" value="${esc(r ? r.participantes : '')}" placeholder="ex.: Secretária, adjuntos, assessoria"></label>
+      ${r ? '' : `<span class="rot" style="margin-top:6px">Pauta inicial</span><div class="ru-chk">${['estrutura', 'implantacao', 'chefias', 'regional', 'resultados'].map(k => `<label class="lg-lembrar"><input type="checkbox" data-pauta="${k}" ${['estrutura', 'implantacao'].includes(k) ? 'checked' : ''}>${TIPOS_ITEM[k][1]}</label>`).join('')}
+        ${P.map(p => `<label class="lg-lembrar"><input type="checkbox" data-prop="${esc(p.id)}" checked>Proposta: ${esc(p.nome)}</label>`).join('')}</div>`}`,
+    aoConfirmar: async m => {
+      const v = k => m.querySelector(k).value.trim(), o = { titulo:v('#ru-t'), data:v('#ru-d'), status:v('#ru-s'), participantes:v('#ru-p') };
+      if (!o.titulo) throw new Error('Dê um título à reunião.');
+      if (r) { Object.assign(r, o); gravarReu(r); }
+      else { const it = []; m.querySelectorAll('[data-pauta]:checked').forEach(c => it.push({ id:novoId('it'), tipo:c.dataset.pauta })); m.querySelectorAll('[data-prop]:checked').forEach(c => it.splice(1, 0, { id:novoId('it'), tipo:'proposta', ref:c.dataset.prop }));
+        const n = novoReg('reunioes', Object.assign({ id:novoId('ru'), criadoEm:agora(), criadoPor:cfg.usuario || '' }, o)); DB.reunioes.push(n); gravarReu(n, it); ruSel = n.id; }
+      renderReunioes();
+    } });
+}
+function statusReu(id, st){ const r = DB.reunioes.find(x => x.id === id); if (!r) return; r.status = st; gravarReu(r); renderReunioes(); }
+async function excluirReuniao(id){ const r = DB.reunioes.find(x => x.id === id); if (!r || !await confirmar('Excluir reunião', `Excluir "<b>${esc(r.titulo)}</b>" com a pauta e as decisões?`, 'Excluir', true)) return; DB.reunioes = DB.reunioes.filter(x => x !== r); enfileirar('reunioes', r, true); ruSel = ''; renderReunioes(); }
+function addItemReu(id){ const r = DB.reunioes.find(x => x.id === id), it = itensReu(r), t = $('#ru-tipo').value, o = { id:novoId('it'), tipo:t }; if (t === 'proposta') { o.ref = $('#ru-ref').value; if (!o.ref) return toast('Não há propostas.', 'aviso'); } if (t === 'livre') { o.titulo = $('#ru-tit').value.trim(); if (!o.titulo) return toast('Escreva o assunto.', 'aviso'); } it.push(o); gravarReu(r, it); renderReunioes(); }
+function moverItemReu(id, i, d){ const r = DB.reunioes.find(x => x.id === id), it = itensReu(r); if (!it[i + d]) return; [it[i], it[i + d]] = [it[i + d], it[i]]; gravarReu(r, it); renderReunioes(); }
+function removerItemReu(id, i){ const r = DB.reunioes.find(x => x.id === id), it = itensReu(r); it.splice(i, 1); gravarReu(r, it); renderReunioes(); }
+function feitoEnc(rid, iid, v){ const r = DB.reunioes.find(x => x.id === rid), it = itensReu(r), x = it.find(y => y.id === iid); if (!x) return; x.feito = v; gravarReu(r, it); setTimeout(renderReunioes, 250); }
+function formDecisao(rid, i){
+  const r = DB.reunioes.find(x => x.id === rid), it = itensReu(r), x = it[i];
+  abrirModal({ titulo:tituloItem(x), rotulo:'Registrar', largura:560, html:camposDecisao(x, 'fd'),
+    aoConfirmar: async m => { lerDecisao(m, 'fd', x); gravarReu(r, it); renderReunioes(); } });
+}
+const camposDecisao = (x, p) => `<label><span class="rot">Notas</span><textarea id="${p}-n" class="campo" placeholder="Pontos levantados na discussão">${esc(x.notas || '')}</textarea></label>
+  <label><span class="rot">Decisão</span><select id="${p}-d" class="campo">${Object.keys(DECISOES).map(k => `<option value="${k}" ${k === (x.decisao || '') ? 'selected' : ''}>${k || '— sem decisão —'}</option>`).join('')}</select></label>
+  <label><span class="rot">Encaminhamento <small>o que será feito</small></span><input id="${p}-e" class="campo" value="${esc(x.encaminhamento || '')}"></label>
+  <div class="g2"><label><span class="rot">Responsável</span><input id="${p}-r" class="campo" value="${esc(x.responsavel || '')}"></label><label><span class="rot">Prazo</span><input id="${p}-p" type="date" class="campo" value="${esc(x.prazo || '')}"></label></div>`;
+function lerDecisao(m, p, x){ const v = k => m.querySelector('#' + p + '-' + k).value.trim(); Object.assign(x, { notas:v('n'), decisao:v('d'), encaminhamento:v('e'), responsavel:v('r'), prazo:v('p') }); }
+/* conteúdo de cada tela da apresentação */
+function telaItem(x){
+  const kp = (c, r, v, s) => `<div class="ap-k" style="--c:${c}"><small>${r}</small><b>${v}</b>${s ? `<span>${s}</span>` : ''}</div>`;
+  if (x.tipo === 'estrutura') { const D = dadosInd(''), ins = insightsInd(D, ''), cad = D.base.length ? Math.round(D.base.reduce((t, s) => t + cadSetor(s), 0) / D.base.length * 100) : 0;
+    return `<div class="ap-ks">${kp('#1e3a8a', 'Setores ativos', fmtN(D.base.length), D.chefias.length + ' chefias')}${kp('#16a34a', 'Unidades escolares', fmtN(D.E.length), D.dres.length + ' DREs')}${kp('#7c3aed', 'Cadastro completo', cad + '%', '')}${kp('#dc2626', 'Setores em risco', fmtN(D.base.filter(emRisco).length), 'impacto alto sem validação ou responsável')}${kp('#2563eb', 'Custo anual', D.custo.Atual.a ? fmtRc(D.custo.Atual.a) : '—', '')}</div>
+      <ul class="ap-l">${ins.filter(i => i[0] !== 'ok').slice(0, 6).map(([t, h]) => `<li class="${t}">${h}</li>`).join('')}</ul>`; }
+  if (x.tipo === 'proposta') { const p = (DB.propostas || []).find(q => q.id === x.ref); if (!p) return '<p>Proposta removida.</p>';
+    const X = diffCenarios('', p.id), c = t => X.est.filter(e => e.tipo === t), d = X.aB - X.aA, mt = Object.assign({}, METAS_PADRAO, param('metasReestr', {})), C = cenariosRe(), cen = C.find(q => q.id === p.id), av = cen ? avaliarCenario(cen, metricasEstrutura(cen.lista), C[0], mt) : [];
+    return `${p.descricao ? `<p class="ap-desc">${esc(p.descricao)}</p>` : ''}<div class="ap-ks">${kp('#16a34a', 'Unidades criadas', c('novo').length + c('reativado').length, '')}${kp('#dc2626', 'Unidades extintas', c('extinto').length, '')}${kp('#2563eb', 'Movidas', c('movido').length, '')}${kp('#7c3aed', 'Renomeadas', c('renomeado').length + c('tipo').length, '')}${kp(d > 0 ? '#dc2626' : '#16a34a', 'Custo anual', fmtRc(X.aB), `${d >= 0 ? '+' : ''}${fmtRs(d)} sobre o atual`)}</div>
+      ${av.length ? `<div class="ap-metas">${av.map(y => `<span class="${y.ok ? 'ok' : 'nok'}"><i class="fa-solid ${y.ok ? 'fa-circle-check' : 'fa-circle-xmark'}"></i>${esc(y.nome)}: ${esc(y.valor)}</span>`).join('')}</div>` : ''}
+      <ul class="ap-l">${X.est.filter(e => e.tipo !== 'editado').slice(0, 8).map(e => `<li>${e.txt}</li>`).join('')}${X.est.length > 8 ? `<li>e mais ${X.est.length - 8} alteração(ões)</li>` : ''}</ul>`; }
+  if (x.tipo === 'implantacao') { const L = DB.etapas || [], co = L.filter(e => e.status === 'Concluída').length, at = L.filter(atrasada);
+    return `<div class="ap-ks">${kp('#0f766e', 'Etapas', L.length, co + ' concluídas')}${kp('#2563eb', 'Andamento', (L.length ? Math.round(co * 100 / L.length) : 0) + '%', '')}${kp('#dc2626', 'Atrasadas', at.length, '')}${kp('#7f1d1d', 'Bloqueadas', L.filter(e => e.status === 'Bloqueada').length, '')}</div>
+      <ul class="ap-l">${at.slice(0, 7).map(e => `<li class="alerta"><b>${esc(e.titulo)}</b> · ${esc(e.responsavel || 'sem responsável')} · venceu em ${fmtDia(e.prazo)}</li>`).join('') || '<li class="ok">Nenhuma etapa atrasada.</li>'}</ul>`; }
+  if (x.tipo === 'chefias') { const T = setoresOficiais().filter(s => s.status !== 'Extinto' && CHEFIAS.includes(s.tipo)).map(s => ({ s, c:chefiaDe(s) })), n = k => T.filter(y => y.c.situacao === k).length;
+    return `<div class="ap-ks">${kp('#16a34a', 'Com titular', n('Titular'), '')}${kp('#d97706', 'Interinos', n('Interino'), '')}${kp('#2563eb', 'Em nomeação', n('Em nomeação'), '')}${kp('#dc2626', 'Vagos', n('Vago'), '')}</div>
+      <ul class="ap-l">${T.filter(y => ['Vago', 'Interino', 'Em nomeação'].includes(y.c.situacao)).sort((a, b) => (prof.get(a.s.id) || 0) - (prof.get(b.s.id) || 0)).slice(0, 8).map(y => `<li class="${y.c.situacao === 'Vago' ? 'alerta' : 'atencao'}"><b>${esc(y.s.nome)}</b> · ${esc(y.c.situacao)}${y.c.desde ? ` há ${diasDesdeData(y.c.desde)} dia(s)` : ''}</li>`).join('') || '<li class="ok">Nenhuma chefia vaga ou interina registrada.</li>'}</ul>`; }
+  if (x.tipo === 'regional') { const R = dadosRegionais().sort((a, b) => b.custo - a.custo), dres = R.map(y => y.d).sort();
+    return `<table class="ap-t"><thead><tr><th>DRE</th><th>Escolas</th><th>Dist. média</th><th>Mais distante</th><th>Deslocamento/ano</th></tr></thead><tbody>${R.slice(0, 13).map(y => `<tr><td><i style="background:${corDRE(dres, y.d)}"></i>${esc(nomeDRE(y.d))}</td><td>${y.n}</td><td>${fmtKm(y.med)}</td><td>${fmtKm(y.max.km)}</td><td>${fmtRc(y.custo)}</td></tr>`).join('')}</tbody></table>`; }
+  if (x.tipo === 'resultados') { const M = DB.metas || [], at = M.filter(m => situacaoMeta(m) === 'Atrasada'), p = M.map(progressoMeta).filter(v => v !== null);
+    return `<div class="ap-ks">${kp('#be185d', 'Metas', M.length, new Set(M.map(m => m.setorId)).size + ' setores')}${kp('#16a34a', 'Atingimento médio', p.length ? Math.round(p.reduce((a, b) => a + b, 0) / p.length * 100) + '%' : '—', '')}${kp('#dc2626', 'Atrasadas', at.length, '')}</div>
+      <ul class="ap-l">${at.slice(0, 7).map(m => `<li class="alerta"><b>${esc(m.titulo)}</b> · ${esc(nomeCurto(porId.get(m.setorId)))} · prazo ${fmtDia(m.prazo)}</li>`).join('') || '<li class="ok">Nenhuma meta atrasada.</li>'}</ul>`; }
+  return `<p class="ap-desc">${esc(x.notas || 'Assunto para discussão.')}</p>`;
+}
+function apresentarReuniao(id){
+  const r = DB.reunioes.find(x => x.id === id); if (!r) return;
+  ap = { id, i:0 }; let el = $('#ap-reu'); if (!el) { el = document.createElement('div'); el.id = 'ap-reu'; document.body.appendChild(el); }
+  el.classList.remove('hidden'); desenharApresentacao();
+  if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
+}
+function desenharApresentacao(){
+  const r = DB.reunioes.find(x => x.id === ap.id), it = itensReu(r), n = it.length + 2, el = $('#ap-reu'); ap.i = Math.max(0, Math.min(n - 1, ap.i));
+  let corpo;
+  if (ap.i === 0) corpo = `<div class="ap-capa"><span class="ap-logo"><i class="fa-solid fa-sitemap"></i></span><h1>${esc(r.titulo)}</h1><p>${fmtData(r.data)}${r.participantes ? '<br>' + esc(r.participantes) : ''}</p><ol>${it.map(x => `<li>${esc(tituloItem(x))}</li>`).join('')}</ol></div>`;
+  else if (ap.i === n - 1) corpo = `<div class="ap-fim"><h2><i class="fa-solid fa-gavel"></i>Decisões da reunião</h2><table class="ap-t"><thead><tr><th>Assunto</th><th>Decisão</th><th>Encaminhamento</th><th>Responsável</th><th>Prazo</th></tr></thead><tbody>${it.map(x => `<tr><td>${esc(tituloItem(x))}</td><td>${x.decisao ? chipG(esc(x.decisao), DECISOES[x.decisao]) : '—'}</td><td>${esc(x.encaminhamento || '—')}</td><td>${esc(x.responsavel || '—')}</td><td>${x.prazo ? fmtDia(x.prazo) : '—'}</td></tr>`).join('')}</tbody></table></div>`;
+  else { const x = it[ap.i - 1];
+    corpo = `<div class="ap-slide"><div class="ap-tit"><span>${ap.i} de ${it.length}</span><h2><i class="fa-solid ${TIPOS_ITEM[x.tipo] ? TIPOS_ITEM[x.tipo][0] : 'fa-comment'}"></i>${esc(tituloItem(x))}</h2></div><div class="ap-cont">${telaItem(x)}</div>
+      ${podeGestao() ? `<form class="ap-dec" onsubmit="event.preventDefault();salvarDecisaoAp()"><div class="g4">${camposDecisao(x, 'ad')}</div><div class="acoes"><button class="btn btn-p btn-sm" type="submit"><i class="fa-solid fa-floppy-disk"></i>Registrar decisão</button>${x.decisao ? chipG('registrado: ' + esc(x.decisao), DECISOES[x.decisao]) : ''}</div></form>` : ''}</div>`; }
+  el.innerHTML = `<div class="ap-topo"><b>GAB<span>Org</span></b><span>${esc(r.titulo)}</span><span class="esp"></span><button onclick="ap.i--;desenharApresentacao()" ${ap.i ? '' : 'disabled'} title="Anterior (←)"><i class="fa-solid fa-chevron-left"></i></button><span>${ap.i + 1}/${n}</span><button onclick="ap.i++;desenharApresentacao()" ${ap.i < n - 1 ? '' : 'disabled'} title="Próxima (→)"><i class="fa-solid fa-chevron-right"></i></button><button onclick="fecharApresentacao()" title="Sair (Esc)"><i class="fa-solid fa-xmark"></i></button></div><div class="ap-palco">${corpo}</div>`;
+}
+function salvarDecisaoAp(){ const r = DB.reunioes.find(x => x.id === ap.id), it = itensReu(r), x = it[ap.i - 1]; lerDecisao($('#ap-reu'), 'ad', x); gravarReu(r, it); toast('Decisão registrada.'); desenharApresentacao(); }
+function fecharApresentacao(){ const el = $('#ap-reu'); if (el) { el.classList.add('hidden'); el.innerHTML = ''; } if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); ap = null; renderReunioes(); }
+document.addEventListener('keydown', e => { if (!ap || e.target.closest('input,textarea,select')) return; if (e.key === 'ArrowRight' || e.key === 'PageDown') { ap.i++; desenharApresentacao(); } if (e.key === 'ArrowLeft' || e.key === 'PageUp') { ap.i--; desenharApresentacao(); } if (e.key === 'Escape') fecharApresentacao(); });
+function exportarAta(id, modo){
+  const r = DB.reunioes.find(x => x.id === id), it = itensReu(r);
+  const h = `<h1>MEMÓRIA DE REUNIÃO</h1><p class="centro"><b>${esc(r.titulo)}</b><br>${fmtData(r.data)}</p>${r.participantes ? `<p><b>Participantes:</b> ${esc(r.participantes)}</p>` : ''}
+    <h2>Pauta e deliberações</h2>${it.map((x, i) => `<p><b>${i + 1}. ${esc(tituloItem(x))}</b></p>${x.notas ? `<p>${esc(x.notas)}</p>` : ''}<p><b>Decisão:</b> ${esc(x.decisao || 'sem deliberação')}${x.encaminhamento ? `. <b>Encaminhamento:</b> ${esc(x.encaminhamento)}` : ''}${x.responsavel ? `. <b>Responsável:</b> ${esc(x.responsavel)}` : ''}${x.prazo ? `. <b>Prazo:</b> ${fmtDia(x.prazo)}` : ''}.</p>`).join('')}
+    <h2>Quadro de encaminhamentos</h2><table><thead><tr><th>Assunto</th><th>Encaminhamento</th><th>Responsável</th><th>Prazo</th></tr></thead><tbody>${it.filter(x => x.encaminhamento).map(x => `<tr><td>${esc(tituloItem(x))}</td><td>${esc(x.encaminhamento)}</td><td>${esc(x.responsavel || '')}</td><td>${x.prazo ? fmtDia(x.prazo) : ''}</td></tr>`).join('') || '<tr><td colspan="4">Sem encaminhamentos.</td></tr>'}</tbody></table>
+    <p class="pq">Gerado pelo GABOrg em ${new Date().toLocaleString('pt-BR')}.</p>`;
+  if (modo === 'word') baixarWord('memoria-reuniao-' + String(r.data).slice(0, 10), 'Memória de reunião', h); else imprimirDoc('Memória de reunião', h);
+}
 
 /* ===================== MENU LATERAL: RECOLHER E AJUSTAR LARGURA ===================== */
 let ladoCfg = Object.assign({ mini:false, w:236 }, store.get('gaborg_lado', {}));
