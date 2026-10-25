@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.18.1';
+const VERSAO = '1.19.0';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -1300,51 +1300,222 @@ function listaAbrirTudo(abrir){ listaAbertos = abrir ? new Set(DB.setores.filter
 function limparFiltrosLista(){ ['#l-busca','#l-tipo','#l-area','#l-val'].forEach(i => $(i).value = ''); renderLista(); }
 
 /* Indicadores */
+/* ===================== INDICADORES ESTRATÉGICOS ===================== */
+let indAba = store.get('gaborg_ind_aba', 'geral'), indSel = null, indOrd = { k:'idx', d:-1 };
+const IND_ABAS = [['geral','Visão geral','fa-gauge-high'],['risco','Riscos e prioridades','fa-triangle-exclamation'],['estrutura','Estrutura e governança','fa-sitemap'],['rede','Rede escolar','fa-school'],['custos','Custos e propostas','fa-coins']];
+const CHEFIAS = ['Gabinete','Superintendência','Diretoria','Diretoria Adjunta','Coordenadoria','Gerência','Unidade','Núcleo Regional'];
+const CAMPOS_CAD = [['responsavel','Responsável'],['competencias','Competências'],['entregas','Entregas'],['impacto','Impacto avaliado'],['servidores','Nº de servidores']];
+const pct = (a, b) => b ? Math.round(a * 100 / b) : 0;
+const fmtRs = v => (v < 0 ? '−' : '') + fmtRc(Math.abs(v));
+const fmtP = v => v.toLocaleString('pt-BR', { maximumFractionDigits:1 }) + '%';
+function abaInd(a){ indAba = a; indSel = null; store.set('gaborg_ind_aba', a); renderPainelInd(); }
+function cadSetor(s){ return CAMPOS_CAD.filter(([k]) => k === 'impacto' ? num(s.impacto) > 0 : k === 'servidores' ? String(s.servidores ?? '') !== '' : String(s[k] || '').trim()).length / CAMPOS_CAD.length; }
+const validado = s => ['Aprovado', 'Aprovado com ressalvas'].includes(statusVal(s.id));
+const emRisco = s => num(s.impacto) >= 4 && (linhasDe(s.negativos).length > linhasDe(s.positivos).length || ['Reprovado', 'Sem validação'].includes(statusVal(s.id)) || !s.responsavel);
+const diasDesde = d => { const t = Date.parse(d || ''); return isFinite(t) ? Math.floor((Date.now() - t) / 864e5) : 0; };
+/* Coleta todos os números de uma vez, para o filtro de área escolhido */
+function dadosInd(fa){
+  const todos = DB.setores.filter(s => s.status !== 'Extinto');
+  const base = todos.filter(s => !fa || areaDe.get(s.id) === fa), ids = new Set(base.map(s => s.id));
+  const filhosAtivos = id => filhosDe(id).filter(k => k.status !== 'Extinto' && k.tipo !== 'Unidades Escolares');
+  const chefias = base.filter(s => CHEFIAS.includes(s.tipo));
+  const amp = chefias.map(s => [s, filhosAtivos(s.id).length]).filter(([, n]) => n > 0);
+  const vals = DB.validacoes.filter(v => ids.has(v.setorId)), pend = vals.filter(v => !v.status || v.status === 'Pendente');
+  const desp = DB.despesas.filter(d => (!d.setorId || ids.has(d.setorId) || !fa) && (!fa || ids.has(d.setorId)));
+  const custo = { Atual:{ m:0, a:0 }, Proposto:{ m:0, a:0 } }; desp.forEach(d => { const c = calcDesp(d), k = d.cenario === 'Proposto' ? 'Proposto' : 'Atual'; custo[k].m += c.mensal; custo[k].a += c.anual; });
+  const porArea = areas.filter(a => !fa || a === fa).map(a => {
+    const sub = todos.filter(s => areaDe.get(s.id) === a), sid = new Set(sub.map(s => s.id)), ch = sub.filter(s => CHEFIAS.includes(s.tipo));
+    let ca = 0; DB.despesas.forEach(d => { if (sid.has(d.setorId) && (d.cenario || 'Atual') === 'Atual') ca += calcDesp(d).anual; });
+    const cad = sub.length ? sub.reduce((t, s) => t + cadSetor(s), 0) / sub.length * 100 : 0, val = pct(sub.filter(validado).length, sub.length), risco = sub.filter(emRisco).length;
+    const semResp = ch.filter(s => !s.responsavel).length, pendA = DB.validacoes.filter(v => sid.has(v.setorId) && (!v.status || v.status === 'Pendente')).length;
+    const idx = Math.round(cad * .4 + val * .3 + (ch.length ? (1 - semResp / ch.length) * 100 : 100) * .2 + (sub.length ? (1 - risco / sub.length) * 100 : 100) * .1);
+    return { a, nome:nomeCurto(porId.get(a)), cor:corArea(a), n:sub.length, ch:ch.length, ser:sub.reduce((t, s) => t + num(s.servidores), 0), com:sub.reduce((t, s) => t + num(s.comissionados), 0), ca, cad, val, risco, semResp, pend:pendA, idx };
+  });
+  const E = escolasLista(), dres = dresDe(E);
+  return { todos, base, ids, chefias, amp, vals, pend, custo, desp, porArea, E, dres };
+}
+function insightsInd(D, fa){
+  const r = [], { base, chefias, amp, pend, porArea, E, dres } = D;
+  const ser = base.reduce((t, s) => t + num(s.servidores), 0);
+  const cad = base.length ? base.reduce((t, s) => t + cadSetor(s), 0) / base.length * 100 : 0;
+  const semResp = chefias.filter(s => !s.responsavel);
+  const criticosSemVal = base.filter(s => num(s.impacto) >= 4 && statusVal(s.id) === 'Sem validação');
+  const parados = pend.filter(v => diasDesde(v.solicitadoEm) > 15);
+  const altos = amp.filter(([, n]) => n > 8), unicos = amp.filter(([, n]) => n === 1);
+  const risco = base.filter(emRisco);
+  if (cad < 60) r.push(['alerta', `O cadastro está <b>${fmtP(cad)}</b> completo. Sem responsável, competências e impacto preenchidos, as análises abaixo ficam parciais.`, () => "abaInd('estrutura')"]);
+  else r.push(['ok', `Cadastro <b>${fmtP(cad)}</b> completo: a base é confiável para análise.`]);
+  if (semResp.length) r.push([semResp.length > chefias.length * .3 ? 'alerta' : 'atencao', `<b>${semResp.length}</b> de ${chefias.length} chefias (${pct(semResp.length, chefias.length)}%) estão sem responsável indicado.`, () => "abaInd('risco')"]);
+  if (risco.length) r.push(['alerta', `<b>${risco.length}</b> setor(es) de impacto alto ou crítico com ponto fraco: sem validação, sem responsável ou com mais pontos negativos que positivos.`, () => "abaInd('risco')"]);
+  if (criticosSemVal.length) r.push(['atencao', `<b>${criticosSemVal.length}</b> setor(es) de impacto alto ou crítico ainda não passaram por validação de outro setor.`, () => "abaInd('risco')"]);
+  if (parados.length) r.push(['atencao', `<b>${parados.length}</b> validação(ões) pendente(s) há mais de 15 dias.`, () => "trocarVista('validacoes')"]);
+  else if (pend.length) r.push(['info', `${pend.length} validação(ões) pendente(s), todas pedidas há menos de 15 dias.`]);
+  if (altos.length) r.push(['atencao', `<b>${altos.length}</b> chefia(s) com mais de 8 setores diretamente subordinados (amplitude de controle alta). Maior: <b>${esc(nomeCurto(altos.sort((a, b) => b[1] - a[1])[0][0]))}</b>, com ${altos[0][1]}.`, () => "abaInd('estrutura')"]);
+  if (unicos.length) r.push(['info', `<b>${unicos.length}</b> chefia(s) com apenas 1 setor subordinado: possível nível hierárquico a simplificar.`, () => "abaInd('estrutura')"]);
+  if (!fa && porArea.length > 1) { const tot = porArea.reduce((t, x) => t + x.n, 0), mx = porArea.slice().sort((a, b) => b.n - a.n)[0]; r.push(['info', `<b>${esc(mx.nome)}</b> concentra ${pct(mx.n, tot)}% dos setores${ser ? ` e ${pct(mx.ser, ser)}% dos servidores informados` : ''}.`]);
+    const pior = porArea.slice().sort((a, b) => a.idx - b.idx)[0]; if (pior && pior.idx < 70) r.push(['atencao', `Menor índice de maturidade: <b>${esc(pior.nome)}</b> (${pior.idx} de 100).`, () => `$('#p-area').value=${arg(pior.a)};renderPainelInd()`]); }
+  if (E.length) { const met = dres.map(d => [d, E.filter(e => e.dre === d).length]).sort((a, b) => b[1] - a[1]), med = E.length / dres.length, rur = dres.map(d => { const l = E.filter(e => e.dre === d); return [d, pct(l.filter(e => e.localidade === 'RURAL').length, l.length)]; }).sort((a, b) => b[1] - a[1])[0];
+    r.push(['info', `Rede de <b>${fmtN(E.length)}</b> unidades escolares em ${dres.length} DREs. A <b>${esc(nomeDRE(met[0][0]))}</b> atende ${met[0][1]} escolas (${(met[0][1] / med).toLocaleString('pt-BR', { maximumFractionDigits:1 })}× a média de ${Math.round(med)} por DRE). A <b>${esc(nomeDRE(rur[0]))}</b> é a mais rural: ${rur[1]}% das suas escolas.`, () => "abaInd('rede')"]); }
+  if (!DB.despesas.length) r.push(['info', 'Os custos ainda não foram lançados no Financeiro: os indicadores de custo aparecem quando houver lançamentos.', () => "trocarVista('financeiro')"]);
+  return r;
+}
 function renderPainelInd(){
   opcoesFiltro('#p-area', 'Toda a Secretaria', areas.map(a => [a, nomeCurto(porId.get(a))]));
-  const fa = $('#p-area').value;
-  const base = DB.setores.filter(s => s.status !== 'Extinto' && (!fa || areaDe.get(s.id) === fa));
-  const ids = new Set(base.map(s => s.id));
-  const soma = k => base.reduce((a, s) => a + num(s[k]), 0);
-  const vals = DB.validacoes.filter(v => ids.has(v.setorId));
-  const pend = vals.filter(v => !v.status || v.status === 'Pendente').length;
-  const comResp = base.filter(s => s.responsavel).length, comComp = base.filter(s => s.competencias).length, comImp = base.filter(s => num(s.impacto)).length;
-  const compl = base.length ? Math.round((comResp + comComp + comImp) * 100 / (base.length * 3)) : 0;
-  const kpi = (c, ic, r, v, s) => `<div class="cartao kpi" style="--c:${c}"><div class="r"><i class="fa-solid ${ic}"></i>${r}</div><div class="v">${v}</div><div class="s">${s}</div></div>`;
-  const barras = (pares, cor, fmt) => { const mx = Math.max(1, ...pares.map(p => p[1])); return pares.map(([n, v, c, id]) => `<div class="barra-l" ${id ? `style="cursor:pointer" onclick="irPara(${arg(id)})"` : ''}><span class="n" title="${esc(n)}">${esc(n)}</span><span class="t"><span style="width:${v * 100 / mx}%;background:${c || cor}"></span></span><b>${fmt ? fmt(v) : fmtN(v)}</b></div>`).join('') || '<div class="vazio">Sem dados.</div>'; };
-  const porTipo = Object.keys(TIPOS).map(t => [t, base.filter(s => s.tipo === t).length, TIPOS[t].cor]).filter(x => x[1]).sort((a, b) => b[1] - a[1]);
-  const porArea = areas.filter(a => !fa || a === fa).map(a => { const sub = base.filter(s => areaDe.get(s.id) === a); return { a, n:sub.length, ser:sub.reduce((x, s) => x + num(s.servidores), 0), orc:sub.reduce((x, s) => x + num(s.orcamento), 0) }; });
-  const impDist = [5,4,3,2,1,0].map(n => [IMPACTO[n][0], base.filter(s => num(s.impacto) === n).length, IMPACTO[n][1]]);
-  const valDist = Object.keys(STATUS_VAL).map(k => [k, base.filter(s => statusVal(s.id) === k).length, STATUS_VAL[k]]);
-  const topImp = base.filter(s => num(s.impacto) >= 4).sort((a, b) => num(b.impacto) - num(a.impacto) || num(b.servidores) - num(a.servidores)).slice(0, 10);
-  const semResp = base.filter(s => !s.responsavel && ['Gabinete','Superintendência','Diretoria','Coordenadoria'].includes(s.tipo)).slice(0, 12);
-  const saldo = base.map(s => [s, linhasDe(s.positivos).length - linhasDe(s.negativos).length, linhasDe(s.negativos).length]).filter(x => x[2]).sort((a, b) => a[1] - b[1]).slice(0, 8);
-  $('#p-corpo').innerHTML = `
+  const fa = $('#p-area').value, D = dadosInd(fa);
+  const kpi = (c, ic, r, v, s, on) => `<div class="cartao kpi ${on ? 'clic' : ''}" style="--c:${c}" ${on ? `onclick="${on}"` : ''}><div class="r"><i class="fa-solid ${ic}"></i>${r}</div><div class="v">${v}</div><div class="s">${s}</div></div>`;
+  const barras = (pares, fmt) => { const mx = Math.max(1, ...pares.map(p => p[1])); return pares.map(([n, v, c, on, extra]) => `<div class="barra-l" ${on ? `style="cursor:pointer" onclick="${on}"` : ''}><span class="n" title="${esc(n)}">${esc(n)}</span><span class="t"><span style="width:${v / mx * 100}%;background:${c || 'var(--marca)'}"></span></span><b>${fmt ? fmt(v) : fmtN(v)}</b>${extra || ''}</div>`).join(''); };
+  const nav = `<div class="ind-abas">${IND_ABAS.map(([k, n, ic]) => `<button class="${indAba === k ? 'on' : ''}" onclick="abaInd('${k}')"><i class="fa-solid ${ic}"></i><span>${n}</span></button>`).join('')}<span class="esp"></span><button class="btn btn-s btn-sm" onclick="exportarIndicadores()"><i class="fa-solid fa-file-csv"></i>Exportar</button><button class="btn btn-s btn-sm" onclick="window.print()"><i class="fa-solid fa-print"></i>Imprimir</button></div>`;
+  let h = '';
+  if (indAba === 'geral') h = indGeral(D, fa, kpi);
+  else if (indAba === 'risco') h = indRisco(D, kpi);
+  else if (indAba === 'estrutura') h = indEstrutura(D, kpi, barras);
+  else if (indAba === 'rede') h = indRede(D, kpi, barras);
+  else h = indCustos(D, fa, kpi, barras);
+  $('#p-corpo').innerHTML = nav + `<div class="ind-corpo">${h}</div>`;
+}
+function indGeral(D, fa, kpi){
+  const { base, chefias, amp, vals, pend, custo, porArea, E, dres } = D;
+  const ser = base.reduce((t, s) => t + num(s.servidores), 0), com = base.reduce((t, s) => t + num(s.comissionados), 0);
+  const cad = base.length ? Math.round(base.reduce((t, s) => t + cadSetor(s), 0) / base.length * 100) : 0;
+  const profMax = Math.max(0, ...base.map(s => (prof.get(s.id) || 0) + 1)), ampMed = amp.length ? amp.reduce((t, x) => t + x[1], 0) / amp.length : 0;
+  const ok = vals.filter(v => ['Aprovado', 'Aprovado com ressalvas'].includes(v.status)).length, risco = base.filter(emRisco).length;
+  const ins = insightsInd(D, fa), IC = { alerta:'fa-circle-exclamation', atencao:'fa-triangle-exclamation', info:'fa-circle-info', ok:'fa-circle-check' };
+  const idxG = porArea.length ? Math.round(porArea.reduce((t, x) => t + x.idx * x.n, 0) / Math.max(1, porArea.reduce((t, x) => t + x.n, 0))) : 0;
+  const cols = [['nome','Área',0],['n','Setores',1],['ch','Chefias',1],['ser','Servidores',1],['ca','Custo anual',1],['cad','Cadastro',2],['val','Validados',2],['semResp','Sem resp.',3],['risco','Em risco',3],['pend','Valid. pend.',3],['idx','Índice',2]];
+  const linhas = porArea.slice().sort((a, b) => { const k = indOrd.k, x = a[k], y = b[k]; return (typeof x === 'string' ? x.localeCompare(y, 'pt-BR') : x - y) * indOrd.d; });
+  const mx = {}; cols.forEach(([k]) => { mx[k] = Math.max(1, ...porArea.map(x => num(x[k]))); });
+  const cel = (x, [k, , t]) => { const v = x[k];
+    if (!t) return `<td class="nm"><span class="pt" style="background:${x.cor}"></span>${esc(v)}</td>`;
+    const f = k === 'ca' ? (v ? fmtRc(v) : '—') : t === 2 ? Math.round(v) + (k === 'idx' ? '' : '%') : fmtN(v);
+    let bg = ''; if (t === 2) { const q = v / 100; bg = `background:color-mix(in srgb,${q >= .75 ? '#16a34a' : q >= .5 ? '#eab308' : '#dc2626'} ${Math.round(12 + Math.abs(q - .5) * 40)}%,transparent)`; }
+    else if (t === 3 && v) bg = `background:color-mix(in srgb,#dc2626 ${Math.round(8 + v / mx[k] * 32)}%,transparent)`;
+    else if (t === 1 && v) bg = `background:linear-gradient(90deg,color-mix(in srgb,${x.cor} 18%,transparent) ${v / mx[k] * 100}%,transparent 0)`;
+    return `<td style="${bg}">${f}</td>`; };
+  return `<div class="ind-resumo cartao">
+      <div class="ind-nota" style="--c:${idxG >= 75 ? '#16a34a' : idxG >= 50 ? '#d97706' : '#dc2626'}"><div class="anel"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15.9" class="f"/><circle cx="18" cy="18" r="15.9" class="v" stroke-dasharray="${idxG} 100"/></svg><b>${idxG}</b></div><small>índice de maturidade</small></div>
+      <div class="ind-ins"><h3><i class="fa-solid fa-lightbulb"></i>Resumo executivo${fa ? ' · ' + esc(nomeCurto(porId.get(fa))) : ''}</h3>
+        ${ins.map(([t, txt, on]) => `<div class="in ${t}" ${on ? `onclick="${on()}" role="button"` : ''}><i class="fa-solid ${IC[t]}"></i><span>${txt}</span>${on ? '<i class="fa-solid fa-chevron-right vai"></i>' : ''}</div>`).join('')}
+        <small class="ind-leg">Índice de maturidade (0 a 100) = 40% cadastro completo + 30% setores validados + 20% chefias com responsável + 10% setores fora de risco.</small></div>
+    </div>
     <div class="kpis">
-      ${kpi('#1e3a8a','fa-sitemap','Setores ativos', fmtN(base.length), `${porTipo.length} tipos · ${DB.setores.filter(s => s.status === 'Extinto' && (!fa || areaDe.get(s.id) === fa)).length} extintos`)}
-      ${kpi('#0891b2','fa-users','Servidores', fmtN(soma('servidores')), `${fmtN(soma('comissionados'))} em cargos comissionados`)}
-      ${(() => { const esc_ = base.filter(s => s.tipo === 'Unidades Escolares').reduce((t, s) => t + num(s.quantidade), 0); return esc_ ? kpi('#16a34a','fa-school','Unidades escolares', fmtN(esc_), 'representadas no mapa por um cartão') : ''; })()}
-      ${kpi('#16a34a','fa-coins','Orçamento anual', fmtRc(soma('orcamento')), `custo mensal ${fmtRc(soma('custoMensal'))}`)}
-      ${kpi('#d97706','fa-stamp','Validações pendentes', fmtN(pend), `${vals.length} pedidas no total`)}
-      ${kpi('#7c3aed','fa-list-check','Cadastro completo', compl + '%', `${comResp} com responsável · ${comComp} com competências`)}
+      ${kpi('#1e3a8a', 'fa-sitemap', 'Setores ativos', fmtN(base.length), `${profMax} níveis hierárquicos · ${chefias.length} chefias`, "abaInd('estrutura')")}
+      ${kpi('#0891b2', 'fa-users', 'Servidores informados', fmtN(ser), ser ? `${fmtP(com * 100 / ser)} em cargos comissionados` : 'preencha o campo Servidores dos setores')}
+      ${kpi('#16a34a', 'fa-school', 'Unidades escolares', fmtN(E.length), `${dres.length} DREs · ${new Set(E.map(e => e.municipio)).size} municípios`, "abaInd('rede')")}
+      ${kpi('#0e7490', 'fa-diagram-project', 'Amplitude de controle', ampMed.toLocaleString('pt-BR', { maximumFractionDigits:1 }), 'setores subordinados por chefia, em média', "abaInd('estrutura')")}
+      ${kpi('#2563eb', 'fa-coins', 'Custo anual (atual)', custo.Atual.a ? fmtRc(custo.Atual.a) : '—', custo.Proposto.a ? `proposto: ${fmtRc(custo.Proposto.a)} (${custo.Proposto.a >= custo.Atual.a ? '+' : ''}${fmtRs(custo.Proposto.a - custo.Atual.a)})` : `mensal ${fmtRc(custo.Atual.m)}`, "abaInd('custos')")}
+      ${kpi('#d97706', 'fa-stamp', 'Validações', `${pct(ok, vals.length)}%`, `${ok} concluídas · ${pend.length} pendentes de ${vals.length}`, "trocarVista('validacoes')")}
+      ${kpi('#7c3aed', 'fa-list-check', 'Cadastro completo', cad + '%', 'responsável, competências, entregas, impacto e servidores', "abaInd('estrutura')")}
+      ${kpi('#dc2626', 'fa-fire', 'Setores em risco', fmtN(risco), 'impacto alto ou crítico com ponto fraco', "abaInd('risco')")}
     </div>
+    <div class="cartao bl"><h3><i class="fa-solid fa-table-cells"></i>Painel por secretaria adjunta</h3><p class="s">Clique no título de uma coluna para ordenar e numa linha para filtrar a área. Verde é bom, vermelho pede atenção.</p>
+      <div class="tab-wrap"><table class="tab ind-heat"><thead><tr>${cols.map(([k, n]) => `<th onclick="indOrd={k:'${k}',d:indOrd.k==='${k}'?-indOrd.d:-1};renderPainelInd()" class="${indOrd.k === k ? 'ord' : ''}">${n}${indOrd.k === k ? `<i class="fa-solid fa-caret-${indOrd.d > 0 ? 'up' : 'down'}"></i>` : ''}</th>`).join('')}</tr></thead>
+      <tbody>${linhas.map(x => `<tr onclick="$('#p-area').value=${arg(x.a)};renderPainelInd()">${cols.map(c => cel(x, c)).join('')}</tr>`).join('')}</tbody></table></div></div>`;
+}
+function indRisco(D, kpi){
+  const { base, chefias, pend } = D;
+  const cols = Object.keys(STATUS_VAL), linhas = [5, 4, 3, 2, 1, 0];
+  const cel = (i, st) => base.filter(s => num(s.impacto) === i && statusVal(s.id) === st);
+  const peso = (i, st) => (i >= 4 ? 2 : i === 3 ? 1 : 0) + (['Reprovado', 'Sem validação'].includes(st) ? 2 : st === 'Pendente' ? 1 : 0);
+  const sel = indSel ? cel(indSel[0], indSel[1]) : base.filter(emRisco);
+  const semResp = chefias.filter(s => !s.responsavel).sort((a, b) => (prof.get(a.id) || 0) - (prof.get(b.id) || 0));
+  const saldo = base.map(s => [s, linhasDe(s.positivos).length, linhasDe(s.negativos).length]).filter(x => x[2] > x[1]).sort((a, b) => (b[2] - b[1]) - (a[2] - a[1]));
+  const parados = pend.slice().sort((a, b) => diasDesde(b.solicitadoEm) - diasDesde(a.solicitadoEm)).slice(0, 12);
+  const item = (s, dir) => `<button onclick="irPara(${arg(s.id)})"><span class="chip" style="--c:${IMPACTO[num(s.impacto)][1]}">${IMPACTO[num(s.impacto)][0]}</span><span>${esc(s.nome)}</span><small>${dir || esc(statusVal(s.id))}</small></button>`;
+  return `<div class="grade2 ind-g12">
+    <div class="cartao bl" style="--c:#dc2626"><h3><i class="fa-solid fa-border-all"></i>Matriz de risco: impacto × validação</h3><p class="s">Cada célula mostra quantos setores estão naquela combinação. Clique para listar. Quanto mais vermelha a célula, maior a prioridade.</p>
+      <div class="ind-mat" style="grid-template-columns:110px repeat(${cols.length},1fr)"><span></span>${cols.map(c => `<span class="ch">${esc(c)}</span>`).join('')}
+      ${linhas.map(i => `<span class="rh"><i style="background:${IMPACTO[i][1]}"></i>${IMPACTO[i][0]}</span>` + cols.map(st => { const n = cel(i, st).length, p = peso(i, st), on = indSel && indSel[0] === i && indSel[1] === st; return `<button class="cl p${p} ${on ? 'on' : ''} ${n ? '' : 'z'}" onclick="indSel=${on ? 'null' : `[${i},'${st}']`};renderPainelInd()">${n || ''}</button>`; }).join('')).join('')}</div></div>
+    <div class="cartao bl" style="--c:#dc2626"><h3><i class="fa-solid fa-fire"></i>${indSel ? `${esc(IMPACTO[indSel[0]][0])} · ${esc(indSel[1])}` : 'Setores em risco'}</h3><p class="s">${indSel ? `${sel.length} setor(es) · <a href="#" onclick="event.preventDefault();indSel=null;renderPainelInd()">voltar aos setores em risco</a>` : 'Impacto alto ou crítico e sem validação, sem responsável ou com saldo negativo'}</p>
+      <div class="pend">${sel.slice(0, 40).map(s => item(s, !s.responsavel ? 'sem responsável' : '')).join('') || '<div class="vazio">Nenhum setor aqui.</div>'}</div></div>
+  </div>
+  <div class="grade2">
+    <div class="cartao bl" style="--c:#7c3aed"><h3><i class="fa-solid fa-user-xmark"></i>Chefias sem responsável <span class="ct">${semResp.length}</span></h3><p class="s">Ordenadas do nível mais alto para o mais baixo</p><div class="pend">${semResp.slice(0, 30).map(s => `<button onclick="irPara(${arg(s.id)})"><i class="fa-solid ${icTipo(s.tipo)}" style="color:${corTipo(s.tipo)}"></i><span>${esc(s.nome)}</span><small>${esc(nomeCurto(porId.get(areaDe.get(s.id))))}</small></button>`).join('') || '<div class="vazio">Todas as chefias têm responsável.</div>'}</div></div>
+    <div class="cartao bl" style="--c:#dc2626"><h3><i class="fa-solid fa-scale-unbalanced"></i>Mais pontos negativos que positivos <span class="ct">${saldo.length}</span></h3><p class="s">Pontos de atenção registrados na aba Análise de cada setor</p><div class="pend">${saldo.slice(0, 30).map(([s, p, n]) => `<button onclick="irPara(${arg(s.id)})"><span class="chip" style="--c:#dc2626">−${n} / +${p}</span><span>${esc(s.nome)}</span></button>`).join('') || '<div class="vazio">Nenhum setor com saldo negativo.</div>'}</div></div>
+  </div>
+  <div class="cartao bl" style="--c:#d97706"><h3><i class="fa-solid fa-hourglass-half"></i>Validações pendentes mais antigas <span class="ct">${pend.length}</span></h3><p class="s">Quanto mais tempo parada, mais a decisão atrasa</p><div class="pend">${parados.map(v => { const s = porId.get(v.setorId), o = porId.get(v.validadorId), d = diasDesde(v.solicitadoEm); return `<button onclick="irPara(${arg(v.setorId)})"><span class="chip" style="--c:${d > 30 ? '#dc2626' : d > 15 ? '#d97706' : '#64748b'}">${d} dia(s)</span><span>${esc(s ? s.nome : '?')}</span><small>validador: ${esc(o ? nomeCurto(o) : '?')}</small></button>`; }).join('') || '<div class="vazio">Nenhuma validação pendente.</div>'}</div></div>`;
+}
+function indEstrutura(D, kpi, barras){
+  const { base, chefias, amp } = D;
+  const porTipo = Object.keys(TIPOS).map(t => [t, base.filter(s => s.tipo === t).length, TIPOS[t].cor]).filter(x => x[1]).sort((a, b) => b[1] - a[1]);
+  const niveis = {}; base.forEach(s => { const n = (prof.get(s.id) || 0) + 1; niveis[n] = (niveis[n] || 0) + 1; });
+  const faixas = [['1', n => n === 1, '#94a3b8'], ['2 a 3', n => n >= 2 && n <= 3, '#0891b2'], ['4 a 8', n => n >= 4 && n <= 8, '#16a34a'], ['9 a 12', n => n >= 9 && n <= 12, '#d97706'], ['mais de 12', n => n > 12, '#dc2626']];
+  const altos = amp.filter(([, n]) => n > 8).sort((a, b) => b[1] - a[1]), unicos = amp.filter(([, n]) => n === 1);
+  const cad = CAMPOS_CAD.map(([k, n]) => [n, pct(base.filter(s => k === 'impacto' ? num(s.impacto) > 0 : k === 'servidores' ? String(s.servidores ?? '') !== '' : String(s[k] || '').trim()).length, base.length)]);
+  const status = Object.keys(STATUS_SETOR).map(k => [k, DB.setores.filter(s => (s.status || 'Ativo') === k && (!$('#p-area').value || areaDe.get(s.id) === $('#p-area').value)).length, STATUS_SETOR[k]]).filter(x => x[1]);
+  return `<div class="grade2">
+    <div class="cartao bl" style="--c:#7c3aed"><h3><i class="fa-solid fa-list-check"></i>Qualidade do cadastro</h3><p class="s">Percentual dos setores com cada informação preenchida</p>${cad.map(([n, v]) => `<div class="barra-l"><span class="n">${n}</span><span class="t"><span style="width:${v}%;background:${v >= 75 ? '#16a34a' : v >= 50 ? '#eab308' : '#dc2626'}"></span></span><b>${v}%</b></div>`).join('')}</div>
+    <div class="cartao bl" style="--c:#0e7490"><h3><i class="fa-solid fa-diagram-project"></i>Amplitude de controle</h3><p class="s">Quantos setores cada chefia coordena diretamente. O ideal fica entre 4 e 8.</p>${barras(faixas.map(([n, f, c]) => [n + ' subordinado(s)', amp.filter(([, x]) => f(x)).length, c]))}</div>
+  </div>
+  <div class="grade2">
+    <div class="cartao bl" style="--c:#dc2626"><h3><i class="fa-solid fa-people-arrows"></i>Chefias sobrecarregadas <span class="ct">${altos.length}</span></h3><p class="s">Mais de 8 setores diretamente subordinados: avaliar criar um nível intermediário ou redistribuir</p><div class="pend">${altos.slice(0, 20).map(([s, n]) => `<button onclick="irPara(${arg(s.id)})"><span class="chip" style="--c:#dc2626">${n}</span><span>${esc(s.nome)}</span><small>${esc(s.tipo)}</small></button>`).join('') || '<div class="vazio">Nenhuma chefia acima de 8 subordinados.</div>'}</div></div>
+    <div class="cartao bl" style="--c:#64748b"><h3><i class="fa-solid fa-compress"></i>Possíveis níveis a simplificar <span class="ct">${unicos.length}</span></h3><p class="s">Chefias com apenas 1 setor subordinado: avaliar fusão ou subordinação direta</p><div class="pend">${unicos.slice(0, 20).map(([s]) => { const f = filhosDe(s.id).find(k => k.status !== 'Extinto'); return `<button onclick="irPara(${arg(s.id)})"><span class="chip" style="--c:#64748b">1</span><span>${esc(s.nome)}</span><small>→ ${esc(f ? nomeCurto(f) : '')}</small></button>`; }).join('') || '<div class="vazio">Nenhum caso.</div>'}</div></div>
+  </div>
+  <div class="grade2">
+    <div class="cartao bl" style="--c:#2563eb"><h3><i class="fa-solid fa-shapes"></i>Setores por tipo</h3><p class="s">Composição da estrutura</p>${barras(porTipo)}</div>
+    <div class="cartao bl" style="--c:#1e3a8a"><h3><i class="fa-solid fa-layer-group"></i>Setores por nível hierárquico</h3><p class="s">Nível 1 é o topo. Muitos níveis alongam a cadeia de decisão.</p>${barras(Object.keys(niveis).sort((a, b) => a - b).map(n => ['Nível ' + n, niveis[n], '#1e3a8a']))}
+      <h3 style="margin-top:14px"><i class="fa-solid fa-circle-half-stroke"></i>Situação dos setores</h3>${barras(status)}</div>
+  </div>`;
+}
+function indRede(D, kpi, barras){
+  const { E, dres } = D; if (!E.length) return '<div class="cartao vazio">Sem base de escolas.</div>';
+  const med = E.length / dres.length, mun = new Set(E.map(e => e.municipio)), rur = E.filter(e => e.localidade === 'RURAL').length;
+  const T = ['Cívico-militar', 'Militar', 'Campo', 'Indígena', 'Quilombola', 'Integral', 'Especializada'];
+  const lin = dres.map(d => { const l = E.filter(e => e.dre === d), m = new Set(l.map(e => e.municipio)), r = l.filter(e => e.localidade === 'RURAL').length, tp = {}; l.forEach(e => { const g = grupoTipo(e.tipo); tp[g] = (tp[g] || 0) + 1; if (/INTEGRAL/.test(e.tipo) && g !== 'Integral') tp.Integral = (tp.Integral || 0) + 1; }); return { d, n:l.length, m:m.size, r, pr:pct(r, l.length), em:l.length / m.size, carga:l.length / med, tp, s:setorDaDRE(d) }; }).sort((a, b) => b.n - a.n);
+  const tipos = {}; E.forEach(e => { const g = grupoTipo(e.tipo); tipos[g] = (tipos[g] || 0) + 1; });
+  const munT = [...mun].map(m => [m, E.filter(e => e.municipio === m).length]).sort((a, b) => b[1] - a[1]);
+  const mx = Math.max(...lin.map(x => x.n)), umaEsc = munT.filter(x => x[1] === 1).length;
+  return `<div class="kpis">
+      ${kpi('#16a34a', 'fa-school', 'Unidades escolares', fmtN(E.length), 'base geolocalizada da SEDUC', "trocarVista('escolas')")}
+      ${kpi('#2563eb', 'fa-building-flag', 'DREs', dres.length, `média de ${Math.round(med)} escolas por DRE`)}
+      ${kpi('#0891b2', 'fa-city', 'Municípios atendidos', mun.size, `${umaEsc} com uma única escola estadual`)}
+      ${kpi('#65a30d', 'fa-tree', 'Escolas rurais', fmtN(rur), `${pct(rur, E.length)}% da rede · ${fmtN(E.length - rur)} urbanas`)}
+      ${kpi('#c2410c', 'fa-feather', 'Indígenas e quilombolas', fmtN((tipos['Indígena'] || 0) + (tipos.Quilombola || 0)), `${tipos['Indígena'] || 0} indígenas · ${tipos.Quilombola || 0} quilombolas`)}
+      ${kpi('#0f766e', 'fa-shield-halved', 'Cívico-militares e militares', fmtN((tipos['Cívico-militar'] || 0) + (tipos.Militar || 0)), `${tipos['Cívico-militar'] || 0} cívico-militares · ${tipos.Militar || 0} militares`)}
+    </div>
+    <div class="cartao bl" style="--c:#16a34a"><h3><i class="fa-solid fa-building-flag"></i>Carga de cada DRE</h3><p class="s">Escolas e municípios sob cada Diretoria Regional. O índice de carga compara com a média (1,0 = média). Clique para ver no mapa.</p>
+      <div class="tab-wrap"><table class="tab ind-heat ind-dre"><thead><tr><th>DRE</th><th>Escolas</th><th>Carga</th><th>Municípios</th><th>Escolas/mun.</th><th>Rurais</th>${T.map(t => `<th>${t}</th>`).join('')}<th></th></tr></thead><tbody>
+      ${lin.map(x => `<tr onclick="trocarVista('escolas');setTimeout(()=>focarDREmt(${dres.indexOf(x.d)}),400)"><td class="nm"><span class="pt" style="background:${corDRE(dres, x.d)}"></span>${esc(nomeDRE(x.d))}</td>
+        <td style="background:linear-gradient(90deg,color-mix(in srgb,${corDRE(dres, x.d)} 22%,transparent) ${x.n / mx * 100}%,transparent 0)"><b>${x.n}</b></td>
+        <td><span class="chip" style="--c:${x.carga > 1.5 ? '#dc2626' : x.carga > 1.15 ? '#d97706' : x.carga < .6 ? '#64748b' : '#16a34a'}">${x.carga.toLocaleString('pt-BR', { maximumFractionDigits:2 })}</span></td>
+        <td>${x.m}</td><td>${x.em.toLocaleString('pt-BR', { maximumFractionDigits:1 })}</td><td>${x.r} <small>(${x.pr}%)</small></td>${T.map(t => `<td>${x.tp[t] || '<span style="color:var(--mut2)">—</span>'}</td>`).join('')}
+        <td onclick="event.stopPropagation()">${x.s ? `<button class="btn btn-g btn-sm btn-i" title="Ver no organograma" onclick="trocarVista('mapa');setTimeout(()=>irPara(${arg(x.s.id)}),60)"><i class="fa-solid fa-sitemap"></i></button>` : ''}</td></tr>`).join('')}
+      </tbody><tfoot><tr><td><b>Total</b></td><td><b>${E.length}</b></td><td></td><td>${mun.size}</td><td>${(E.length / mun.size).toLocaleString('pt-BR', { maximumFractionDigits:1 })}</td><td>${rur} <small>(${pct(rur, E.length)}%)</small></td>${T.map(t => `<td>${lin.reduce((a, x) => a + (x.tp[t] || 0), 0)}</td>`).join('')}<td></td></tr></tfoot></table></div></div>
     <div class="grade2">
-      <div class="cartao bl" style="--c:#1e3a8a"><h3><i class="fa-solid fa-building-columns"></i>Por secretaria adjunta</h3><p class="s">Quantidade de setores em cada área (clique para abrir no mapa)</p>${barras(porArea.map(x => [nomeCurto(porId.get(x.a)), x.n, corArea(x.a), x.a]))}</div>
-      <div class="cartao bl" style="--c:#2563eb"><h3><i class="fa-solid fa-shapes"></i>Por tipo de setor</h3><p class="s">Como a estrutura se distribui</p>${barras(porTipo)}</div>
+      <div class="cartao bl" style="--c:#2563eb"><h3><i class="fa-solid fa-shapes"></i>Escolas por tipo</h3><p class="s">Classificação da base</p>${barras(Object.entries(tipos).sort((a, b) => b[1] - a[1]).map(([k, n]) => [k, n, CORES_TIPO[k] || '#94a3b8']))}</div>
+      <div class="cartao bl" style="--c:#0891b2"><h3><i class="fa-solid fa-city"></i>Municípios com mais escolas</h3><p class="s">Onde a rede estadual se concentra</p>${barras(munT.slice(0, 10).map(([m, n]) => [m, n, '#0891b2']))}</div>
+    </div>`;
+}
+function indCustos(D, fa, kpi, barras){
+  const { custo, porArea } = D;
+  const dga = new Map(); DB.despesas.filter(d => (d.cenario || 'Atual') === 'Atual' && (!fa || D.ids.has(d.setorId))).forEach(d => { const c = calcDesp(d), k = c.r.codigo || c.categoria; if (!/^DGA|^FG|^DAS/i.test(k)) return; const o = dga.get(k) || { q:0, m:0 }; o.q += c.qtd; o.m += c.mensal; dga.set(k, o); });
+  const dgaL = [...dga.entries()].sort((a, b) => String(a[0]).localeCompare(String(b[0]), 'pt-BR', { numeric:true }));
+  const props = (DB.propostas || []).map(p => { try { const x = diffCenarios('', p.id), c = t => x.est.filter(e => e.tipo === t).length; return { p, aA:x.aA, aB:x.aB, d:x.aB - x.aA, novo:c('novo') + c('reativado'), ext:c('extinto'), mov:c('movido'), ren:c('renomeado') + c('tipo'), ed:c('editado') }; } catch (e) { return null; } }).filter(Boolean);
+  const dif = custo.Proposto.a - custo.Atual.a, porSer = (() => { const s = D.base.reduce((t, x) => t + num(x.servidores), 0); return s ? custo.Atual.a / s : 0; })();
+  return `<div class="kpis">
+      ${kpi('#2563eb', 'fa-calendar', 'Custo anual atual', custo.Atual.a ? fmtRc(custo.Atual.a) : '—', `mensal ${fmtRc(custo.Atual.m)}`, "trocarVista('financeiro')")}
+      ${kpi('#7c3aed', 'fa-lightbulb', 'Custo anual proposto', custo.Proposto.a ? fmtRc(custo.Proposto.a) : '—', 'lançamentos marcados como Proposto')}
+      ${kpi(dif > 0 ? '#dc2626' : '#16a34a', dif > 0 ? 'fa-arrow-trend-up' : 'fa-arrow-trend-down', 'Diferença anual', custo.Proposto.a ? (dif > 0 ? '+' : '') + fmtRs(dif) : '—', custo.Atual.a && custo.Proposto.a ? fmtP(dif / custo.Atual.a * 100) + ' sobre o atual' : 'proposto − atual')}
+      ${kpi('#0891b2', 'fa-user-tie', 'Custo por servidor/ano', porSer ? fmtRc(porSer) : '—', 'custo atual ÷ servidores informados')}
+      ${kpi('#0e7490', 'fa-scale-balanced', 'Propostas', props.length, props.length ? `${props.filter(x => x.d < 0).length} reduzem e ${props.filter(x => x.d > 0).length} aumentam o custo` : 'nenhuma proposta criada', "trocarVista('propostas')")}
     </div>
+    ${props.length ? `<div class="cartao bl" style="--c:#7c3aed"><h3><i class="fa-solid fa-code-compare"></i>Propostas em comparação com a estrutura atual</h3><p class="s">Efeito de cada cenário na estrutura e no custo anual. Clique para abrir o comparativo.</p>
+      <div class="tab-wrap"><table class="tab ind-heat"><thead><tr><th>Proposta</th><th>Situação</th><th>Novos</th><th>Extintos</th><th>Movidos</th><th>Renomeados</th><th>Editados</th><th>Custo anual</th><th>Diferença</th></tr></thead><tbody>
+      ${props.sort((a, b) => a.d - b.d).map(x => `<tr onclick="abrirComparativo('',${arg(x.p.id)})"><td class="nm"><b>${esc(x.p.nome)}</b></td><td>${esc(x.p.status || '—')}</td><td>${x.novo || '—'}</td><td>${x.ext || '—'}</td><td>${x.mov || '—'}</td><td>${x.ren || '—'}</td><td>${x.ed || '—'}</td><td>${fmtRc(x.aB)}</td><td><span class="chip" style="--c:${x.d > 0 ? '#dc2626' : x.d < 0 ? '#16a34a' : '#64748b'}">${x.d > 0 ? '+' : ''}${fmtRs(x.d)}${x.aA ? ` (${fmtP(x.d / x.aA * 100)})` : ''}</span></td></tr>`).join('')}</tbody></table></div></div>` : ''}
     <div class="grade2">
-      <div class="cartao bl" style="--c:#0891b2"><h3><i class="fa-solid fa-users"></i>Servidores por área</h3><p class="s">Soma do campo Servidores</p>${porArea.some(x => x.ser) ? barras(porArea.map(x => [nomeCurto(porId.get(x.a)), x.ser, corArea(x.a), x.a])) : '<div class="vazio"><i class="fa-solid fa-users-slash"></i>Preencha os valores dos setores (aba Valores) para ver esta distribuição.</div>'}</div>
-      <div class="cartao bl" style="--c:#16a34a"><h3><i class="fa-solid fa-coins"></i>Orçamento por área</h3><p class="s">Soma do orçamento anual</p>${porArea.some(x => x.orc) ? barras(porArea.map(x => [nomeCurto(porId.get(x.a)), x.orc, corArea(x.a), x.a]), null, fmtRc) : '<div class="vazio"><i class="fa-solid fa-coins"></i>Sem orçamento informado ainda.</div>'}</div>
-    </div>
-    <div class="grade2">
-      <div class="cartao bl" style="--c:#f97316"><h3><i class="fa-solid fa-bolt"></i>Impacto</h3><p class="s">Classificação de impacto dos setores</p>${barras(impDist)}</div>
-      <div class="cartao bl" style="--c:#d97706"><h3><i class="fa-solid fa-stamp"></i>Situação das validações</h3><p class="s">Por setor</p>${barras(valDist)}</div>
-    </div>
-    <div class="grade2">
-      <div class="cartao bl" style="--c:#dc2626"><h3><i class="fa-solid fa-triangle-exclamation"></i>Setores de impacto alto ou crítico</h3><p class="s">Prioridade para acompanhamento</p><div class="pend">${topImp.map(s => `<button onclick="irPara(${arg(s.id)})"><span class="chip" style="--c:${IMPACTO[num(s.impacto)][1]}">${IMPACTO[num(s.impacto)][0]}</span><span>${esc(s.nome)}</span><small style="color:var(--mut)">${esc(nomeCurto(porId.get(areaDe.get(s.id))))}</small></button>`).join('') || '<div class="vazio">Nenhum setor classificado como alto ou crítico.</div>'}</div></div>
-      <div class="cartao bl" style="--c:#7c3aed"><h3><i class="fa-solid fa-user-xmark"></i>Chefias sem responsável</h3><p class="s">Gabinetes, superintendências, diretorias e coordenadorias</p><div class="pend">${semResp.map(s => `<button onclick="irPara(${arg(s.id)})"><i class="fa-solid ${icTipo(s.tipo)}" style="color:${corTipo(s.tipo)};width:16px"></i><span>${esc(s.nome)}</span></button>`).join('') || '<div class="vazio">Todas têm responsável.</div>'}</div></div>
-    </div>
-    ${saldo.length ? `<div class="cartao bl" style="--c:#dc2626"><h3><i class="fa-solid fa-scale-unbalanced"></i>Mais pontos negativos que positivos</h3><p class="s">Setores com pontos de atenção registrados</p><div class="pend">${saldo.map(([s, d, n]) => `<button onclick="irPara(${arg(s.id)})"><span class="chip" style="--c:${d < 0 ? '#dc2626' : '#d97706'}">${n} negativo(s)</span><span>${esc(s.nome)}</span></button>`).join('')}</div></div>` : ''}`;
+      <div class="cartao bl" style="--c:#2563eb"><h3><i class="fa-solid fa-building-columns"></i>Custo anual por área</h3><p class="s">Lançamentos atuais do Financeiro</p>${porArea.some(x => x.ca) ? barras(porArea.slice().sort((a, b) => b.ca - a.ca).map(x => [x.nome, x.ca, x.cor, `$('#p-area').value=${arg(x.a)};renderPainelInd()`]), fmtRc) : '<div class="vazio">Sem lançamentos no Financeiro.</div>'}</div>
+      <div class="cartao bl" style="--c:#7c3aed"><h3><i class="fa-solid fa-id-badge"></i>Cargos em comissão e funções</h3><p class="s">Quantidade e custo mensal por símbolo (DGA, FG...)</p>${dgaL.length ? `<div class="tab-wrap"><table class="tab"><thead><tr><th>Símbolo</th><th>Qtd.</th><th>Custo mensal</th></tr></thead><tbody>${dgaL.map(([k, o]) => `<tr><td><b>${esc(k)}</b></td><td>${o.q.toLocaleString('pt-BR')}</td><td>${fmtM0(o.m)}</td></tr>`).join('')}</tbody><tfoot><tr><td><b>Total</b></td><td><b>${dgaL.reduce((t, x) => t + x[1].q, 0).toLocaleString('pt-BR')}</b></td><td><b>${fmtM0(dgaL.reduce((t, x) => t + x[1].m, 0))}</b></td></tr></tfoot></table></div>` : '<div class="vazio">Nenhum cargo lançado. No Financeiro, use "Aplicar cargos das chefias".</div>'}</div>
+    </div>`;
+}
+function exportarIndicadores(){
+  const fa = $('#p-area').value, D = dadosInd(fa), q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"', L = [];
+  L.push(['Painel por secretaria adjunta']); L.push(['Área', 'Setores', 'Chefias', 'Servidores', 'Comissionados', 'Custo anual', 'Cadastro %', 'Validados %', 'Chefias sem responsável', 'Setores em risco', 'Validações pendentes', 'Índice de maturidade']);
+  D.porArea.forEach(x => L.push([x.nome, x.n, x.ch, x.ser, x.com, Math.round(x.ca), Math.round(x.cad), x.val, x.semResp, x.risco, x.pend, x.idx]));
+  L.push([]); L.push(['Rede escolar por DRE']); L.push(['DRE', 'Escolas', 'Municípios', 'Rurais', 'Urbanas']);
+  D.dres.forEach(d => { const l = D.E.filter(e => e.dre === d); L.push([d, l.length, new Set(l.map(e => e.municipio)).size, l.filter(e => e.localidade === 'RURAL').length, l.filter(e => e.localidade !== 'RURAL').length]); });
+  L.push(['Total', D.E.length, new Set(D.E.map(e => e.municipio)).size]);
+  L.push([]); L.push(['Setores em risco']); L.push(['Setor', 'Impacto', 'Validação', 'Responsável']);
+  D.base.filter(emRisco).forEach(s => L.push([s.nome, IMPACTO[num(s.impacto)][0], statusVal(s.id), s.responsavel || '(sem)']));
+  baixarArquivo('gaborg-indicadores-' + new Date().toISOString().slice(0, 10) + '.csv', '﻿' + L.map(r => r.map(q).join(';')).join('\r\n'), 'text/csv;charset=utf-8');
 }
 
 /* Validações (todas) */

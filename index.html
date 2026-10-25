@@ -682,6 +682,42 @@ body.sem-mini .m-mini{opacity:0;transform:translateY(12px);pointer-events:none}
 .pend button:hover{background:var(--sup2)}
 .pend button span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
+/* indicadores estratégicos */
+.ind-abas{display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-bottom:14px;padding:4px;border-radius:12px;background:var(--sup);border:1px solid var(--linha);position:sticky;top:0;z-index:5}
+.ind-abas>button:not(.btn){height:36px;padding:0 14px;border-radius:9px;font-size:13px;font-weight:600;color:var(--mut);display:inline-flex;gap:8px;align-items:center}
+.ind-abas>button:not(.btn):hover{background:var(--sup2);color:var(--txt)}.ind-abas>button.on{background:var(--marca-bg);color:var(--marca)}
+.ind-abas .esp{flex:1}
+.ind-corpo{animation:sobe .2s}
+.ind-resumo{display:grid;grid-template-columns:170px 1fr;gap:18px;padding:18px;margin-bottom:16px}
+.ind-nota{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+.ind-nota svg{width:140px;height:140px;transform:rotate(-90deg)}.ind-nota circle{fill:none;stroke-width:3.2}.ind-nota .f{stroke:var(--sup3)}.ind-nota .v{stroke:var(--c);stroke-linecap:round;transition:stroke-dasharray .6s}
+.ind-nota .anel{position:relative;width:140px;height:140px}.ind-nota .anel b{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:34px;font-weight:800;color:var(--c);letter-spacing:-.03em}.ind-nota small{font-size:11.5px;color:var(--mut);margin-top:4px;font-weight:600}
+.ind-ins h3{margin:0 0 10px;font-size:15px;font-weight:800;display:flex;gap:8px;align-items:center}.ind-ins h3 i{color:#d97706}
+.ind-ins .in{display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border-radius:10px;font-size:13px;line-height:1.45;margin-bottom:4px;border-left:3px solid var(--c);background:color-mix(in srgb,var(--c) 6%,transparent)}
+.ind-ins .in>i:first-child{color:var(--c);margin-top:3px}.ind-ins .in span{flex:1}.ind-ins .in .vai{color:var(--mut2);font-size:11px;margin-top:4px}
+.ind-ins .in[role=button]{cursor:pointer}.ind-ins .in[role=button]:hover{background:color-mix(in srgb,var(--c) 12%,transparent)}
+.ind-ins .alerta{--c:#dc2626}.ind-ins .atencao{--c:#d97706}.ind-ins .info{--c:#2563eb}.ind-ins .ok{--c:#16a34a}
+.ind-leg{display:block;margin-top:8px;color:var(--mut2);font-size:11px}
+.kpi.clic{cursor:pointer;transition:transform .15s,box-shadow .15s}.kpi.clic:hover{transform:translateY(-2px);box-shadow:var(--sombra)}
+.ind-heat th{cursor:pointer;user-select:none;white-space:nowrap}.ind-heat th.ord{color:var(--marca)}.ind-heat th i{margin-left:4px}
+.ind-heat td{font-variant-numeric:tabular-nums;white-space:nowrap}.ind-heat tbody tr{cursor:pointer}
+.ind-heat td.nm{font-weight:700;white-space:normal;min-width:150px}.ind-heat .pt{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:8px;vertical-align:middle}
+.ind-heat tfoot td{font-variant-numeric:tabular-nums;border-top:2px solid var(--linha2)}
+.ind-g12{grid-template-columns:minmax(0,1.25fr) minmax(0,1fr)}
+.ind-mat{display:grid;gap:4px;font-size:11.5px}
+.ind-mat .ch{font-weight:700;color:var(--mut);text-align:center;font-size:10.5px;line-height:1.2;display:flex;align-items:flex-end;justify-content:center;padding-bottom:3px}
+.ind-mat .rh{display:flex;align-items:center;gap:6px;font-weight:600;color:var(--txt2)}.ind-mat .rh i{width:10px;height:10px;border-radius:3px}
+.ind-mat .cl{height:44px;border-radius:9px;font-size:15px;font-weight:800;font-variant-numeric:tabular-nums;border:1px solid var(--linha);transition:transform .12s}
+.ind-mat .cl:hover{transform:scale(1.05)}.ind-mat .cl.on{outline:3px solid var(--marca);outline-offset:1px}
+.ind-mat .p0{background:color-mix(in srgb,#16a34a 10%,var(--sup))}.ind-mat .p1{background:color-mix(in srgb,#84cc16 16%,var(--sup))}.ind-mat .p2{background:color-mix(in srgb,#eab308 22%,var(--sup))}.ind-mat .p3{background:color-mix(in srgb,#f97316 30%,var(--sup))}.ind-mat .p4{background:color-mix(in srgb,#dc2626 40%,var(--sup));color:#7f1d1d}
+html[data-tema="escuro"] .ind-mat .p4{color:#fecaca}
+.ind-mat .cl.z{color:transparent;opacity:.55}
+.bl h3 .ct{margin-left:auto;font-size:11.5px;padding:2px 8px;border-radius:999px;background:var(--sup3);color:var(--mut)}
+.pend button small{color:var(--mut);font-size:11px;white-space:nowrap}
+.pend button .chip{flex:none}
+@media (max-width:820px){.ind-resumo{grid-template-columns:1fr}.ind-abas{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}.ind-abas>button{flex:none}.ind-abas .esp{display:none}.ind-g12{grid-template-columns:1fr}}
+@media print{body *{visibility:hidden!important}#v-painel,#v-painel *{visibility:visible!important}#v-painel{position:absolute!important;inset:0!important;overflow:visible!important}#v-painel .rolagem{overflow:visible!important;height:auto!important}.ind-abas .btn,#p-area{display:none!important}.cartao{break-inside:avoid}}
+
 /* ===================== CONFIG ===================== */
 .cfg{max-width:860px;display:flex;flex-direction:column;gap:14px}
 body.ro .so-edit{display:none!important}
@@ -790,8 +826,8 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background
 <body>
 <!-- Vigia de inicialização: se o arquivo.js não carregar ou falhar, mostra o motivo em vez de uma tela vazia -->
 <script>
-window.GABORG_VERSAO_HTML = '1.18.1'; window.GABORG_ERROS = [];
-window.GABORG_NOVIDADES = "Correção: os limites dos 141 municípios agora vêm junto com o app, então a Divisão municipal, as divisas e os nomes aparecem sempre.";
+window.GABORG_VERSAO_HTML = '1.19.0'; window.GABORG_ERROS = [];
+window.GABORG_NOVIDADES = "Indicadores estratégicos: resumo executivo automático, índice de maturidade por área, matriz de risco, amplitude de controle, rede escolar com as 631 unidades por DRE, custos e comparação das propostas.";
 window.addEventListener('error', function (e) {
   var alvo = e.target || {};
   if (alvo.tagName === 'SCRIPT') window.GABORG_ERROS.push('Não foi possível baixar o arquivo ' + (alvo.getAttribute('src') || '') + '.');
@@ -1002,7 +1038,7 @@ window.addEventListener('load', function () { setTimeout(function () { window.GA
 
     <!-- INDICADORES -->
     <section class="vista fora" id="v-painel">
-      <div class="topo"><div><h1><i class="fa-solid fa-chart-simple"></i>Indicadores da estrutura</h1><p>Totais, distribuição por área, impactos e pendências de cadastro.</p></div>
+      <div class="topo"><div><h1><i class="fa-solid fa-chart-simple"></i>Indicadores estratégicos</h1><p>Maturidade da estrutura, riscos, governança, rede escolar e custos, com leitura automática dos pontos de atenção.</p></div>
         <div class="dir"><select id="p-area" class="campo" style="width:auto" onchange="renderPainelInd()"></select></div></div>
       <div class="rolagem" id="p-corpo"></div>
     </section>
@@ -1104,6 +1140,6 @@ window.addEventListener('load', function () { setTimeout(function () { window.GA
 
 <div id="toast"><i class="fa-solid fa-check"></i><span></span></div>
 
-<script src="arquivo.js?v=1.18.1" onerror="window.GABORG_ERROS.push('O arquivo arquivo.js não foi encontrado no servidor (erro 404).');GABORG_DIAGNOSTICO()"></script>
+<script src="arquivo.js?v=1.19.0" onerror="window.GABORG_ERROS.push('O arquivo arquivo.js não foi encontrado no servidor (erro 404).');GABORG_DIAGNOSTICO()"></script>
 </body>
 </html>
