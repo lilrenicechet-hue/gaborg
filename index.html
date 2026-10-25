@@ -683,7 +683,7 @@ body.sem-mini .m-mini{opacity:0;transform:translateY(12px);pointer-events:none}
 .pend button span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 /* indicadores estratégicos */
-.ind-abas{display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-bottom:14px;padding:4px;border-radius:12px;background:var(--sup);border:1px solid var(--linha);position:sticky;top:0;z-index:5}
+.ind-abas{display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-bottom:14px;padding:4px;border-radius:12px;background:var(--sup);border:1px solid var(--linha)}
 .ind-abas>button:not(.btn){height:36px;padding:0 14px;border-radius:9px;font-size:13px;font-weight:600;color:var(--mut);display:inline-flex;gap:8px;align-items:center}
 .ind-abas>button:not(.btn):hover{background:var(--sup2);color:var(--txt)}.ind-abas>button.on{background:var(--marca-bg);color:var(--marca)}
 .ind-abas .esp{flex:1}
@@ -703,6 +703,12 @@ body.sem-mini .m-mini{opacity:0;transform:translateY(12px);pointer-events:none}
 .ind-heat td{font-variant-numeric:tabular-nums;white-space:nowrap}.ind-heat tbody tr{cursor:pointer}
 .ind-heat td.nm{font-weight:700;white-space:normal;min-width:150px}.ind-heat .pt{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:8px;vertical-align:middle}
 .ind-heat tfoot td{font-variant-numeric:tabular-nums;border-top:2px solid var(--linha2)}
+.ind-filtro{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px}.ind-filtro>span{font-size:12px;font-weight:700;color:var(--mut);display:flex;gap:6px;align-items:center}
+.ind-fx{display:flex;height:12px;border-radius:999px;overflow:hidden;background:var(--sup3);min-width:180px}.ind-fx span{height:100%}
+.ind-fx-leg{display:flex;gap:12px;flex-wrap:wrap;margin-top:10px;font-size:11.5px;color:var(--mut)}.ind-fx-leg span{display:inline-flex;gap:6px;align-items:center}.ind-fx-leg i{width:11px;height:11px;border-radius:3px}
+.ind-heat tr.sel td{background:var(--marca-bg)!important}
+.ind-nota-rodape{font-size:11.5px;color:var(--mut);display:flex;gap:8px;align-items:flex-start;margin:6px 2px 20px;line-height:1.5}.ind-nota-rodape i{margin-top:3px}
+.mt-pop .l span a{font-weight:600;margin-left:4px}
 .ind-g12{grid-template-columns:minmax(0,1.25fr) minmax(0,1fr)}
 .ind-mat{display:grid;gap:4px;font-size:11.5px}
 .ind-mat .ch{font-weight:700;color:var(--mut);text-align:center;font-size:10.5px;line-height:1.2;display:flex;align-items:flex-end;justify-content:center;padding-bottom:3px}
@@ -826,8 +832,8 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background
 <body>
 <!-- Vigia de inicialização: se o arquivo.js não carregar ou falhar, mostra o motivo em vez de uma tela vazia -->
 <script>
-window.GABORG_VERSAO_HTML = '1.19.0'; window.GABORG_ERROS = [];
-window.GABORG_NOVIDADES = "Indicadores estratégicos: resumo executivo automático, índice de maturidade por área, matriz de risco, amplitude de controle, rede escolar com as 631 unidades por DRE, custos e comparação das propostas.";
+window.GABORG_VERSAO_HTML = '1.20.0'; window.GABORG_ERROS = [];
+window.GABORG_NOVIDADES = "Distâncias das escolas até as suas DREs: nova aba nos Indicadores, novo modo no Mapa de MT, rota real pelo Google Maps e exportação.";
 window.addEventListener('error', function (e) {
   var alvo = e.target || {};
   if (alvo.tagName === 'SCRIPT') window.GABORG_ERROS.push('Não foi possível baixar o arquivo ' + (alvo.getAttribute('src') || '') + '.');
@@ -1140,6 +1146,6 @@ window.addEventListener('load', function () { setTimeout(function () { window.GA
 
 <div id="toast"><i class="fa-solid fa-check"></i><span></span></div>
 
-<script src="arquivo.js?v=1.19.0" onerror="window.GABORG_ERROS.push('O arquivo arquivo.js não foi encontrado no servidor (erro 404).');GABORG_DIAGNOSTICO()"></script>
+<script src="arquivo.js?v=1.20.0" onerror="window.GABORG_ERROS.push('O arquivo arquivo.js não foi encontrado no servidor (erro 404).');GABORG_DIAGNOSTICO()"></script>
 </body>
 </html>

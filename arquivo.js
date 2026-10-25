@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.19.0';
+const VERSAO = '1.20.0';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -1302,7 +1302,7 @@ function limparFiltrosLista(){ ['#l-busca','#l-tipo','#l-area','#l-val'].forEach
 /* Indicadores */
 /* ===================== INDICADORES ESTRATÉGICOS ===================== */
 let indAba = store.get('gaborg_ind_aba', 'geral'), indSel = null, indOrd = { k:'idx', d:-1 };
-const IND_ABAS = [['geral','Visão geral','fa-gauge-high'],['risco','Riscos e prioridades','fa-triangle-exclamation'],['estrutura','Estrutura e governança','fa-sitemap'],['rede','Rede escolar','fa-school'],['custos','Custos e propostas','fa-coins']];
+const IND_ABAS = [['geral','Visão geral','fa-gauge-high'],['risco','Riscos e prioridades','fa-triangle-exclamation'],['estrutura','Estrutura e governança','fa-sitemap'],['rede','Rede escolar','fa-school'],['dist','Distâncias até a DRE','fa-route'],['custos','Custos e propostas','fa-coins']];
 const CHEFIAS = ['Gabinete','Superintendência','Diretoria','Diretoria Adjunta','Coordenadoria','Gerência','Unidade','Núcleo Regional'];
 const CAMPOS_CAD = [['responsavel','Responsável'],['competencias','Competências'],['entregas','Entregas'],['impacto','Impacto avaliado'],['servidores','Nº de servidores']];
 const pct = (a, b) => b ? Math.round(a * 100 / b) : 0;
@@ -1356,6 +1356,8 @@ function insightsInd(D, fa){
     const pior = porArea.slice().sort((a, b) => a.idx - b.idx)[0]; if (pior && pior.idx < 70) r.push(['atencao', `Menor índice de maturidade: <b>${esc(pior.nome)}</b> (${pior.idx} de 100).`, () => `$('#p-area').value=${arg(pior.a)};renderPainelInd()`]); }
   if (E.length) { const met = dres.map(d => [d, E.filter(e => e.dre === d).length]).sort((a, b) => b[1] - a[1]), med = E.length / dres.length, rur = dres.map(d => { const l = E.filter(e => e.dre === d); return [d, pct(l.filter(e => e.localidade === 'RURAL').length, l.length)]; }).sort((a, b) => b[1] - a[1])[0];
     r.push(['info', `Rede de <b>${fmtN(E.length)}</b> unidades escolares em ${dres.length} DREs. A <b>${esc(nomeDRE(met[0][0]))}</b> atende ${met[0][1]} escolas (${(met[0][1] / med).toLocaleString('pt-BR', { maximumFractionDigits:1 })}× a média de ${Math.round(med)} por DRE). A <b>${esc(nomeDRE(rur[0]))}</b> é a mais rural: ${rur[1]}% das suas escolas.`, () => "abaInd('rede')"]); }
+  if (E.length) { const X = distanciasMT(), l = X.lista, m100 = l.filter(o => o.km > 100).length, med = l.reduce((t, o) => t + o.km, 0) / l.length, dm = X.dres.map(d => { const x = l.filter(o => o.e.dre === d); return [d, x.reduce((t, o) => t + o.km, 0) / x.length]; }).sort((a, b) => b[1] - a[1])[0];
+    r.push([m100 > l.length * .2 ? 'atencao' : 'info', `As escolas ficam, em média, a <b>${fmtKm(med)}</b> em linha reta da sede da sua DRE. <b>${m100}</b> estão a mais de 100 km. A DRE com escolas mais distantes é <b>${esc(nomeDRE(dm[0]))}</b> (média de ${fmtKm(dm[1])}).`, () => "abaInd('dist')"]); }
   if (!DB.despesas.length) r.push(['info', 'Os custos ainda não foram lançados no Financeiro: os indicadores de custo aparecem quando houver lançamentos.', () => "trocarVista('financeiro')"]);
   return r;
 }
@@ -1370,6 +1372,7 @@ function renderPainelInd(){
   else if (indAba === 'risco') h = indRisco(D, kpi);
   else if (indAba === 'estrutura') h = indEstrutura(D, kpi, barras);
   else if (indAba === 'rede') h = indRede(D, kpi, barras);
+  else if (indAba === 'dist') h = indDist(D, kpi, barras);
   else h = indCustos(D, fa, kpi, barras);
   $('#p-corpo').innerHTML = nav + `<div class="ind-corpo">${h}</div>`;
 }
@@ -1505,6 +1508,55 @@ function indCustos(D, fa, kpi, barras){
       <div class="cartao bl" style="--c:#2563eb"><h3><i class="fa-solid fa-building-columns"></i>Custo anual por área</h3><p class="s">Lançamentos atuais do Financeiro</p>${porArea.some(x => x.ca) ? barras(porArea.slice().sort((a, b) => b.ca - a.ca).map(x => [x.nome, x.ca, x.cor, `$('#p-area').value=${arg(x.a)};renderPainelInd()`]), fmtRc) : '<div class="vazio">Sem lançamentos no Financeiro.</div>'}</div>
       <div class="cartao bl" style="--c:#7c3aed"><h3><i class="fa-solid fa-id-badge"></i>Cargos em comissão e funções</h3><p class="s">Quantidade e custo mensal por símbolo (DGA, FG...)</p>${dgaL.length ? `<div class="tab-wrap"><table class="tab"><thead><tr><th>Símbolo</th><th>Qtd.</th><th>Custo mensal</th></tr></thead><tbody>${dgaL.map(([k, o]) => `<tr><td><b>${esc(k)}</b></td><td>${o.q.toLocaleString('pt-BR')}</td><td>${fmtM0(o.m)}</td></tr>`).join('')}</tbody><tfoot><tr><td><b>Total</b></td><td><b>${dgaL.reduce((t, x) => t + x[1].q, 0).toLocaleString('pt-BR')}</b></td><td><b>${fmtM0(dgaL.reduce((t, x) => t + x[1].m, 0))}</b></td></tr></tfoot></table></div>` : '<div class="vazio">Nenhum cargo lançado. No Financeiro, use "Aplicar cargos das chefias".</div>'}</div>
     </div>`;
+}
+let indDistDRE = '';
+function indDist(D, kpi, barras){
+  const X = distanciasMT(), dres = X.dres, L = X.lista.filter(o => !indDistDRE || o.e.dre === indDistDRE);
+  if (!L.length) return '<div class="cartao vazio">Sem base de escolas.</div>';
+  const kms = L.map(o => o.km).sort((a, b) => a - b), med = kms.reduce((a, b) => a + b, 0) / kms.length, mediana = kms[Math.floor(kms.length / 2)], max = L.reduce((a, o) => o.km > a.km ? o : a, L[0]);
+  const acima = k => L.filter(o => o.km > k).length, longe = L.slice().sort((a, b) => b.km - a.km).slice(0, 25);
+  const realinhar = L.filter(o => o.prox && o.km - o.prox.km >= 40 && o.prox.km < o.km * .7).sort((a, b) => (b.km - b.prox.km) - (a.km - a.prox.km));
+  const porDRE = dres.map(d => { const l = X.lista.filter(o => o.e.dre === d), k = l.map(o => o.km).sort((a, b) => a - b), mx = l.reduce((a, o) => o.km > a.km ? o : a, l[0]);
+    return { d, n:l.length, med:k.reduce((a, b) => a + b, 0) / k.length, mediana:k[Math.floor(k.length / 2)], mx, p100:pct(l.filter(o => o.km > 100).length, l.length), tot:k.reduce((a, b) => a + b, 0) * 2 * FATOR_ESTRADA, fx:FAIXAS_DIST.map(f => l.filter(o => faixaDist(o.km) === f).length), mesma:l.filter(o => o.km <= 10).length }; }).sort((a, b) => b.med - a.med);
+  const mxMed = Math.max(...porDRE.map(x => x.med));
+  const opt = `<select class="campo" style="width:auto;height:34px" onchange="indDistDRE=this.value;renderPainelInd()"><option value="">Todas as DREs</option>${dres.map(d => `<option value="${esc(d)}" ${d === indDistDRE ? 'selected' : ''}>${esc(nomeDRE(d))}</option>`).join('')}</select>`;
+  const linhaEsc = (o, extra) => `<tr onclick="verEscolaNoMapa(${arg(o.e.codigo)})"><td class="nm"><b>${esc(o.e.nome)}</b><small style="display:block;color:var(--mut)">${esc(o.e.municipio)} · ${o.e.localidade === 'RURAL' ? 'rural' : 'urbana'}</small></td><td><span class="pt" style="background:${corDRE(dres, o.e.dre)}"></span>${esc(nomeDRE(o.e.dre))}</td>
+    <td><span class="chip" style="--c:${faixaDist(o.km)[2]}">${fmtKm(o.km)}</span></td><td>~${fmtKm(o.km * FATOR_ESTRADA)}</td><td>~${fmtHoras(o.km)}</td>${extra || ''}
+    <td onclick="event.stopPropagation()"><a class="btn btn-g btn-sm btn-i" href="${rotaDRE(o.e)}" target="_blank" rel="noopener" title="Rota real pelo Google Maps, saindo da sede da DRE"><i class="fa-solid fa-route"></i></a></td></tr>`;
+  return `<div class="ind-filtro"><span><i class="fa-solid fa-filter"></i>Ver</span>${opt}<button class="btn btn-s btn-sm" onclick="trocarVista('escolas');setTimeout(()=>{modoMT('distancia');${indDistDRE ? `focarDREmt(${dres.indexOf(indDistDRE)})` : ''}},400)"><i class="fa-solid fa-map-location-dot"></i>Ver no mapa</button><button class="btn btn-s btn-sm" onclick="exportarDistancias()"><i class="fa-solid fa-file-csv"></i>Exportar distâncias</button></div>
+    <div class="kpis">
+      ${kpi('#2563eb', 'fa-ruler', 'Distância média', fmtKm(med), `mediana ${fmtKm(mediana)} · em linha reta até a sede da DRE`)}
+      ${kpi('#0e7490', 'fa-road', 'Média por estrada (estimada)', '~' + fmtKm(med * FATOR_ESTRADA), `~${fmtHoras(med)} de viagem, só ida`)}
+      ${kpi('#dc2626', 'fa-location-crosshairs', 'Escola mais distante', fmtKm(max.km), `${esc(max.e.nome)} (${esc(max.e.municipio)})`, `verEscolaNoMapa(${arg(max.e.codigo)})`)}
+      ${kpi('#f97316', 'fa-arrows-left-right-to-line', 'A mais de 100 km', fmtN(acima(100)), `${pct(acima(100), L.length)}% das escolas · ${acima(200)} a mais de 200 km`)}
+      ${kpi('#16a34a', 'fa-house-flag', 'Até 10 km da sede', fmtN(L.filter(o => o.km <= 10).length), `${pct(L.filter(o => o.km <= 10).length, L.length)}% · praticamente na cidade da DRE`)}
+      ${kpi('#7c3aed', 'fa-shuffle', 'Mais perto de outra DRE', fmtN(realinhar.length), 'pelo menos 40 km mais perto da sede de outra DRE')}
+    </div>
+    <div class="grade2">
+      <div class="cartao bl" style="--c:#f97316"><h3><i class="fa-solid fa-chart-bar"></i>Escolas por faixa de distância</h3><p class="s">Distância em linha reta até a sede da DRE a que a escola é subordinada</p>${barras(FAIXAS_DIST.map(f => [f[1], L.filter(o => faixaDist(o.km) === f).length, f[2]]))}</div>
+      <div class="cartao bl" style="--c:#2563eb"><h3><i class="fa-solid fa-building-flag"></i>Distância média por DRE</h3><p class="s">DREs com média alta têm mais custo e tempo de deslocamento para acompanhar as escolas</p>${barras(porDRE.map(x => [nomeDRE(x.d), Math.round(x.med), corDRE(dres, x.d), `indDistDRE=${arg(x.d)};renderPainelInd()`]), v => v + ' km')}</div>
+    </div>
+    <div class="cartao bl" style="--c:#0e7490"><h3><i class="fa-solid fa-table"></i>Quadro de distâncias por DRE</h3><p class="s">A barra mostra como as escolas de cada DRE se distribuem nas faixas de distância. "Circuito" é a soma de ida e volta, por estrada (estimada), para visitar cada escola uma vez.</p>
+      <div class="tab-wrap"><table class="tab ind-heat"><thead><tr><th>DRE</th><th>Escolas</th><th>Média</th><th>Mediana</th><th>Mais distante</th><th>&gt; 100 km</th><th style="min-width:200px">Distribuição</th><th>Circuito</th></tr></thead><tbody>
+      ${porDRE.map(x => `<tr onclick="indDistDRE=${arg(x.d)};renderPainelInd()" class="${indDistDRE === x.d ? 'sel' : ''}"><td class="nm"><span class="pt" style="background:${corDRE(dres, x.d)}"></span>${esc(nomeDRE(x.d))}</td><td>${x.n}</td>
+        <td style="background:linear-gradient(90deg,color-mix(in srgb,${faixaDist(x.med)[2]} 22%,transparent) ${x.med / mxMed * 100}%,transparent 0)"><b>${fmtKm(x.med)}</b></td><td>${fmtKm(x.mediana)}</td>
+        <td title="${esc(x.mx.e.nome)}">${fmtKm(x.mx.km)} <small style="color:var(--mut)">${esc(x.mx.e.municipio)}</small></td><td>${x.p100 ? `<span class="chip" style="--c:${x.p100 > 40 ? '#dc2626' : x.p100 > 15 ? '#f97316' : '#64748b'}">${x.p100}%</span>` : '—'}</td>
+        <td><div class="ind-fx">${x.fx.map((n, i) => n ? `<span style="flex:${n};background:${FAIXAS_DIST[i][2]}" title="${FAIXAS_DIST[i][1]}: ${n}"></span>` : '').join('')}</div></td><td>~${Math.round(x.tot).toLocaleString('pt-BR')} km</td></tr>`).join('')}
+      </tbody></table></div>
+      <div class="ind-fx-leg">${FAIXAS_DIST.map(f => `<span><i style="background:${f[2]}"></i>${f[1]}</span>`).join('')}</div></div>
+    <div class="cartao bl" style="--c:#dc2626"><h3><i class="fa-solid fa-location-crosshairs"></i>Escolas mais distantes da sua DRE${indDistDRE ? ' · ' + esc(nomeDRE(indDistDRE)) : ''}</h3><p class="s">Clique para ver no mapa. O botão de rota abre o trajeto real no Google Maps, saindo da sede da DRE.</p>
+      <div class="tab-wrap"><table class="tab ind-heat"><thead><tr><th>Escola</th><th>DRE</th><th>Linha reta</th><th>Estrada (est.)</th><th>Tempo (est.)</th><th></th></tr></thead><tbody>${longe.map(o => linhaEsc(o)).join('')}</tbody></table></div></div>
+    ${realinhar.length ? `<div class="cartao bl" style="--c:#7c3aed"><h3><i class="fa-solid fa-shuffle"></i>Escolas mais perto da sede de outra DRE <span class="ct">${realinhar.length}</span></h3><p class="s">A sede de outra DRE fica pelo menos 40 km mais perto. Pode valer avaliar o acompanhamento compartilhado ou uma nova subordinação; confira a rota real antes de decidir.</p>
+      <div class="tab-wrap"><table class="tab ind-heat"><thead><tr><th>Escola</th><th>DRE atual</th><th>Até a DRE atual</th><th>Estrada (est.)</th><th>Tempo (est.)</th><th>DRE mais próxima</th><th>Ganho</th><th></th></tr></thead><tbody>
+      ${realinhar.slice(0, 40).map(o => linhaEsc(o, `<td><span class="pt" style="background:${corDRE(dres, o.prox.dre)}"></span>${esc(nomeDRE(o.prox.dre))} · ${fmtKm(o.prox.km)}</td><td><span class="chip" style="--c:#16a34a">−${fmtKm(o.km - o.prox.km)}</span></td>`)).join('')}</tbody></table></div></div>` : ''}
+    <p class="ind-nota-rodape"><i class="fa-solid fa-circle-info"></i>As distâncias são calculadas em linha reta entre as coordenadas da escola e a sede da DRE (o ponto central das escolas urbanas da cidade-sede). A distância por estrada e o tempo são estimativas (${String(FATOR_ESTRADA).replace('.', ',')} × a linha reta, a ${VEL_MEDIA} km/h). Para o trajeto exato, use o botão de rota.</p>`;
+}
+function verEscolaNoMapa(cod){ trocarVista('escolas'); setTimeout(() => irEscolaMT(cod), 500); }
+function exportarDistancias(){
+  const X = distanciasMT(), q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"', n = v => String(Math.round(v * 10) / 10).replace('.', ',');
+  const L = [['Código', 'Escola', 'Município', 'Localidade', 'DRE', 'Distância em linha reta (km)', 'Distância por estrada estimada (km)', 'Tempo estimado', 'DRE mais próxima (outra)', 'Distância até ela (km)', 'Rota no Google Maps']];
+  X.lista.slice().sort((a, b) => a.e.dre.localeCompare(b.e.dre) || b.km - a.km).forEach(o => L.push([o.e.codigo, o.e.nome, o.e.municipio, o.e.localidade, o.e.dre, n(o.km), n(o.km * FATOR_ESTRADA), fmtHoras(o.km), o.prox ? o.prox.dre : '', o.prox ? n(o.prox.km) : '', rotaDRE(o.e)]));
+  baixarArquivo('gaborg-distancias-escolas-dre-' + new Date().toISOString().slice(0, 10) + '.csv', '﻿' + L.map(r => r.map(q).join(';')).join('\r\n'), 'text/csv;charset=utf-8');
 }
 function exportarIndicadores(){
   const fa = $('#p-area').value, D = dadosInd(fa), q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"', L = [];
@@ -3048,7 +3100,8 @@ const MODOS_MT = {
   municipio:['fa-layer-group', 'Escolas por município', 'Quanto mais escuro, mais escolas no município'],
   cluster:['fa-object-group', 'Agrupadas', 'Bolhas com a quantidade de escolas; aproxime para separar'],
   tipo:['fa-shapes', 'Tipo de escola', 'Regular, cívico-militar, campo, indígena, integral...'],
-  localidade:['fa-tree-city', 'Urbanas e rurais', 'Localização da escola']
+  localidade:['fa-tree-city', 'Urbanas e rurais', 'Localização da escola'],
+  distancia:['fa-route', 'Distância até a DRE', 'Cor da escola pela distância em linha reta até a sede da sua DRE']
 };
 const mt = { mapa:null, camadas:{}, base:'', modo:store.get('gaborg_mt_modo', 'dre'), fil:{ dres:new Set(), tipo:'', loc:'', q:'' }, foco:-1, lado:window.innerWidth > 820, ligacoes:store.get('gaborg_mt_lig', true), divisas:store.get('gaborg_mt_div', false), rotulos:store.get('gaborg_mt_rot', false), leg:store.get('gaborg_mt_leg2', false), mun:'', marcadores:new Map(), aberto:new Set(), carregando:null, malha:null, erroTiles:0 };
 function escolasLista(){
@@ -3179,10 +3232,32 @@ function filtrarEscolasMT(lista){
   const f = mt.fil, q = norm(f.q);
   return lista.filter(e => (!f.dres.size || f.dres.has(e.dre)) && (!f.tipo || grupoTipo(e.tipo) === f.tipo || (f.tipo === 'Integral' && /INTEGRAL/.test(e.tipo))) && (!f.loc || e.localidade === f.loc) && (!q || norm(e.nome + ' ' + e.codigo + ' ' + e.municipio + ' ' + e.bairro).includes(q)));
 }
+/* ---------- Distâncias das escolas até a sede da sua DRE ---------- */
+const FATOR_ESTRADA = 1.3, VEL_MEDIA = 70; // estimativa: estrada ≈ 1,3 × linha reta; 70 km/h em média
+const FAIXAS_DIST = [[10, 'até 10 km', '#16a34a'], [50, '10 a 50 km', '#65a30d'], [100, '50 a 100 km', '#eab308'], [200, '100 a 200 km', '#f97316'], [300, '200 a 300 km', '#dc2626'], [Infinity, 'mais de 300 km', '#7f1d1d']];
+const faixaDist = km => FAIXAS_DIST.find(f => km <= f[0]) || FAIXAS_DIST[FAIXAS_DIST.length - 1];
+function kmEntre(a, b){ const R = 6371, r = x => x * Math.PI / 180, dLa = r(b[0] - a[0]), dLo = r(b[1] - a[1]), h = Math.sin(dLa / 2) ** 2 + Math.cos(r(a[0])) * Math.cos(r(b[0])) * Math.sin(dLo / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(h)); }
+const fmtKm = v => Math.round(v).toLocaleString('pt-BR') + ' km';
+const fmtHoras = km => { const m = Math.round(km * FATOR_ESTRADA / VEL_MEDIA * 60); return m < 60 ? m + ' min' : Math.floor(m / 60) + ' h' + (m % 60 ? ' ' + String(m % 60).padStart(2, '0') : ''); };
+/* calcula uma vez por base de escolas: distância de cada escola à sede da sua DRE e a sede mais próxima */
+function distanciasMT(){
+  const sig = assinaturaMT(); if (distanciasMT.c && distanciasMT.c.sig === sig) return distanciasMT.c;
+  const E = escolasLista(), dres = dresDe(E), sedes = new Map(dres.map(d => [d, sedeDRE(d, E)]));
+  const porCod = new Map(), lista = E.map(e => {
+    const p = [e.latitude, e.longitude], km = kmEntre(p, sedes.get(e.dre));
+    let prox = null; dres.forEach(d => { if (d === e.dre) return; const k = kmEntre(p, sedes.get(d)); if (!prox || k < prox.km) prox = { dre:d, km:k }; });
+    const o = { e, km, prox, mesmaCidade:norm(e.municipio) === norm(String(e.dre).replace(/^DRE\s+/i, '')) || (/METROPOLITANA/.test(e.dre) && /^(cuiaba|varzea grande)$/.test(norm(e.municipio))) };
+    porCod.set(e.codigo, o); return o;
+  });
+  return distanciasMT.c = { sig, lista, porCod, sedes, dres };
+}
+const distEscola = e => { const o = distanciasMT().porCod.get(e.codigo); return o ? o.km : 0; };
+function rotaDRE(e){ const s = distanciasMT().sedes.get(e.dre); return `https://www.google.com/maps/dir/?api=1&origin=${s[0].toFixed(5)},${s[1].toFixed(5)}&destination=${e.latitude},${e.longitude}&travelmode=driving`; }
 function popupEscola(e, dres){
   const cor = corDRE(dres, e.dre), end = [e.endereco, e.numero && e.numero !== '0' ? e.numero : '', e.bairro].filter(Boolean).join(', ');
   return `<div class="mt-pop"><div class="t" style="--c:${cor}"><i class="fa-solid fa-school"></i>${esc(e.tipo)} · ${esc(e.localidade === 'RURAL' ? 'Rural' : 'Urbana')}</div><b>${esc(e.nome)}</b><small>Código ${esc(e.codigo)} · ${esc(e.municipio)}</small>
     <div class="l"><i class="fa-solid fa-sitemap"></i><a href="#" onclick="event.preventDefault();focarDREmt(${dres.indexOf(e.dre)})" style="color:${cor}">${esc(e.dre)}</a></div>
+    <div class="l"><i class="fa-solid fa-ruler"></i><span><b style="color:${faixaDist(distEscola(e))[2]}">${fmtKm(distEscola(e))}</b> em linha reta até a sede da DRE · ~${fmtKm(distEscola(e) * FATOR_ESTRADA)} por estrada · ~${fmtHoras(distEscola(e))} <a href="${rotaDRE(e)}" target="_blank" rel="noopener">rota real</a></span></div>
     ${end ? `<div class="l"><i class="fa-solid fa-location-dot"></i>${esc(end)}${e.cep ? ' · ' + esc(e.cep) : ''}</div>` : ''}
     ${e.telefone ? `<div class="l"><i class="fa-solid fa-phone"></i>${esc(e.telefone)}</div>` : ''}
     ${e.email ? `<div class="l"><i class="fa-solid fa-envelope"></i><a href="mailto:${esc(e.email)}">${esc(e.email)}</a></div>` : ''}
@@ -3191,6 +3266,7 @@ function popupEscola(e, dres){
 function corEscolaMT(e, dres){
   if (mt.modo === 'tipo') return CORES_TIPO[grupoTipo(e.tipo)] || CORES_TIPO.Outro;
   if (mt.modo === 'localidade') return e.localidade === 'RURAL' ? '#65a30d' : '#2563eb';
+  if (mt.modo === 'distancia') return faixaDist(distEscola(e))[2];
   if (mt.modo === 'municipio' || mt.modo === 'divisao') return '#0f172a';
   return corDRE(dres, e.dre);
 }
@@ -3200,7 +3276,7 @@ function desenharEscolasMT(){
   if (mt.camadas.cluster) { mt.mapa.removeLayer(mt.camadas.cluster); mt.camadas.cluster = null; }
   mt.camadas.escolas.clearLayers(); mt.camadas.dres.clearLayers(); mt.camadas.ligacoes.clearLayers(); mt.marcadores.clear();
   const sedes = new Map(dres.map(d => [d, sedeDRE(d, todas)]));
-  if ((mt.ligacoes && modo !== 'divisao') || (foco && modo !== 'sodre')) lista.filter(e => (!foco || e.dre === foco) && (!mun || chaveMun(e.municipio) === mun)).forEach(e => L.polyline([sedes.get(e.dre), [e.latitude, e.longitude]], { color:corDRE(dres, e.dre), weight:foco ? 1.6 : 1.1, opacity:foco ? .7 : .45, renderer:mt.render, interactive:false }).addTo(mt.camadas.ligacoes));
+  if ((mt.ligacoes && modo !== 'divisao') || modo === 'distancia' || (foco && modo !== 'sodre')) lista.filter(e => (!foco || e.dre === foco) && (!mun || chaveMun(e.municipio) === mun)).forEach(e => L.polyline([sedes.get(e.dre), [e.latitude, e.longitude]], { color:modo === 'distancia' ? faixaDist(distEscola(e))[2] : corDRE(dres, e.dre), weight:foco ? 1.6 : 1.1, opacity:foco ? .7 : .45, renderer:mt.render, interactive:false }).addTo(mt.camadas.ligacoes));
   const pequeno = ['regioes', 'municipio', 'divisao'].includes(modo);
   let destino = mt.camadas.escolas;
   if (modo === 'cluster' && L.markerClusterGroup) {
@@ -3217,7 +3293,7 @@ function desenharEscolasMT(){
     if (destino === mt.camadas.escolas) opts.renderer = mt.render;
     const m = L.circleMarker([e.latitude, e.longitude], opts);
     if (!apagada) { m.on('mouseover', () => m.setRadius(opts.radius + 3)); m.on('mouseout', () => m.setRadius(opts.radius)); }
-    m.bindTooltip(`<b>${esc(e.nome)}</b><br>${esc(e.municipio)} · ${esc(nomeDRE(e.dre))}`, { direction:'top', offset:[0, -4], className:'mt-tip' });
+    m.bindTooltip(`<b>${esc(e.nome)}</b><br>${esc(e.municipio)} · ${esc(nomeDRE(e.dre))} · ${fmtKm(distEscola(e))} da DRE`, { direction:'top', offset:[0, -4], className:'mt-tip' });
     m.bindPopup(() => popupEscola(e, dres), { maxWidth:320, className:'mt-popup' });
     destino.addLayer(m); mt.marcadores.set(e.codigo, m);
   });
@@ -3435,6 +3511,7 @@ function legendaMT(dres, lista){
   let it = [];
   if (mt.modo === 'tipo') { const c = {}; lista.forEach(e => { const g = grupoTipo(e.tipo); c[g] = (c[g] || 0) + 1; }); it = Object.entries(c).sort((a, b) => b[1] - a[1]).map(([k, n]) => [CORES_TIPO[k] || CORES_TIPO.Outro, k, n]); }
   else if (mt.modo === 'localidade') it = [['#2563eb', 'Urbanas', lista.filter(e => e.localidade !== 'RURAL').length], ['#65a30d', 'Rurais', lista.filter(e => e.localidade === 'RURAL').length]];
+  else if (mt.modo === 'distancia') it = FAIXAS_DIST.map(f => [f[2], f[1], lista.filter(e => faixaDist(distEscola(e)) === f).length]);
   else if (mt.modo === 'divisao') { const ks = mt.munF ? [...mt.munF.values()] : [], com = ks.filter(f => f.properties.n).length; it = [['#fde68a', `${ks.length || 142} municípios`], ['#bfdbfe', `${com} com escola estadual`, undefined], ['#e2e8f0', `${(ks.length || 142) - com} sem escola estadual`]]; }
   else if (mt.modo === 'municipio') it = [['#dbeafe', '1 escola'], ['#93c5fd', '2'], ['#60a5fa', '3 a 4'], ['#3b82f6', '5 a 8'], ['#1d4ed8', '9 a 16'], ['#1e3a8a', 'mais de 16'], ['#e2e8f0', 'sem escola']];
   else it = dres.map((d, i) => [corDRE(dres, d), nomeDRE(d), lista.filter(e => e.dre === d).length, i]);
