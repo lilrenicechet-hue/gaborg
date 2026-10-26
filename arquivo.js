@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.21.0';
+const VERSAO = '1.22.0';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -1272,6 +1272,7 @@ function atualizarVistaAtual(){
   else if (vistaAtual === 'resultados') renderResultados();
   else if (vistaAtual === 'regional') renderRegional();
   else if (vistaAtual === 'reunioes') renderReunioes();
+  else if (vistaAtual === 'relatorios') renderRelatorios();
   atualizarBadgeIm();
 }
 function redesenharTudo(){ indexar(); atualizarVistaAtual(); if (selId && porId.has(selId)) renderPainel(); else fecharPainel(); }
@@ -3873,10 +3874,14 @@ function gerarMinuta(o){
   return h;
 }
 function exportarMinuta(modo){
-  const o = dadosMinutaForm(), html = gerarMinuta(o), p = o.cenario && DB.propostas.find(x => x.id === o.cenario), nome = 'minuta-decreto-' + (p ? norm(p.nome).replace(/[^a-z0-9]+/g, '-').slice(0, 40) : 'estrutura-seduc') + '-' + hojeISO();
-  if (modo === 'word') baixarWord(nome, 'Minuta de decreto', html);
-  else if (modo === 'print') imprimirDoc('Minuta de decreto', html);
-  else { const t = document.createElement('div'); t.innerHTML = html; navigator.clipboard.writeText(t.innerText).then(() => toast('Texto copiado.'), () => toast('Não foi possível copiar.', 'aviso')); }
+  const o = dadosMinutaForm(), p = o.cenario && DB.propostas.find(x => x.id === o.cenario);
+  if (modo === 'copiar') { const t = document.createElement('div'); t.innerHTML = gerarMinuta(o); navigator.clipboard.writeText(t.innerText).then(() => toast('Texto copiado.'), () => toast('Não foi possível copiar.', 'aviso')); return; }
+  const codigo = gerarCodigo('DEC'), d = new Date(), emis = { codigo, data:d.toLocaleDateString('pt-BR'), quando:d.toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }), por:cfg.usuario || cfg.login || '' };
+  const html = gerarMinuta(o) + `<style>${ESTILO_REL}</style>` + docHTML([Object.assign({ t:'selo' }, emis)]);
+  const titulo = 'Minuta de decreto' + (p ? ' – ' + p.nome : ' – estrutura vigente'), nome = 'minuta-decreto-' + codigo;
+  if (modo === 'word') baixarWord(nome, titulo, html); else imprimirDoc(titulo, html);
+  registrarEmissao({ c:codigo, tipo:'Minuta de decreto', titulo, formato:modo === 'word' ? 'word' : 'print', det:p ? p.nome : 'Estrutura vigente' });
+  toast('Documento emitido: ' + codigo);
 }
 
 /* ===================== IMPLANTAÇÃO DA NOVA ESTRUTURA ===================== */
@@ -4245,6 +4250,388 @@ function exportarAta(id, modo){
   if (modo === 'word') baixarWord('memoria-reuniao-' + String(r.data).slice(0, 10), 'Memória de reunião', h); else imprimirDoc('Memória de reunião', h);
 }
 
+/* ===================== DOCUMENTOS: MODELO ÚNICO → PRÉVIA, PDF, WORD E IMPRESSÃO ===================== */
+const SISTEMA_NOME = 'GABOrg · Organização Institucional', SISTEMA_ORG = 'Secretaria de Estado de Educação de Mato Grosso – SEDUC-MT';
+/* código de verificação: GAB-REL-20261025-K7Q2X (o último caractere confere os demais) */
+function digitoCodigo(s){ let h = 7; for (const ch of s.replace(/-/g, '')) h = (h * 31 + ch.charCodeAt(0)) % 1000003; return '0123456789ABCDEFGHJKLMNPQRSTUVWXYZ'[h % 34]; }
+function gerarCodigo(tipo){ const d = new Date(), dt = d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0'), al = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'; let r = ''; for (let i = 0; i < 4; i++) r += al[Math.floor(Math.random() * al.length)]; const b = `GAB-${tipo}-${dt}-${r}`; return b + digitoCodigo(b); }
+function codigoValido(c){ const m = String(c || '').trim().toUpperCase().match(/^(GAB-[A-Z]{3}-\d{8}-[0-9A-Z]{4})([0-9A-Z])$/); return !!m && digitoCodigo(m[1]) === m[2]; }
+const emissoes = () => { const e = param('emissoes', []); return Array.isArray(e) ? e : []; };
+function registrarEmissao(o){ const l = emissoes(); l.unshift(Object.assign({ em:agora(), por:cfg.usuario || cfg.login || '' }, o)); salvarParam('emissoes', l.slice(0, 500)); }
+/* selo do sistema (SVG): texto em volta, marca no centro, data e código */
+function seloSVG(codigo, data, t){
+  t = t || 120; const c = t / 2, r = t * .4, txt = 'GABORG · SEDUC-MT · DOCUMENTO EMITIDO PELO SISTEMA · ', n = txt.length;
+  const letras = [...txt].map((ch, i) => { const a = i / n * 360, rad = a * Math.PI / 180, x = c + r * Math.sin(rad), y = c - r * Math.cos(rad); return `<text x="${x.toFixed(2)}" y="${y.toFixed(2)}" transform="rotate(${a.toFixed(1)} ${x.toFixed(2)} ${y.toFixed(2)})" text-anchor="middle" dominant-baseline="central" font-family="Helvetica, Arial, sans-serif" font-size="${(t * .062).toFixed(1)}" font-weight="bold" fill="#1e3a8a">${esc(ch)}</text>`; }).join('');
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${t}" height="${t}" viewBox="0 0 ${t} ${t}"><circle cx="${c}" cy="${c}" r="${(c - 2).toFixed(1)}" fill="#ffffff" stroke="#1e3a8a" stroke-width="${(t * .025).toFixed(1)}"/><circle cx="${c}" cy="${c}" r="${(r - t * .06).toFixed(1)}" fill="#eff6ff" stroke="#1e3a8a" stroke-width="${(t * .01).toFixed(1)}"/>${letras}
+    <text x="${c}" y="${(c - t * .04).toFixed(1)}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="${(t * .115).toFixed(1)}" font-weight="bold" fill="#1e3a8a">GABOrg</text>
+    <text x="${c}" y="${(c + t * .06).toFixed(1)}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="${(t * .075).toFixed(1)}" fill="#1e3a8a">${esc(data || '')}</text>
+    <text x="${c}" y="${(c + t * .16).toFixed(1)}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="${(t * .05).toFixed(1)}" font-weight="bold" fill="#0f172a">${esc(String(codigo || '').replace(/^GAB-[A-Z]+-/, ''))}</text></svg>`;
+}
+/* texto com trechos em negrito: [['texto', true], 'normal'] */
+const runsHTML = x => Array.isArray(x) ? x.map(r => Array.isArray(r) ? (r[1] ? `<b>${esc(r[0])}</b>` : esc(r[0])) : esc(r)).join('') : esc(x);
+const runsPDF = x => Array.isArray(x) ? x.map(r => Array.isArray(r) ? { text:String(r[0]), bold:!!r[1] } : { text:String(r) }) : String(x ?? '');
+const celTxt = c => c && typeof c === 'object' && !Array.isArray(c) ? c.x : c;
+function docHTML(blocos, o){
+  o = o || {};
+  const h = blocos.map(b => {
+    switch (b.t) {
+      case 'capa': return `<div class="d-capa"><div class="d-capa-sup"><b>${esc(SISTEMA_NOME)}</b><span>${esc(SISTEMA_ORG)}</span></div><h1>${esc(b.titulo)}</h1>${b.sub ? `<p class="d-sub">${esc(b.sub)}</p>` : ''}<div class="d-capa-selo">${seloSVG(b.codigo, b.data, 150)}</div>
+        <table class="d-capa-tab">${(b.linhas || []).map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join('')}</table></div>`;
+      case 'h1': return `<h1 class="d-h1">${esc(b.x)}</h1>`;
+      case 'h2': return `<h2 class="d-h2">${esc(b.x)}</h2>`;
+      case 'h3': return `<h3 class="d-h3">${esc(b.x)}</h3>`;
+      case 'p': return `<p class="${b.centro ? 'd-c' : ''} ${b.ementa ? 'd-ementa' : ''}" style="${b.recuo ? 'margin-left:' + (b.recuo * 26) + 'px' : ''}">${runsHTML(b.x)}</p>`;
+      case 'kpis': return `<div class="d-kpis">${b.it.map(([r, v, s, c]) => `<div class="d-kpi" style="border-top-color:${c || '#1e3a8a'}"><small>${esc(r)}</small><b>${esc(v)}</b>${s ? `<span>${esc(s)}</span>` : ''}</div>`).join('')}</div>`;
+      case 'tab': return `<table class="d-tab ${b.pq ? 'pq' : ''}"><thead><tr>${b.cab.map((c, i) => `<th class="${(b.dir || []).includes(i) ? 'dir' : ''}">${esc(c)}</th>`).join('')}</tr></thead><tbody>${b.lin.map(l => `<tr>${l.map((c, i) => `<td class="${(b.dir || []).includes(i) ? 'dir' : ''}" style="${c && c.cor ? 'background:' + c.cor : ''}${c && c.b ? ';font-weight:bold' : ''}">${esc(celTxt(c) ?? '')}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${b.cab.length}" class="d-vz">Sem registros.</td></tr>`}</tbody></table>`;
+      case 'barras': { if (!b.it.length) return '<p class="d-nota">Sem dados.</p>'; const mx = Math.max(1, ...b.it.map(x => x[1])); return `<div class="d-barras">${b.it.map(([n, v, r, c]) => `<div class="d-bar"><span class="n">${esc(n)}</span><span class="t"><i style="width:${(v / mx * 100).toFixed(1)}%;background:${c || '#2563eb'}"></i></span><b>${esc(r ?? fmtN(v))}</b></div>`).join('')}</div>`; }
+      case 'lista': return `<div class="d-lista">${b.it.map(([x, n]) => `<p style="margin-left:${(n || 0) * 20}px">${runsHTML(x)}</p>`).join('')}</div>`;
+      case 'alertas': return `<div class="d-alertas">${b.it.map(([t, x]) => `<p class="d-al ${t}">${runsHTML(x)}</p>`).join('')}</div>`;
+      case 'nota': return `<p class="d-nota">${runsHTML(b.x)}</p>`;
+      case 'quebra': return '<div class="d-quebra"></div>';
+      case 'ass': return `<p class="d-ass">______________________________________<br><b>${esc(b.x)}</b>${b.sub ? '<br>' + esc(b.sub) : ''}</p>`;
+      case 'selo': return `<div class="d-aut"><div>${seloSVG(b.codigo, b.data, 110)}</div><div><b>Autenticação</b><p>Documento gerado pelo ${esc(SISTEMA_NOME)} em ${esc(b.quando)}${b.por ? ' por ' + esc(b.por) : ''}.</p><p>Código de verificação: <b>${esc(b.codigo)}</b></p><p class="pq">Para conferir, abra o GABOrg › Relatórios e minutas › Verificar código.</p></div></div>`;
+    } return '';
+  }).join('');
+  return `<div class="d-doc ${o.minuta ? 'minuta' : ''}">${o.minuta ? '<div class="d-marca">MINUTA</div>' : ''}${o.cabecalho ? `<div class="d-cab"><span>${esc(SISTEMA_NOME)}</span><span>${esc(o.cabecalho)}</span></div>` : ''}${h}</div>`;
+}
+const ESTILO_REL = `.d-doc{font-family:Helvetica,Arial,sans-serif;font-size:10.5pt;color:#0f172a;line-height:1.45;position:relative}
+.d-doc.minuta{font-family:'Times New Roman',Times,serif;font-size:12pt}
+.d-marca{position:absolute;top:240px;left:0;right:0;text-align:center;font-size:110px;font-weight:bold;color:rgba(30,58,138,.06);transform:rotate(-30deg);pointer-events:none;letter-spacing:.1em}
+.d-cab{display:flex;justify-content:space-between;font-size:8.5pt;color:#64748b;border-bottom:1px solid #cbd5e1;padding-bottom:4px;margin-bottom:14px}
+.d-capa{text-align:center;padding:30px 0 10px;page-break-after:always}.d-capa-sup b{display:block;font-size:13pt;color:#1e3a8a}.d-capa-sup span{font-size:9.5pt;color:#475569}
+.d-capa h1{font-size:22pt;margin:60px 0 8px;color:#0f172a}.d-sub{font-size:12pt;color:#475569;text-align:center}.d-capa-selo{margin:40px 0}
+.d-capa-tab{margin:0 auto;border-collapse:collapse;min-width:60%;font-size:10pt}.d-capa-tab th{text-align:left;color:#475569;font-weight:normal;padding:5px 12px;border-bottom:1px solid #e2e8f0}.d-capa-tab td{text-align:left;font-weight:bold;padding:5px 12px;border-bottom:1px solid #e2e8f0}
+.d-h1{font-size:15pt;color:#1e3a8a;border-bottom:2px solid #1e3a8a;padding-bottom:4px;margin:22px 0 10px}.minuta .d-h1{border:0;color:#000;text-align:center;font-size:13pt}
+.d-h2{font-size:12pt;color:#0f172a;margin:16px 0 6px}.minuta .d-h2{text-align:center;text-transform:uppercase}
+.d-h3{font-size:11pt;color:#334155;margin:12px 0 4px}.minuta .d-h3{text-align:center}
+.d-doc p{margin:0 0 6px;text-align:justify}.d-c{text-align:center!important}.d-ementa{margin-left:45%!important;font-style:italic}
+.d-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:8px 0 12px}.d-kpi{border:1px solid #e2e8f0;border-top:3px solid #1e3a8a;border-radius:6px;padding:7px 9px}.d-kpi small{display:block;color:#64748b;font-size:8.5pt}.d-kpi b{display:block;font-size:15pt}.d-kpi span{display:block;font-size:8pt;color:#64748b}
+.d-tab{width:100%;border-collapse:collapse;margin:6px 0 12px;font-size:9.5pt}.d-tab.pq{font-size:8.5pt}.d-tab th{background:#e2e8f0;text-align:left;padding:4px 6px;border:1px solid #cbd5e1}.d-tab td{padding:3px 6px;border:1px solid #e2e8f0;vertical-align:top}.d-tab .dir{text-align:right}.d-vz{text-align:center;color:#94a3b8}
+.minuta .d-tab th{background:#eee;border-color:#000}.minuta .d-tab td{border-color:#000}
+.d-barras{margin:6px 0 12px}.d-bar{display:grid;grid-template-columns:200px 1fr 90px;gap:8px;align-items:center;font-size:9.5pt;margin-bottom:3px}.d-bar .t{height:9px;background:#f1f5f9;border-radius:5px;overflow:hidden}.d-bar .t i{display:block;height:100%}.d-bar b{text-align:right}
+.d-lista p{margin:0 0 2px}.d-alertas p{padding:5px 9px;border-left:3px solid #2563eb;background:#f8fafc;margin:0 0 4px}.d-al.alerta{border-color:#dc2626}.d-al.atencao{border-color:#d97706}.d-al.ok{border-color:#16a34a}
+.d-nota{font-size:8.5pt;color:#64748b}.d-quebra{page-break-after:always;height:1px}
+.d-ass{text-align:center!important;margin-top:40px}
+.d-aut{display:flex;gap:16px;align-items:center;border:1px solid #cbd5e1;border-radius:8px;padding:12px;margin-top:24px;page-break-inside:avoid}.d-aut p{margin:2px 0;font-size:9.5pt}.d-aut .pq{color:#64748b;font-size:8.5pt}`;
+/* PDF com pdfmake (texto real, cabeçalho, rodapé e páginas numeradas) */
+async function carregarPdfMake(){
+  if (window.pdfMake && pdfMake.vfs) return;
+  await carregarScript(['https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.10/pdfmake.min.js', 'https://cdn.jsdelivr.net/npm/pdfmake@0.2.10/build/pdfmake.min.js']);
+  await carregarScript(['https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.10/vfs_fonts.js', 'https://cdn.jsdelivr.net/npm/pdfmake@0.2.10/build/vfs_fonts.js']);
+}
+function docPDF(blocos, o){
+  const lc = '#cbd5e1', layoutTab = { hLineWidth:() => .5, vLineWidth:() => .5, hLineColor:() => lc, vLineColor:() => lc, paddingLeft:() => 4, paddingRight:() => 4, paddingTop:() => 2, paddingBottom:() => 2 };
+  const W = o.minuta ? 451 : 483, conteudo = [];
+  blocos.forEach(b => {
+    switch (b.t) {
+      case 'capa': conteudo.push({ stack:[{ text:SISTEMA_NOME, style:'capaSup' }, { text:SISTEMA_ORG, style:'capaOrg' }, { text:b.titulo, style:'capaTit' }, b.sub ? { text:b.sub, style:'capaSub' } : '', { svg:seloSVG(b.codigo, b.data, 150), width:150, alignment:'center', margin:[0, 30, 0, 30] },
+        { table:{ widths:[150, '*'], body:(b.linhas || []).map(([k, v]) => [{ text:k, color:'#475569' }, { text:String(v), bold:true }]) }, layout:{ hLineWidth:(i) => i ? .5 : 0, vLineWidth:() => 0, hLineColor:() => '#e2e8f0' }, margin:[40, 0, 40, 0] }], pageBreak:'after' }); break;
+      case 'h1': conteudo.push({ text:b.x, style:o.minuta ? 'mh1' : 'h1' }); if (!o.minuta) conteudo.push({ canvas:[{ type:'line', x1:0, y1:0, x2:W, y2:0, lineWidth:1.2, lineColor:'#1e3a8a' }], margin:[0, 0, 0, 6] }); break;
+      case 'h2': conteudo.push({ text:b.x, style:o.minuta ? 'mh2' : 'h2' }); break;
+      case 'h3': conteudo.push({ text:b.x, style:o.minuta ? 'mh3' : 'h3' }); break;
+      case 'p': conteudo.push({ text:runsPDF(b.x), alignment:b.centro ? 'center' : 'justify', italics:!!b.ementa, margin:[b.ementa ? W * .45 : (b.recuo || 0) * 20, b.ementa ? 8 : 0, 0, b.ementa ? 10 : 5] }); break;
+      case 'kpis': { const lin = []; for (let i = 0; i < b.it.length; i += 4) lin.push(b.it.slice(i, i + 4)); lin.forEach(l => conteudo.push({ columns:l.map(([r, v, s, c]) => ({ stack:[{ canvas:[{ type:'line', x1:0, y1:0, x2:112, y2:0, lineWidth:2.5, lineColor:c || '#1e3a8a' }] }, { text:r, fontSize:7.5, color:'#64748b', margin:[0, 4, 0, 0] }, { text:String(v), fontSize:14, bold:true }, s ? { text:s, fontSize:7, color:'#64748b' } : ''] })).concat(Array(4 - l.length).fill({ text:'' })), columnGap:9, margin:[0, 2, 0, 8] })); break; }
+      case 'tab': { const dir = b.dir || [];
+        conteudo.push({ table:{ headerRows:1, widths:b.larg || b.cab.map(() => '*'), dontBreakRows:true, body:[b.cab.map((c, i) => ({ text:c, bold:true, fillColor:o.minuta ? '#eeeeee' : '#e2e8f0', alignment:dir.includes(i) ? 'right' : 'left' }))].concat(b.lin.length ? b.lin.map(l => l.map((c, i) => ({ text:String(celTxt(c) ?? ''), alignment:dir.includes(i) ? 'right' : 'left', fillColor:c && c.cor ? c.cor : undefined, bold:!!(c && c.b) }))) : [[{ text:'Sem registros.', colSpan:b.cab.length, alignment:'center', color:'#94a3b8' }].concat(Array(b.cab.length - 1).fill(''))]) },
+          layout:o.minuta ? { hLineWidth:() => .5, vLineWidth:() => .5, paddingLeft:() => 4, paddingRight:() => 4 } : layoutTab, fontSize:b.pq ? 7.5 : 8.5, margin:[0, 3, 0, 10] }); break; }
+      case 'barras': { if (!b.it.length) { conteudo.push({ text:'Sem dados.', color:'#94a3b8', margin:[0, 2, 0, 8] }); break; } const mx = Math.max(1, ...b.it.map(x => x[1])), bw = W - 260;
+        conteudo.push({ table:{ widths:[160, bw, 80], body:b.it.map(([n, v, r, c]) => [{ text:n, fontSize:8.5 }, { canvas:[{ type:'rect', x:0, y:2, w:bw, h:7, r:3, color:'#f1f5f9' }, { type:'rect', x:0, y:2, w:Math.max(1, v / mx * bw), h:7, r:3, color:c || '#2563eb' }] }, { text:String(r ?? fmtN(v)), alignment:'right', bold:true, fontSize:8.5 }]) }, layout:'noBorders', margin:[0, 2, 0, 10] }); break; }
+      case 'lista': b.it.forEach(([x, n]) => conteudo.push({ text:runsPDF(x), margin:[(n || 0) * 16, 0, 0, 2], fontSize:o.minuta ? 12 : 9.5 })); break;
+      case 'alertas': if (!b.it.length) break; conteudo.push({ table:{ widths:[3, '*'], body:b.it.map(([t, x]) => [{ text:'', fillColor:{ alerta:'#dc2626', atencao:'#d97706', ok:'#16a34a' }[t] || '#2563eb' }, { text:runsPDF(x), fillColor:'#f8fafc', margin:[4, 2, 2, 2] }]) }, layout:{ hLineWidth:() => 2, hLineColor:() => '#ffffff', vLineWidth:() => 0 }, margin:[0, 2, 0, 10] }); break;
+      case 'nota': conteudo.push({ text:runsPDF(b.x), fontSize:7.5, color:'#64748b', margin:[0, 2, 0, 8] }); break;
+      case 'quebra': conteudo.push({ text:'', pageBreak:'after' }); break;
+      case 'ass': conteudo.push({ stack:[{ text:'______________________________________', alignment:'center', margin:[0, 30, 0, 0] }, { text:b.x, bold:true, alignment:'center' }, b.sub ? { text:b.sub, alignment:'center' } : ''], unbreakable:true }); break;
+      case 'selo': conteudo.push({ table:{ widths:[100, '*'], body:[[{ svg:seloSVG(b.codigo, b.data, 96), width:96 }, { stack:[{ text:'Autenticação', bold:true, margin:[0, 6, 0, 4] }, { text:`Documento gerado pelo ${SISTEMA_NOME} em ${b.quando}${b.por ? ' por ' + b.por : ''}.`, fontSize:9 }, { text:[{ text:'Código de verificação: ', fontSize:9 }, { text:b.codigo, bold:true, fontSize:10 }], margin:[0, 4, 0, 4] }, { text:'Para conferir, abra o GABOrg › Relatórios e minutas › Verificar código.', fontSize:8, color:'#64748b' }] }]] }, layout:{ hLineWidth:() => .6, vLineWidth:() => .6, hLineColor:() => lc, vLineColor:() => lc, paddingLeft:() => 8, paddingTop:() => 6, paddingBottom:() => 6 }, margin:[0, 18, 0, 0], unbreakable:true }); break;
+    }
+  });
+  return { pageSize:'A4', pageMargins:o.minuta ? [85, 60, 57, 55] : [56, 58, 56, 50], info:{ title:o.titulo, author:SISTEMA_NOME, subject:o.codigo, creator:'GABOrg' },
+    watermark:o.minuta ? { text:'MINUTA', color:'#1e3a8a', opacity:.06, bold:true } : undefined,
+    header:(p) => p === 1 && blocos[0] && blocos[0].t === 'capa' ? null : { columns:[{ text:SISTEMA_NOME, color:'#64748b', fontSize:7.5 }, { text:o.titulo, alignment:'right', color:'#64748b', fontSize:7.5 }], margin:[o.minuta ? 85 : 56, 26, o.minuta ? 57 : 56, 0] },
+    footer:(p, n) => ({ columns:[{ text:`Código ${o.codigo} · emitido em ${o.quando}`, color:'#64748b', fontSize:7.5 }, { text:`Página ${p} de ${n}`, alignment:'right', color:'#64748b', fontSize:7.5 }], margin:[o.minuta ? 85 : 56, 18, o.minuta ? 57 : 56, 0] }),
+    content:conteudo,
+    styles:{ h1:{ fontSize:14, bold:true, color:'#1e3a8a', margin:[0, 14, 0, 3] }, h2:{ fontSize:11.5, bold:true, margin:[0, 10, 0, 4] }, h3:{ fontSize:10, bold:true, color:'#334155', margin:[0, 8, 0, 3] }, mh1:{ fontSize:13, bold:true, alignment:'center', margin:[0, 6, 0, 6] }, mh2:{ fontSize:12, bold:true, alignment:'center', margin:[0, 12, 0, 6] }, mh3:{ fontSize:12, bold:true, alignment:'center', margin:[0, 8, 0, 4] },
+      capaSup:{ fontSize:13, bold:true, color:'#1e3a8a', alignment:'center', margin:[0, 30, 0, 2] }, capaOrg:{ fontSize:9.5, color:'#475569', alignment:'center' }, capaTit:{ fontSize:22, bold:true, alignment:'center', margin:[0, 70, 0, 8] }, capaSub:{ fontSize:12, color:'#475569', alignment:'center' } },
+    defaultStyle:{ font:'Roboto', fontSize:o.minuta ? 12 : 9.5, lineHeight:o.minuta ? 1.25 : 1.15 } };
+}
+/* emitir: gera o código, registra e entrega no formato pedido */
+async function emitirDoc({ tipo, titulo, montar, minuta, formato, nomeArq, detalhe }){
+  const codigo = gerarCodigo(tipo), d = new Date(), data = d.toLocaleDateString('pt-BR'), quando = d.toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+  const blocos = montar({ codigo, data, quando, por:cfg.usuario || cfg.login || '' }), o = { codigo, data, quando, titulo, minuta };
+  const nome = (nomeArq || 'gaborg') + '-' + codigo;
+  if (formato === 'pdf') {
+    toast('Gerando o PDF...');
+    try { await carregarPdfMake(); } catch (e) { toast('Não foi possível carregar o gerador de PDF. Use Imprimir › Salvar como PDF.', 'aviso'); return; }
+    await new Promise((ok, erro) => { try { pdfMake.createPdf(docPDF(blocos, o)).download(nome + '.pdf', ok); setTimeout(ok, 4000); } catch (e) { erro(e); } });
+  } else if (formato === 'word') baixarWord(nome, titulo, `<style>${ESTILO_REL}</style>` + docHTML(blocos, { minuta, cabecalho:titulo + ' · ' + codigo }));
+  else imprimirDoc(titulo, `<style>${ESTILO_REL}.d-capa{page-break-after:always}</style>` + docHTML(blocos, { minuta, cabecalho:titulo + ' · ' + codigo }));
+  registrarEmissao({ c:codigo, tipo:{ REL:'Relatório', POR:'Minuta de portaria', DEC:'Minuta de decreto' }[tipo] || tipo, titulo, formato, det:detalhe || '' });
+  toast('Documento emitido: ' + codigo);
+  return codigo;
+}
+
+/* ===================== RELATÓRIO COMPLETO: SEÇÕES SELECIONÁVEIS ===================== */
+const REL_SECOES = [
+  ['Visão geral', [['resumo', 'Resumo executivo e índice de maturidade'], ['kpis', 'Indicadores-chave'], ['areas', 'Painel por secretaria adjunta']]],
+  ['Estrutura', [['estrutura', 'Estrutura hierárquica (organograma em lista)'], ['quadro', 'Quadro de setores'], ['governanca', 'Amplitude de controle e qualidade do cadastro'], ['competencias', 'Competências repetidas e lacunas']]],
+  ['Pessoas e governança', [['chefias', 'Chefias e sucessão'], ['riscos', 'Riscos e prioridades'], ['validacoes', 'Validações entre setores']]],
+  ['Financeiro e propostas', [['financeiro', 'Custos e cargos em comissão'], ['propostas', 'Propostas: alterações, custo e metas']]],
+  ['Rede escolar', [['rede', 'Rede escolar por DRE'], ['distancias', 'Distâncias das escolas até as DREs'], ['regional', 'Gestão regional e sugestões'], ['escolas', 'Lista de unidades escolares']]],
+  ['Gestão', [['implantacao', 'Implantação: etapas e prazos'], ['metas', 'Pacto de resultados'], ['reunioes', 'Reuniões, decisões e encaminhamentos']]]
+];
+const REL_MODELOS = { completo:['Completo', REL_SECOES.flatMap(g => g[1].map(x => x[0])).filter(k => k !== 'escolas')], executivo:['Executivo', ['resumo', 'kpis', 'areas', 'riscos', 'propostas', 'regional']], estrutura:['Estrutura e pessoas', ['kpis', 'estrutura', 'quadro', 'governanca', 'chefias', 'competencias']], rede:['Rede escolar', ['rede', 'distancias', 'regional', 'escolas']], financeiro:['Financeiro e propostas', ['kpis', 'financeiro', 'propostas', 'implantacao']] };
+let relCfg = Object.assign({ titulo:'Relatório da estrutura organizacional', obs:'', area:'', dre:'', props:'*', secoes:REL_MODELOS.executivo[1] }, store.get('gaborg_rel', {}));
+const relNomeArea = a => a ? nomeCurto(porId.get(a)) : 'Toda a Secretaria';
+function relTitulos(){ const m = {}; REL_SECOES.forEach(g => g[1].forEach(([k, n]) => m[k] = n)); return m; }
+function montarRelatorio(F, emis){
+  const T = relTitulos(), D = dadosInd(F.area), B = [], sec = F.secoes.filter(k => T[k]);
+  const E = distanciasMT(), dres = E.dres, dreOk = d => !F.dre || d === F.dre, P = (DB.propostas || []).filter(p => F.props === '*' || (F.props || []).includes(p.id));
+  B.push({ t:'capa', titulo:F.titulo || 'Relatório', sub:SISTEMA_ORG, codigo:emis.codigo, data:emis.data, linhas:[['Código de verificação', emis.codigo], ['Emitido em', emis.quando], ['Emitido por', emis.por || '—'], ['Abrangência', relNomeArea(F.area) + (F.dre ? ' · ' + F.dre : '')], ['Seções', sec.length + ' de ' + Object.keys(T).length]].concat(F.obs ? [['Observação', F.obs]] : []) });
+  B.push({ t:'h1', x:'Sumário' }, { t:'lista', it:sec.map((k, i) => [[[`${i + 1}. `, true], T[k]], 0]) });
+  let n = 0; const H = k => B.push({ t:'h1', x:`${++n}. ${T[k]}` });
+  const ser = D.base.reduce((t, s) => t + num(s.servidores), 0), cad = D.base.length ? Math.round(D.base.reduce((t, s) => t + cadSetor(s), 0) / D.base.length * 100) : 0;
+  sec.forEach(k => {
+    if (k === 'resumo') { H(k); const idx = D.porArea.length ? Math.round(D.porArea.reduce((t, x) => t + x.idx * x.n, 0) / Math.max(1, D.porArea.reduce((t, x) => t + x.n, 0))) : 0;
+      B.push({ t:'kpis', it:[['Índice de maturidade', idx + ' / 100', '40% cadastro · 30% validação · 20% chefias · 10% risco', idx >= 75 ? '#16a34a' : idx >= 50 ? '#d97706' : '#dc2626']] });
+      B.push({ t:'alertas', it:insightsInd(D, F.area).map(([t, h]) => [t, h.replace(/<[^>]+>/g, '')]) }); }
+    if (k === 'kpis') { H(k); const ok = D.vals.filter(v => ['Aprovado', 'Aprovado com ressalvas'].includes(v.status)).length, M = metricasEstrutura(D.base);
+      B.push({ t:'kpis', it:[['Setores ativos', fmtN(D.base.length), M.niveis + ' níveis hierárquicos'], ['Chefias', fmtN(D.chefias.length), D.chefias.filter(s => !s.responsavel).length + ' sem responsável', '#7c3aed'], ['Servidores informados', fmtN(ser), D.base.reduce((t, s) => t + num(s.comissionados), 0) + ' comissionados', '#0891b2'], ['Unidades escolares', fmtN(D.E.length), dres.length + ' DREs', '#16a34a'], ['Amplitude média', M.ampMedia.toLocaleString('pt-BR', { maximumFractionDigits:1 }), 'subordinados por chefia', '#0e7490'], ['Custo anual atual', fmtRc(D.custo.Atual.a), 'mensal ' + fmtRc(D.custo.Atual.m), '#2563eb'], ['Validações concluídas', pct(ok, D.vals.length) + '%', D.pend.length + ' pendentes', '#d97706'], ['Cadastro completo', cad + '%', 'responsável, competências, entregas...', '#7c3aed']] }); }
+    if (k === 'areas') { H(k); B.push({ t:'tab', cab:['Área', 'Setores', 'Chefias', 'Servidores', 'Custo anual', 'Cadastro', 'Validados', 'Sem resp.', 'Em risco', 'Índice'], dir:[1, 2, 3, 4, 5, 6, 7, 8, 9], larg:['*', 38, 38, 48, 58, 40, 42, 36, 36, 34], pq:true,
+      lin:D.porArea.slice().sort((a, b) => b.n - a.n).map(x => [x.nome, x.n, x.ch, fmtN(x.ser), x.ca ? fmtRc(x.ca) : '—', Math.round(x.cad) + '%', x.val + '%', x.semResp, x.risco, { x:x.idx, b:true, cor:x.idx >= 75 ? '#dcfce7' : x.idx >= 50 ? '#fef3c7' : '#fee2e2' }]) }); }
+    if (k === 'estrutura') { H(k); const M = metricasEstrutura(D.base), lin = [];
+      const vis = (pai, nv) => (M.fil.get(pai) || []).slice().sort((a, b) => num(a.ordem) - num(b.ordem) || a.nome.localeCompare(b.nome, 'pt-BR')).forEach(s => { lin.push([[[s.nome + (s.sigla ? ' (' + s.sigla + ')' : ''), nv < 2], ` — ${s.tipo}${s.responsavel ? ' · ' + s.responsavel : ''}${s.tipo === 'Unidades Escolares' && num(s.quantidade) ? ' · ' + fmtN(s.quantidade) + ' unidades' : ''}`], Math.min(nv, 6)]); vis(s.id, nv + 1); });
+      vis('', 0); B.push({ t:'p', x:`${fmtN(D.base.length)} setores ativos em ${M.niveis} níveis${F.area ? ' na área ' + relNomeArea(F.area) : ''}.` }, { t:'lista', it:lin }); }
+    if (k === 'quadro') { H(k); B.push({ t:'tab', pq:true, cab:['Setor', 'Tipo', 'Responsável', 'Serv.', 'Impacto', 'Validação'], larg:['*', 70, 90, 30, 50, 70], dir:[3], lin:D.base.slice().sort((a, b) => (prof.get(a.id) || 0) - (prof.get(b.id) || 0) || a.nome.localeCompare(b.nome, 'pt-BR')).map(s => [s.nome + (s.sigla ? ' · ' + s.sigla : ''), s.tipo, s.responsavel || '—', s.servidores || '—', IMPACTO[num(s.impacto)][0], statusVal(s.id)]) }); }
+    if (k === 'governanca') { H(k); const M = metricasEstrutura(D.base);
+      B.push({ t:'h3', x:'Qualidade do cadastro' }, { t:'barras', it:CAMPOS_CAD.map(([c, nm]) => { const v = pct(D.base.filter(s => c === 'impacto' ? num(s.impacto) > 0 : c === 'servidores' ? String(s.servidores ?? '') !== '' : String(s[c] || '').trim()).length, D.base.length); return [nm, v, v + '%', v >= 75 ? '#16a34a' : v >= 50 ? '#eab308' : '#dc2626']; }) });
+      B.push({ t:'h3', x:'Chefias com mais de 8 setores subordinados' }, { t:'tab', cab:['Chefia', 'Subordinados diretos'], larg:['*', 90], dir:[1], lin:M.comSub.filter(x => x[1] > 8).sort((a, b) => b[1] - a[1]).map(([s, q]) => [s.nome, q]) });
+      B.push({ t:'h3', x:'Chefias com apenas 1 setor subordinado' }, { t:'tab', cab:['Chefia', 'Único subordinado'], lin:M.comSub.filter(x => x[1] === 1).map(([s]) => [s.nome, ((M.fil.get(s.id) || [])[0] || {}).nome || '']) }); }
+    if (k === 'competencias') { H(k); const C = baseCompetencias(), ref = String(param('atribuicoes', '') || '').split('\n').map(limparComp).filter(t => t.length > 8);
+      B.push({ t:'p', x:`${fmtN(C.C.length)} competências cadastradas em ${new Set(C.C.map(c => c.s.id)).size} setores. ${C.pares.length} pares de competências parecidas em setores diferentes.` });
+      B.push({ t:'tab', pq:true, cab:['Semelhança', 'Setor A', 'Competência A', 'Setor B', 'Competência B'], larg:[42, 70, '*', 70, '*'], lin:C.pares.slice(0, 60).map(p => [Math.round(p.sim * 100) + '%', nomeCurto(p.a.s), p.a.t, nomeCurto(p.b.s), p.b.t]) });
+      if (ref.length) { const lac = ref.map(t => ({ t, m:melhorSetorPara(t, C) })).filter(x => !x.m || x.m.sim < .3 || x.m.n < 2); B.push({ t:'h3', x:`Atribuições de referência sem setor responsável (${lac.length} de ${ref.length})` }, { t:'lista', it:lac.map(x => ['• ' + x.t, 0]) }); } }
+    if (k === 'chefias') { H(k); const L = D.base.filter(s => CHEFIAS.includes(s.tipo)).map(s => ({ s, c:chefiaDe(s) })), cn = q => L.filter(x => x.c.situacao === q).length;
+      B.push({ t:'kpis', it:[['Chefias', L.length, ''], ['Com titular', cn('Titular'), '', '#16a34a'], ['Interinas / em nomeação', cn('Interino') + cn('Em nomeação'), '', '#d97706'], ['Vagas', cn('Vago'), '', '#dc2626']] });
+      B.push({ t:'tab', pq:true, cab:['Unidade', 'Símbolo', 'Titular', 'Situação', 'Desde', 'Substituto', 'Atenção'], larg:['*', 40, 80, 50, 46, 70, 90], lin:L.sort((a, b) => (prof.get(a.s.id) || 0) - (prof.get(b.s.id) || 0)).map(x => [x.s.nome, simboloChefia(x.s.id) || '—', x.c.titular || '—', { x:x.c.situacao, cor:{ Vago:'#fee2e2', Interino:'#fef3c7', 'Em nomeação':'#dbeafe' }[x.c.situacao] }, fmtDia(x.c.desde), x.c.substituto || '—', alertasChefia(x.s, x.c).map(a => a[1]).filter(a => a !== 'sem registro').join('; ')]) }); }
+    if (k === 'riscos') { H(k); const r = D.base.filter(emRisco);
+      B.push({ t:'h3', x:`Setores em risco (${r.length})` }, { t:'tab', pq:true, cab:['Setor', 'Impacto', 'Validação', 'Responsável', 'Pontos − / +'], larg:['*', 50, 70, 90, 50], lin:r.map(s => [s.nome, IMPACTO[num(s.impacto)][0], statusVal(s.id), s.responsavel || 'sem responsável', linhasDe(s.negativos).length + ' / ' + linhasDe(s.positivos).length]) });
+      B.push({ t:'h3', x:'Validações pendentes mais antigas' }, { t:'tab', pq:true, cab:['Setor', 'Validador', 'Pedida em', 'Dias'], larg:['*', '*', 60, 34], dir:[3], lin:D.pend.slice().sort((a, b) => diasDesde(b.solicitadoEm) - diasDesde(a.solicitadoEm)).slice(0, 25).map(v => [nomeSetor(v.setorId), nomeSetor(v.validadorId), fmtDia(v.solicitadoEm), diasDesde(v.solicitadoEm)]) }); }
+    if (k === 'validacoes') { H(k); const st = {}; D.vals.forEach(v => { const q = v.status || 'Pendente'; st[q] = (st[q] || 0) + 1; });
+      B.push({ t:'barras', it:Object.entries(st).map(([q, c]) => [q, c, c, STATUS_VAL[q]]) }, { t:'tab', pq:true, cab:['Setor avaliado', 'Validador', 'Situação', 'Parecer', 'Pedida em'], larg:['*', '*', 60, '*', 55], lin:D.vals.map(v => [nomeSetor(v.setorId), nomeSetor(v.validadorId), v.status || 'Pendente', v.parecer || '—', fmtDia(v.solicitadoEm)]) }); }
+    if (k === 'financeiro') { H(k); const porCat = {}, dga = new Map(); D.desp.filter(d => (d.cenario || 'Atual') === 'Atual').forEach(d => { const c = calcDesp(d); porCat[c.categoria] = (porCat[c.categoria] || 0) + c.anual; if (d.observacao === MARCA_CHEFIA || /^DGA/i.test(c.r.codigo || '')) { const o = dga.get(c.r.codigo || '—') || { q:0, m:0 }; o.q += c.qtd; o.m += c.mensal; dga.set(c.r.codigo || '—', o); } });
+      B.push({ t:'kpis', it:[['Custo mensal atual', fmtM0(D.custo.Atual.m), ''], ['Custo anual atual', fmtM0(D.custo.Atual.a), '', '#0e7490'], ['Custo anual proposto', fmtM0(D.custo.Proposto.a), 'lançamentos marcados como Proposto', '#7c3aed'], ['Diferença', fmtRs(D.custo.Proposto.a - D.custo.Atual.a), '', '#dc2626']] });
+      B.push({ t:'h3', x:'Custo anual por área' }, { t:'barras', it:D.porArea.filter(x => x.ca).sort((a, b) => b.ca - a.ca).map(x => [x.nome, x.ca, fmtRc(x.ca), x.cor]) });
+      B.push({ t:'h3', x:'Custo anual por categoria' }, { t:'barras', it:Object.entries(porCat).sort((a, b) => b[1] - a[1]).map(([c, v]) => [c, v, fmtRc(v), '#2563eb']) });
+      B.push({ t:'h3', x:'Cargos em comissão por símbolo' }, { t:'tab', cab:['Símbolo', 'Quantidade', 'Custo mensal', 'Custo anual (12 meses)'], dir:[1, 2, 3], lin:[...dga.entries()].sort((a, b) => String(a[0]).localeCompare(String(b[0]), 'pt-BR', { numeric:true })).map(([c, o]) => [c, o.q, fmtM0(o.m), fmtM0(o.m * 12)]) }); }
+    if (k === 'propostas') { H(k); if (!P.length) B.push({ t:'p', x:'Nenhuma proposta selecionada.' });
+      const mt = Object.assign({}, METAS_PADRAO, param('metasReestr', {})), C = cenariosRe();
+      P.forEach(p => { const X = diffCenarios('', p.id), c = t => X.est.filter(e => e.tipo === t).length, cen = C.find(q => q.id === p.id), av = cen ? avaliarCenario(cen, metricasEstrutura(cen.lista), C[0], mt) : [];
+        B.push({ t:'h2', x:p.nome + (p.status ? ' · ' + p.status : '') }); if (p.descricao) B.push({ t:'p', x:p.descricao });
+        B.push({ t:'kpis', it:[['Criadas', c('novo') + c('reativado'), '', '#16a34a'], ['Extintas', c('extinto'), '', '#dc2626'], ['Movidas / renomeadas', c('movido') + c('renomeado') + c('tipo'), '', '#2563eb'], ['Custo anual', fmtRc(X.aB), (X.aB - X.aA >= 0 ? '+' : '') + fmtRs(X.aB - X.aA) + ' sobre o atual', X.aB > X.aA ? '#dc2626' : '#16a34a']] });
+        if (av.length) B.push({ t:'tab', pq:true, cab:['Meta da reorganização', 'Resultado', 'Situação'], larg:['*', 90, 60], lin:av.map(y => [y.nome, y.valor, { x:y.ok ? 'Atende' : 'Não atende', cor:y.ok ? '#dcfce7' : '#fee2e2' }]) });
+        B.push({ t:'lista', it:X.est.filter(e => e.tipo !== 'editado').slice(0, 40).map(e => ['• ' + e.txt.replace(/<[^>]+>/g, ''), 0]) }); }); }
+    if (k === 'rede') { H(k); const L = escolasLista().filter(e => dreOk(e.dre)), tp = {}; L.forEach(e => { const g = grupoTipo(e.tipo); tp[g] = (tp[g] || 0) + 1; });
+      B.push({ t:'kpis', it:[['Unidades escolares', fmtN(L.length), F.dre || dres.length + ' DREs', '#16a34a'], ['Municípios', new Set(L.map(e => e.municipio)).size, '', '#0891b2'], ['Rurais', L.filter(e => e.localidade === 'RURAL').length, pct(L.filter(e => e.localidade === 'RURAL').length, L.length) + '% da rede', '#65a30d'], ['Indígenas e quilombolas', (tp['Indígena'] || 0) + (tp.Quilombola || 0), '', '#c2410c']] });
+      B.push({ t:'tab', pq:true, cab:['DRE', 'Escolas', 'Municípios', 'Rurais', 'Cívico-mil.', 'Campo', 'Indígena', 'Integral'], dir:[1, 2, 3, 4, 5, 6, 7], lin:dres.filter(dreOk).map(d => { const l = L.filter(e => e.dre === d), c = g => l.filter(e => grupoTipo(e.tipo) === g).length; return [nomeDRE(d), l.length, new Set(l.map(e => e.municipio)).size, l.filter(e => e.localidade === 'RURAL').length, c('Cívico-militar'), c('Campo'), c('Indígena'), l.filter(e => /INTEGRAL/.test(e.tipo)).length]; }) });
+      B.push({ t:'h3', x:'Escolas por tipo' }, { t:'barras', it:Object.entries(tp).sort((a, b) => b[1] - a[1]).map(([g, c]) => [g, c, c, CORES_TIPO[g] || '#94a3b8']) }); }
+    if (k === 'distancias') { H(k); const L = E.lista.filter(o => dreOk(o.e.dre)), med = L.reduce((t, o) => t + o.km, 0) / Math.max(1, L.length);
+      B.push({ t:'kpis', it:[['Distância média', fmtKm(med), 'em linha reta até a sede da DRE'], ['Por estrada (estimada)', '~' + fmtKm(med * FATOR_ESTRADA), '~' + fmtHoras(med) + ' de viagem', '#0e7490'], ['A mais de 100 km', L.filter(o => o.km > 100).length, pct(L.filter(o => o.km > 100).length, L.length) + '% das escolas', '#f97316'], ['Mais perto de outra DRE', L.filter(o => o.prox && o.km - o.prox.km >= 40 && o.prox.km < o.km * .7).length, 'ao menos 40 km mais perto', '#7c3aed']] });
+      B.push({ t:'barras', it:FAIXAS_DIST.map(f => [f[1], L.filter(o => faixaDist(o.km) === f).length, null, f[2]]) });
+      B.push({ t:'tab', pq:true, cab:['DRE', 'Escolas', 'Média', 'Mediana', 'Mais distante', '> 100 km'], dir:[1, 2, 3, 4, 5], lin:dres.filter(dreOk).map(d => { const l = E.lista.filter(o => o.e.dre === d), k2 = l.map(o => o.km).sort((a, b) => a - b), mx = l.reduce((a, o) => o.km > a.km ? o : a, l[0]); return [nomeDRE(d), l.length, fmtKm(k2.reduce((a, b) => a + b, 0) / k2.length), fmtKm(k2[Math.floor(k2.length / 2)]), fmtKm(mx.km) + ' (' + mx.e.municipio + ')', pct(l.filter(o => o.km > 100).length, l.length) + '%']; }) });
+      B.push({ t:'h3', x:'Escolas mais distantes da sua DRE' }, { t:'tab', pq:true, cab:['Escola', 'Município', 'DRE', 'Linha reta', 'Estrada (est.)'], dir:[3, 4], lin:L.slice().sort((a, b) => b.km - a.km).slice(0, 25).map(o => [o.e.nome, o.e.municipio, nomeDRE(o.e.dre), fmtKm(o.km), '~' + fmtKm(o.km * FATOR_ESTRADA)]) });
+      B.push({ t:'nota', x:`Distâncias em linha reta entre as coordenadas da escola e a sede da DRE; estrada e tempo estimados (${String(FATOR_ESTRADA).replace('.', ',')} × linha reta, ${VEL_MEDIA} km/h).` }); }
+    if (k === 'regional') { H(k); const R = dadosRegionais().filter(x => dreOk(x.d));
+      B.push({ t:'tab', pq:true, cab:['DRE', 'Escolas', 'Servidores', 'Esc./servidor', 'Dist. média', 'Circuito (km)', 'Custo/ano'], dir:[1, 2, 3, 4, 5, 6], lin:R.sort((a, b) => b.custo - a.custo).map(x => [nomeDRE(x.d), x.n, x.ser || '—', x.escSer !== null ? x.escSer.toLocaleString('pt-BR', { maximumFractionDigits:1 }) : '—', fmtKm(x.med), fmtN(Math.round(x.circuito)), fmtRc(x.custo)]) });
+      const sug = []; R.forEach(x => { if (x.polo) sug.push(['info', `${nomeDRE(x.d)}: avaliar polo de apoio em ${x.polo.m} (${x.polo.n} escolas num raio de 80 km, a ~${fmtKm(x.polo.km)} da sede).`]); if (x.outra.length >= 2) sug.push(['atencao', `${nomeDRE(x.d)}: ${x.outra.length} escola(s) mais perto da sede de outra DRE.`]); });
+      if (sug.length) B.push({ t:'h3', x:'Sugestões' }, { t:'alertas', it:sug }); }
+    if (k === 'escolas') { H(k); const L = escolasLista().filter(e => dreOk(e.dre)).sort((a, b) => a.dre.localeCompare(b.dre) || a.municipio.localeCompare(b.municipio, 'pt-BR') || a.nome.localeCompare(b.nome, 'pt-BR'));
+      B.push({ t:'tab', pq:true, cab:['Código', 'Unidade escolar', 'Município', 'DRE', 'Tipo', 'Loc.', 'Dist.'], larg:[36, '*', 70, 60, 60, 30, 34], dir:[6], lin:L.map(e => [e.codigo, e.nome, e.municipio, nomeDRE(e.dre), grupoTipo(e.tipo), e.localidade === 'RURAL' ? 'R' : 'U', fmtKm(distEscola(e))]) }); }
+    if (k === 'implantacao') { H(k); const L = (DB.etapas || []).filter(e => F.props === '*' || !e.propostaId || (F.props || []).includes(e.propostaId)), co = L.filter(e => e.status === 'Concluída').length;
+      B.push({ t:'kpis', it:[['Etapas', L.length, co + ' concluídas'], ['Andamento', (L.length ? Math.round(co * 100 / L.length) : 0) + '%', '', '#2563eb'], ['Atrasadas', L.filter(atrasada).length, '', '#dc2626'], ['Bloqueadas', L.filter(e => e.status === 'Bloqueada').length, '', '#7f1d1d']] });
+      B.push({ t:'tab', pq:true, cab:['Fase', 'Etapa', 'Responsável', 'Prazo', 'Situação'], larg:[70, '*', 80, 50, 60], lin:L.slice().sort((a, b) => FASES_IM.indexOf(a.fase) - FASES_IM.indexOf(b.fase) || String(a.prazo).localeCompare(String(b.prazo))).map(e => [e.fase, e.titulo, e.responsavel || '—', fmtDia(e.prazo), { x:atrasada(e) ? 'Atrasada' : e.status, cor:atrasada(e) ? '#fee2e2' : e.status === 'Concluída' ? '#dcfce7' : undefined }]) }); }
+    if (k === 'metas') { H(k); const M = (DB.metas || []).filter(m => !F.area || areaDe.get(m.setorId) === F.area);
+      objetivosRS().forEach(o => { const l = M.filter(m => m.objetivo === o); if (!l.length) return; B.push({ t:'h3', x:o }, { t:'tab', pq:true, cab:['Meta', 'Setor', 'Base → Meta', 'Resultado', 'Atingimento', 'Situação'], larg:['*', 70, 60, 46, 46, 50], lin:l.map(m => { const p = progressoMeta(m); return [m.titulo, nomeCurto(porId.get(m.setorId)), `${m.linhaBase || '—'} → ${m.meta || '—'} ${m.unidade}`, m.resultado || '—', p === null ? '—' : Math.round(p * 100) + '%', situacaoMeta(m)]; }) }); });
+      if (!M.length) B.push({ t:'p', x:'Nenhuma meta cadastrada.' }); }
+    if (k === 'reunioes') { H(k); const R = (DB.reunioes || []).slice().sort((a, b) => String(b.data).localeCompare(String(a.data)));
+      R.slice(0, 12).forEach(r => { const it = itensReu(r); B.push({ t:'h3', x:`${r.titulo} · ${fmtData(r.data)} · ${r.status || 'Planejada'}` }, { t:'tab', pq:true, cab:['Assunto', 'Decisão', 'Encaminhamento', 'Responsável', 'Prazo'], larg:['*', 60, '*', 60, 46], lin:it.map(x => [tituloItem(x), x.decisao || '—', x.encaminhamento || '—', x.responsavel || '—', x.prazo ? fmtDia(x.prazo) : '—']) }); });
+      if (!R.length) B.push({ t:'p', x:'Nenhuma reunião registrada.' }); }
+  });
+  B.push({ t:'selo', codigo:emis.codigo, data:emis.data, quando:emis.quando, por:emis.por });
+  return B;
+}
+
+/* ===================== MINUTA DE PORTARIA (ESTRUTURA INTERNA POR PROPOSTA) ===================== */
+const PORT_PADRAO = { cenario:'', area:'', numero:'', ano:String(new Date().getFullYear()), data:'', fundamento:'no uso das atribuições legais que lhe conferem o art. [__] da Constituição Estadual e o [ato de organização da Secretaria]', decreto:'Decreto nº 2.236, de 27 de agosto de 2026', signatario:'', comp:true, cargos:true, titulares:false, alteracoes:true, implantacao:true };
+let portCfg = Object.assign({}, PORT_PADRAO, store.get('gaborg_port', {}));
+function montarPortaria(o, emis){
+  const p = o.cenario && (DB.propostas || []).find(x => x.id === o.cenario), A = setoresOficiais(), Blista = p ? estruturaProposta(p).lista : A;
+  const M = metricasEstrutura(Blista), mA = new Map(A.map(s => [s.id, s])), mB = new Map(Blista.map(s => [s.id, s])), at = s => s && s.status !== 'Extinto';
+  const nomeS = s => s.nome + (s.sigla && !s.nome.includes(s.sigla) ? ' – ' + s.sigla : '');
+  const raiz = (M.fil.get('') || [])[0];
+  let topo = raiz ? (M.fil.get(raiz.id) || []) : [];
+  if (o.area) topo = topo.filter(s => s.id === o.area || (porId.get(o.area) && s.id === o.area));
+  const ordem = l => l.slice().sort((a, b) => num(a.ordem) - num(b.ordem) || a.nome.localeCompare(b.nome, 'pt-BR'));
+  const dataTxt = o.data ? new Date(o.data + 'T12:00:00').toLocaleDateString('pt-BR', { day:'numeric', month:'long', year:'numeric' }) : '[data]';
+  let art = 0; const ART = () => [`Art. ${artN(++art)} `, true];
+  const B = [];
+  const areaS = o.area && mB.get(o.area);
+  B.push({ t:'h1', x:`PORTARIA Nº ${o.numero || '[número]'}/${o.ano || '[ano]'}/GS/SEDUC-MT` });
+  B.push({ t:'p', ementa:true, x:`${areaS ? `Dispõe sobre a estrutura interna e as competências das unidades do(a) ${nomeS(areaS)}` : 'Dispõe sobre a estrutura organizacional interna e as competências das unidades da Secretaria de Estado de Educação'}${p ? `, conforme a proposta "${p.nome}"` : ''}, e dá outras providências.` });
+  B.push({ t:'p', x:[['O(A) SECRETÁRIO(A) DE ESTADO DE EDUCAÇÃO DE MATO GROSSO', true], `, ${o.fundamento || '[fundamento legal]'}, e considerando o disposto no ${o.decreto || '[decreto de estrutura]'}${p && p.descricao ? `, bem como a necessidade de ${p.descricao.replace(/^[A-ZÁÉÍÓÚ]/, c => c.toLowerCase()).replace(/[.;]+$/, '')}` : ''},`] });
+  B.push({ t:'p', centro:true, x:[['R E S O L V E:', true]] });
+  // Capítulo I
+  B.push({ t:'h2', x:'Capítulo I' }, { t:'h3', x:'Das disposições preliminares' });
+  B.push({ t:'p', x:[ART(), `Esta Portaria dispõe sobre a estrutura organizacional interna ${areaS ? `do(a) ${nomeS(areaS)}` : 'da Secretaria de Estado de Educação – SEDUC'}, a denominação, a subordinação e as competências das suas unidades administrativas.`] });
+  B.push({ t:'p', x:[ART(), `A representação gráfica da estrutura de que trata esta Portaria consta do Anexo I${o.cargos ? ', e o quadro de cargos de direção e chefia, do Anexo II' : ''}.`] });
+  // Capítulo II: estrutura por área (seções) com incisos e alíneas
+  B.push({ t:'h2', x:'Capítulo II' }, { t:'h3', x:'Da estrutura organizacional' });
+  if (!o.area && raiz) { B.push({ t:'p', x:[ART(), `O(A) ${nomeS(raiz)} tem a seguinte estrutura organizacional básica:`] }); ordem(topo).forEach((s, i, l) => B.push({ t:'p', recuo:1, x:`${romano(i + 1)} – ${nomeS(s)}${i === l.length - 1 ? '.' : ';'}` })); }
+  let secN = 0;
+  ordem(topo).forEach(a => {
+    const filhos = ordem(M.fil.get(a.id) || []); if (!filhos.length) return;
+    B.push({ t:'h3', x:`Seção ${romano(++secN)} – Do(a) ${a.nome}` });
+    B.push({ t:'p', x:[ART(), `O(A) ${nomeS(a)} compõe-se das seguintes unidades:`] });
+    const vis = (pai, nv) => ordem(M.fil.get(pai) || []).forEach((s, i, l) => {
+      const mk = nv === 1 ? romano(i + 1) + ' –' : nv === 2 ? alinea(i) + ')' : (i + 1) + '.';
+      const qt = s.tipo === 'Unidades Escolares' && num(s.quantidade) ? ` (${fmtN(s.quantidade)} unidades escolares)` : '';
+      B.push({ t:'p', recuo:nv, x:`${mk} ${nomeS(s)}${qt}${i === l.length - 1 && nv === 1 ? '.' : ';'}` }); vis(s.id, nv + 1); });
+    vis(a.id, 1);
+  });
+  // Capítulo III: competências
+  const alvo = [], col = (pai) => ordem(M.fil.get(pai) || []).forEach(s => { if (!o.area || s.id === o.area || caminhoEm(s.id, M) .includes(o.area)) alvo.push(s); col(s.id); });
+  const caminhoEm = (id, MM) => { const r = []; let s = mB.get(id), g = 0; while (s && s.paiId && mB.has(s.paiId) && g++ < 60) { r.push(s.paiId); s = mB.get(s.paiId); } return r; };
+  col('');
+  if (o.comp) {
+    B.push({ t:'h2', x:'Capítulo III' }, { t:'h3', x:'Das competências das unidades' });
+    const com = alvo.filter(s => String(s.competencias || '').trim()), sem = alvo.filter(s => CHEFIAS.includes(s.tipo) && !String(s.competencias || '').trim());
+    com.forEach(s => { const it = String(s.competencias).split(/\n|;\s*/).map(limparComp).filter(Boolean); B.push({ t:'p', x:[ART(), `Compete ao(à) ${nomeS(s)}:`] }); it.forEach((t, i) => B.push({ t:'p', recuo:1, x:`${romano(i + 1)} – ${t.replace(/[.;]+$/, '')}${i === it.length - 1 ? '.' : ';'}` })); });
+    if (sem.length) B.push({ t:'p', x:[ART(), `As competências das unidades a seguir serão detalhadas no regimento interno: ${sem.map(nomeS).join('; ')}.`] });
+    if (!com.length && !sem.length) B.push({ t:'p', x:[ART(), 'As competências das unidades serão detalhadas no regimento interno.'] });
+  }
+  // Capítulo IV: direção e chefia
+  const cap = o.comp ? 'IV' : 'III';
+  B.push({ t:'h2', x:`Capítulo ${cap}` }, { t:'h3', x:'Da direção das unidades' });
+  B.push({ t:'p', x:[ART(), 'As unidades administrativas serão dirigidas por titulares nomeados para os cargos em comissão correspondentes, que serão substituídos, em suas ausências e impedimentos, por servidor designado em ato próprio.'] });
+  B.push({ t:'p', x:[ART(), 'Os titulares das unidades responderão pelo planejamento, pela execução e pelo acompanhamento das atividades de sua área, observadas as diretrizes do Gabinete do Secretário de Estado de Educação.'] });
+  // Capítulo V: disposições finais
+  const capF = o.comp ? 'V' : 'IV', novos = Blista.filter(s => at(s) && !at(mA.get(s.id))), ext = A.filter(s => at(s) && !at(mB.get(s.id)));
+  B.push({ t:'h2', x:`Capítulo ${capF}` }, { t:'h3', x:'Das disposições finais e transitórias' });
+  if (p && (novos.length || ext.length)) B.push({ t:'p', x:[ART(), `A instalação das unidades criadas e a desativação das unidades extintas por esta Portaria${o.implantacao && (DB.etapas || []).some(e => e.propostaId === p.id) ? ' observarão o cronograma do Anexo IV' : ' ocorrerão no prazo de [__] dias'}, com o remanejamento dos servidores, processos e acervos.`] });
+  B.push({ t:'p', x:[ART(), 'Os casos omissos serão resolvidos pelo(a) Secretário(a) de Estado de Educação.'] });
+  B.push({ t:'p', x:[ART(), 'Ficam revogadas as disposições em contrário.'] });
+  B.push({ t:'p', x:[ART(), 'Esta Portaria entra em vigor na data de sua publicação.'] });
+  B.push({ t:'p', centro:true, x:`Cuiabá-MT, ${dataTxt}.` });
+  B.push({ t:'ass', x:o.signatario || '[NOME]', sub:'Secretário(a) de Estado de Educação' });
+  // Anexo I: estrutura
+  B.push({ t:'quebra' }, { t:'h2', x:'Anexo I' }, { t:'h3', x:'Estrutura organizacional' + (areaS ? ' – ' + areaS.nome : '') });
+  const lin = []; const vis2 = (pai, nv) => ordem(M.fil.get(pai) || []).forEach(s => { if (o.area && nv === 0 && s.id !== raiz.id) return; if (o.area && nv === 1 && s.id !== o.area) return; lin.push([[[s.sigla ? s.sigla + ' – ' : '', true], s.nome, ` (${s.tipo})`], nv]); vis2(s.id, nv + 1); }); vis2('', 0);
+  B.push({ t:'lista', it:lin });
+  // Anexo II: cargos
+  if (o.cargos) {
+    const linhas = p ? custoProposta(p).linhas : DB.despesas.filter(d => (d.cenario || 'Atual') === 'Atual'), ids = new Set(alvo.map(s => s.id));
+    const cg = linhas.filter(l => l.observacao === MARCA_CHEFIA && ids.has(l.setorId));
+    B.push({ t:'quebra' }, { t:'h2', x:'Anexo II' }, { t:'h3', x:'Quadro de cargos de direção e chefia' });
+    const cab = ['Unidade', 'Cargo', 'Símbolo'].concat(o.titulares ? ['Titular atual'] : []);
+    B.push({ t:'tab', cab, larg:o.titulares ? ['*', 90, 46, 90] : ['*', 110, 50], lin:(cg.length ? cg.map(l => { const s = mB.get(l.setorId), c = calcDesp(l); return [s ? nomeS(s) : '', l.descricao || 'Titular', c.r.codigo || '—'].concat(o.titulares ? [s ? chefiaDe(s).titular || '—' : '—'] : []); }) : alvo.filter(s => CHEFIAS.includes(s.tipo)).map(s => [nomeS(s), 'Titular', simboloChefia(s.id) || '[símbolo]'].concat(o.titulares ? [chefiaDe(s).titular || '—'] : []))) });
+    const porS = {}; cg.forEach(l => { const c = calcDesp(l), k = c.r.codigo || '—'; porS[k] = (porS[k] || 0) + c.qtd; });
+    if (cg.length) B.push({ t:'tab', cab:['Símbolo', 'Quantidade'], larg:[120, 80], dir:[1], lin:Object.entries(porS).sort((a, b) => a[0].localeCompare(b[0], 'pt-BR', { numeric:true })).map(([k, v]) => [k, v]).concat([[{ x:'Total', b:true }, { x:cg.reduce((t, l) => t + calcDesp(l).qtd, 0), b:true }]]) });
+  }
+  // Anexo III: alterações
+  if (o.alteracoes && p) {
+    const mov = Blista.filter(s => at(s) && at(mA.get(s.id)) && (mA.get(s.id).paiId || '') !== (s.paiId || '')), ren = Blista.filter(s => at(s) && at(mA.get(s.id)) && mA.get(s.id).nome !== s.nome);
+    const pai = (m, s) => { const x = m.get(s.paiId); return x ? (x.sigla || x.nome) : '—'; };
+    B.push({ t:'quebra' }, { t:'h2', x:'Anexo III' }, { t:'h3', x:'Quadro de alterações em relação à estrutura vigente' });
+    B.push({ t:'tab', cab:['Alteração', 'Unidade', 'Detalhe'], larg:[70, '*', '*'], lin:[].concat(novos.map(s => ['Criada', nomeS(s), 'subordinada a ' + pai(mB, s)]), ext.map(s => ['Extinta', nomeS(s), 'era subordinada a ' + pai(mA, s)]), mov.map(s => ['Movida', nomeS(s), pai(mA, s) + ' → ' + pai(mB, s)]), ren.map(s => ['Renomeada', nomeS(s), 'antes: ' + mA.get(s.id).nome])) });
+  }
+  // Anexo IV: cronograma
+  if (o.implantacao && p) { const et = (DB.etapas || []).filter(e => e.propostaId === p.id); if (et.length) { B.push({ t:'quebra' }, { t:'h2', x:'Anexo IV' }, { t:'h3', x:'Cronograma de implantação' }, { t:'tab', cab:['Fase', 'Etapa', 'Responsável', 'Prazo'], larg:[80, '*', 90, 56], lin:et.slice().sort((a, b) => FASES_IM.indexOf(a.fase) - FASES_IM.indexOf(b.fase) || String(a.prazo).localeCompare(String(b.prazo))).map(e => [e.fase, e.titulo, e.responsavel || '—', fmtDia(e.prazo)]) }); } }
+  if (emis) B.push({ t:'selo', codigo:emis.codigo, data:emis.data, quando:emis.quando, por:emis.por });
+  return B;
+}
+
+/* ===================== SEÇÃO RELATÓRIOS E MINUTAS ===================== */
+let rmAba = store.get('gaborg_rm_aba', 'relatorio');
+const RM_ABAS = [['relatorio','Relatório completo','fa-file-pdf'],['portaria','Minuta de portaria','fa-file-contract'],['decreto','Minuta de decreto','fa-file-signature'],['verificar','Verificar código','fa-shield-halved']];
+function abaRm(a){ rmAba = a; store.set('gaborg_rm_aba', a); renderRelatorios(); }
+function garantirEstiloRel(){ if (!$('#estilo-rel')) { const s = document.createElement('style'); s.id = 'estilo-rel'; s.textContent = ESTILO_REL; document.head.appendChild(s); } }
+const emisPrevia = tipo => ({ codigo:`GAB-${tipo}-AAAAMMDD-XXXXX`, data:new Date().toLocaleDateString('pt-BR'), quando:'(gerado ao emitir)', por:cfg.usuario || '' });
+function renderRelatorios(){
+  const el = $('#rm-corpo'); if (!el) return; garantirEstiloRel();
+  el.innerHTML = avisoGestao() + abasG(RM_ABAS, rmAba, 'abaRm') + `<div class="ind-corpo">${rmAba === 'portaria' ? rmPortaria() : rmAba === 'decreto' ? reMinuta() : rmAba === 'verificar' ? rmVerificar() : rmRelatorio()}</div>`;
+  if (rmAba === 'relatorio') previaRel(); else if (rmAba === 'portaria') previaPort(); else if (rmAba === 'decreto') atualizarMinuta();
+}
+/* ---------- relatório ---------- */
+function rmRelatorio(){
+  const c = relCfg, P = DB.propostas || [], sel = new Set(c.secoes), dres = distanciasMT().dres;
+  return `<div class="re-min"><div class="cartao bl re-min-cfg rm-cfg" style="--c:#1e3a8a"><h3><i class="fa-solid fa-sliders"></i>Monte o relatório</h3>
+    <label><span class="rot">Título</span><input id="rl-tit" class="campo" value="${esc(c.titulo)}" oninput="lerRel()"></label>
+    <label><span class="rot">Observação na capa <small>opcional</small></span><input id="rl-obs" class="campo" value="${esc(c.obs)}" oninput="lerRel()" placeholder="ex.: preparado para a reunião de 30/10"></label>
+    <span class="rot">Modelos prontos</span><div class="rm-mod">${Object.entries(REL_MODELOS).map(([k, [n]]) => `<button class="btn btn-s btn-sm" onclick="relCfg.secoes=REL_MODELOS['${k}'][1].slice();salvarRelCfg();renderRelatorios()">${n}</button>`).join('')}</div>
+    <span class="rot">Filtros</span>
+    <div class="g2"><select id="rl-area" class="campo" onchange="lerRel()"><option value="">Toda a Secretaria</option>${areas.map(a => `<option value="${esc(a)}" ${a === c.area ? 'selected' : ''}>${esc(nomeCurto(porId.get(a)))}</option>`).join('')}</select>
+      <select id="rl-dre" class="campo" onchange="lerRel()"><option value="">Todas as DREs</option>${dres.map(d => `<option value="${esc(d)}" ${d === c.dre ? 'selected' : ''}>${esc(nomeDRE(d))}</option>`).join('')}</select></div>
+    ${P.length ? `<details class="rm-det" ${c.props !== '*' ? 'open' : ''}><summary>Propostas incluídas: ${c.props === '*' ? 'todas' : (c.props || []).length}</summary><label class="lg-lembrar"><input type="checkbox" id="rl-ptodas" ${c.props === '*' ? 'checked' : ''} onchange="lerRel()">Todas</label>${P.map(p => `<label class="lg-lembrar"><input type="checkbox" data-rp="${esc(p.id)}" ${c.props === '*' || (c.props || []).includes(p.id) ? 'checked' : ''} onchange="$('#rl-ptodas').checked=false;lerRel()">${esc(p.nome)}</label>`).join('')}</details>` : ''}
+    <span class="rot">O que entra no relatório <small>${sel.size} seções</small></span>
+    <div class="rm-secs">${REL_SECOES.map(([g, l]) => `<div class="rm-g"><div class="rm-gh"><b>${g}</b><button onclick="relAlternarGrupo('${g}')">${l.every(x => sel.has(x[0])) ? 'tirar todas' : 'incluir todas'}</button></div>${l.map(([k, n]) => `<label class="lg-lembrar"><input type="checkbox" data-rs="${k}" ${sel.has(k) ? 'checked' : ''} onchange="lerRel()">${n}</label>`).join('')}</div>`).join('')}</div>
+    <div class="rm-emit"><button class="btn btn-p" onclick="emitirRelatorio('pdf')"><i class="fa-solid fa-file-pdf"></i>Gerar PDF</button><button class="btn btn-s" onclick="emitirRelatorio('print')"><i class="fa-solid fa-print"></i>Imprimir</button><button class="btn btn-s" onclick="emitirRelatorio('word')"><i class="fa-solid fa-file-word"></i>Word</button></div>
+    <p class="s" style="margin:0;font-size:11.5px;color:var(--mut)">Cada emissão recebe um código de verificação, a data e o selo do sistema, e fica registrada na planilha.</p></div>
+    <div class="re-papel"><div id="rl-doc" class="rm-folha"></div></div></div>`;
+}
+function salvarRelCfg(){ store.set('gaborg_rel', relCfg); }
+function lerRel(){
+  const v = id => { const e = $(id); return e ? e.value : ''; };
+  relCfg.titulo = v('#rl-tit'); relCfg.obs = v('#rl-obs'); relCfg.area = v('#rl-area'); relCfg.dre = v('#rl-dre');
+  relCfg.secoes = [...document.querySelectorAll('[data-rs]:checked')].map(x => x.dataset.rs);
+  const t = $('#rl-ptodas'); relCfg.props = !t || t.checked ? '*' : [...document.querySelectorAll('[data-rp]:checked')].map(x => x.dataset.rp);
+  salvarRelCfg(); clearTimeout(lerRel.t); lerRel.t = setTimeout(previaRel, 250);
+}
+function relAlternarGrupo(g){ const l = REL_SECOES.find(x => x[0] === g)[1].map(x => x[0]), s = new Set(relCfg.secoes), todas = l.every(k => s.has(k)); l.forEach(k => todas ? s.delete(k) : s.add(k)); relCfg.secoes = REL_SECOES.flatMap(x => x[1].map(y => y[0])).filter(k => s.has(k)); salvarRelCfg(); renderRelatorios(); }
+function previaRel(){ const d = $('#rl-doc'); if (!d) return; try { d.innerHTML = docHTML(montarRelatorio(relCfg, emisPrevia('REL')), { cabecalho:relCfg.titulo }); } catch (e) { d.innerHTML = `<p style="color:#dc2626">Erro ao montar: ${esc(e.message)}</p>`; console.error(e); } }
+function emitirRelatorio(formato){
+  lerRel(); if (!relCfg.secoes.length) return toast('Escolha ao menos uma seção.', 'aviso');
+  const F = JSON.parse(JSON.stringify(relCfg));
+  return emitirDoc({ tipo:'REL', titulo:F.titulo || 'Relatório', formato, nomeArq:'relatorio', montar:e => montarRelatorio(F, e), detalhe:`${F.secoes.length} seções · ${relNomeArea(F.area)}${F.dre ? ' · ' + F.dre : ''}` });
+}
+/* ---------- portaria ---------- */
+function rmPortaria(){
+  const o = portCfg, P = DB.propostas || [];
+  const ck = (k, n) => `<label class="lg-lembrar"><input type="checkbox" data-pc="${k}" ${o[k] ? 'checked' : ''} onchange="lerPort()">${n}</label>`;
+  return `<div class="re-min"><div class="cartao bl re-min-cfg rm-cfg" style="--c:#a16207"><h3><i class="fa-solid fa-file-contract"></i>Dados da portaria</h3><p class="s">A portaria detalha a estrutura interna, unidade por unidade, com as competências e o quadro de chefias, a partir da proposta escolhida.</p>
+    <label><span class="rot">Estrutura de base</span><select id="pt-cen" class="campo" onchange="lerPort()"><option value="">Estrutura atual (vigente)</option>${P.map(p => `<option value="${esc(p.id)}" ${p.id === o.cenario ? 'selected' : ''}>${esc(p.nome)}${p.status ? ' · ' + esc(p.status) : ''}</option>`).join('')}</select></label>
+    <label><span class="rot">Abrangência</span><select id="pt-area" class="campo" onchange="lerPort()"><option value="">Toda a Secretaria</option>${areas.map(a => `<option value="${esc(a)}" ${a === o.area ? 'selected' : ''}>${esc(nomeCurto(porId.get(a)))}</option>`).join('')}</select></label>
+    <div class="g2"><label><span class="rot">Número</span><input id="pt-num" class="campo" value="${esc(o.numero)}" placeholder="[número]" oninput="lerPort()"></label><label><span class="rot">Ano</span><input id="pt-ano" class="campo" value="${esc(o.ano)}" oninput="lerPort()"></label></div>
+    <label><span class="rot">Data</span><input id="pt-data" type="date" class="campo" value="${esc(o.data)}" oninput="lerPort()"></label>
+    <label><span class="rot">Fundamento legal</span><textarea id="pt-fund" class="campo" oninput="lerPort()">${esc(o.fundamento)}</textarea></label>
+    <label><span class="rot">Decreto de estrutura citado</span><input id="pt-dec" class="campo" value="${esc(o.decreto)}" oninput="lerPort()"></label>
+    <label><span class="rot">Nome de quem assina</span><input id="pt-ass" class="campo" value="${esc(o.signatario)}" placeholder="Secretário(a) de Estado de Educação" oninput="lerPort()"></label>
+    ${ck('comp', 'Incluir as competências de cada unidade')}${ck('cargos', 'Anexo II: quadro de cargos de chefia')}${ck('titulares', 'Mostrar os titulares atuais no Anexo II')}${ck('alteracoes', 'Anexo III: alterações em relação à estrutura vigente')}${ck('implantacao', 'Anexo IV: cronograma de implantação (se houver)')}
+    <div class="rm-emit"><button class="btn btn-p" onclick="emitirPortaria('pdf')"><i class="fa-solid fa-file-pdf"></i>Gerar PDF</button><button class="btn btn-s" onclick="emitirPortaria('word')"><i class="fa-solid fa-file-word"></i>Word</button><button class="btn btn-s" onclick="emitirPortaria('print')"><i class="fa-solid fa-print"></i>Imprimir</button></div>
+    <p class="s" style="margin:0;font-size:11.5px;color:var(--mut)">Minuta para revisão jurídica: os campos entre colchetes devem ser preenchidos antes da publicação.</p></div>
+    <div class="re-papel"><div id="pt-doc" class="rm-folha minuta"></div></div></div>`;
+}
+function lerPort(){
+  const v = id => { const e = $(id); return e ? e.value.trim() : ''; };
+  Object.assign(portCfg, { cenario:v('#pt-cen'), area:v('#pt-area'), numero:v('#pt-num'), ano:v('#pt-ano'), data:v('#pt-data'), fundamento:v('#pt-fund'), decreto:v('#pt-dec'), signatario:v('#pt-ass') });
+  document.querySelectorAll('[data-pc]').forEach(c => portCfg[c.dataset.pc] = c.checked);
+  store.set('gaborg_port', portCfg); clearTimeout(lerPort.t); lerPort.t = setTimeout(previaPort, 250);
+}
+function previaPort(){ const d = $('#pt-doc'); if (!d) return; try { d.innerHTML = docHTML(montarPortaria(portCfg, null), { minuta:true }); } catch (e) { d.innerHTML = `<p style="color:#dc2626">Erro ao montar: ${esc(e.message)}</p>`; console.error(e); } }
+function emitirPortaria(formato){
+  lerPort(); const o = JSON.parse(JSON.stringify(portCfg)), p = o.cenario && DB.propostas.find(x => x.id === o.cenario);
+  return emitirDoc({ tipo:'POR', titulo:`Minuta de portaria${p ? ' – ' + p.nome : ' – estrutura vigente'}`, formato, minuta:true, nomeArq:'minuta-portaria', montar:e => montarPortaria(o, e), detalhe:(p ? p.nome : 'Estrutura vigente') + (o.area ? ' · ' + relNomeArea(o.area) : '') });
+}
+/* ---------- verificação ---------- */
+let rmCod = '';
+function rmVerificar(){
+  const L = emissoes(), c = rmCod.trim().toUpperCase(), achado = c && L.find(x => x.c === c);
+  const res = !c ? '' : !codigoValido(c) ? `<div class="rm-res nok"><i class="fa-solid fa-circle-xmark"></i><div><b>Código inválido</b><p>O formato ou o dígito de conferência não confere. Verifique se foi digitado corretamente.</p></div></div>`
+    : achado ? `<div class="rm-res ok"><i class="fa-solid fa-circle-check"></i><div><b>Documento autêntico</b><p>${esc(achado.tipo)}: <b>${esc(achado.titulo)}</b></p><p>Emitido em ${fmtData(achado.em)}${achado.por ? ' por ' + esc(achado.por) : ''} · formato ${esc(String(achado.formato || '').toUpperCase())}${achado.det ? ' · ' + esc(achado.det) : ''}</p></div></div>`
+    : `<div class="rm-res aviso"><i class="fa-solid fa-circle-question"></i><div><b>Código bem formado, mas não registrado</b><p>Não há emissão com este código na planilha do GABOrg. O documento pode ter sido gerado em outra base ou ainda não sincronizado.</p></div></div>`;
+  return `<div class="cartao bl" style="--c:#16a34a"><h3><i class="fa-solid fa-shield-halved"></i>Verificar um documento</h3><p class="s">Digite o código impresso no rodapé ou no selo do documento.</p>
+      <div class="rm-ver"><input id="rm-cod" class="campo" value="${esc(rmCod)}" placeholder="GAB-REL-20261025-XXXXX" onkeydown="if(event.key==='Enter'){rmCod=this.value;renderRelatorios()}"><button class="btn btn-p" onclick="rmCod=$('#rm-cod').value;renderRelatorios()"><i class="fa-solid fa-magnifying-glass"></i>Verificar</button></div>${res}</div>
+    <div class="cartao bl" style="--c:#1e3a8a;margin-top:14px"><h3><i class="fa-solid fa-clock-rotate-left"></i>Documentos emitidos <span class="ct">${L.length}</span></h3>
+      <div class="tab-wrap"><table class="tab"><thead><tr><th>Código</th><th>Tipo</th><th>Título</th><th>Formato</th><th>Emitido em</th><th>Por</th></tr></thead><tbody>${L.slice(0, 200).map(x => `<tr onclick="rmCod=${arg(x.c)};renderRelatorios()"><td><code>${esc(x.c)}</code></td><td>${esc(x.tipo)}</td><td style="white-space:normal">${esc(x.titulo)}${x.det ? `<small style="display:block;color:var(--mut)">${esc(x.det)}</small>` : ''}</td><td>${esc(String(x.formato || '').toUpperCase())}</td><td>${fmtData(x.em)}</td><td>${esc(x.por || '')}</td></tr>`).join('') || '<tr><td colspan="6" class="vazio">Nenhum documento emitido ainda.</td></tr>'}</tbody></table></div></div>`;
+}
+
 /* ===================== MENU LATERAL: RECOLHER E AJUSTAR LARGURA ===================== */
 let ladoCfg = Object.assign({ mini:false, w:236 }, store.get('gaborg_lado', {}));
 function aplicarLado(){
@@ -4278,21 +4665,6 @@ aplicarLado();
 
 /* ===================== MODO TV ===================== */
 const tv = { slides:[], i:0, timer:null, prog:null, relogio:null, pausado:false, inicio:0, seg:Number(store.get('gaborg_tv_seg', 20)), ocioso:null, voltas:0 };
-function tvSlides(){
-  const L = [['visao', 'Visão geral'], ['mapa', 'Mapa da estrutura'], ['areas', 'Estrutura por área']];
-  if (DB.despesas.length) L.push(['fin', 'Financeiro']);
-  L.push(['val', 'Validações e impacto']);
-  return L;
-}
-function abrirModoTV(){
-  if (vistaAtual !== 'mapa') { const v = vistaAtual; vistaAtual = 'mapa'; calcularLayout(); vistaAtual = v; } else calcularLayout();
-  tv.slides = tvSlides(); tv.i = 0; tv.pausado = false; tv.voltas = 0;
-  $('#tv-seg').value = String(tv.seg);
-  const el = $('#tv-modo'); el.classList.remove('hidden'); el.focus();
-  if (document.documentElement.requestFullscreen && !document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
-  tvRelogio(); clearInterval(tv.relogio); tv.relogio = setInterval(tvRelogio, 1000);
-  tvMostrar(0);
-}
 function fecharModoTV(){
   clearTimeout(tv.timer); cancelAnimationFrame(tv.prog); clearInterval(tv.relogio);
   $('#tv-modo').classList.add('hidden'); $('#tv-palco').innerHTML = '';
@@ -4304,16 +4676,6 @@ function tvRelogio(){ const d = new Date(); $('#tv-relogio').textContent = d.toL
 function tvTempo(v){ tv.seg = Number(v); store.set('gaborg_tv_seg', tv.seg); tvAgendar(); }
 function tvPausar(forcar){ tv.pausado = forcar !== undefined ? forcar : !tv.pausado; $('#tv-btn-pausa').innerHTML = `<i class="fa-solid ${tv.pausado ? 'fa-play' : 'fa-pause'}"></i>`; tvAgendar(); }
 function tvPasso(d){ tvMostrar((tv.i + d + tv.slides.length) % tv.slides.length); }
-async function tvMostrar(i){
-  if (i === 0 && tv.voltas++ > 0 && online()) { try { await lerNuvem(); calcularLayout(); tv.slides = tvSlides(); } catch (e) {} }
-  tv.i = Math.min(i, tv.slides.length - 1);
-  const [k, t] = tv.slides[tv.i];
-  $('#tv-titulo-slide').textContent = t + ' · ' + (tv.i + 1) + '/' + tv.slides.length;
-  $('#tv-pontos').innerHTML = tv.slides.map((s, j) => `<button class="${j === tv.i ? 'on' : ''}" title="${esc(s[1])}" onclick="tvMostrar(${j})"></button>`).join('');
-  $('#tv-palco').innerHTML = `<div class="tv-slide">${TV_SLIDE[k]()}</div>`;
-  if (k === 'mapa') tvMontarMapa();
-  tvAgendar();
-}
 function tvAgendar(){
   clearTimeout(tv.timer); cancelAnimationFrame(tv.prog);
   const bar = $('#tv-barra'); bar.style.width = '0';
@@ -4340,7 +4702,7 @@ const TV_SLIDE = {
         const grandes = areas.filter(a => DB.setores.filter(x => areaDe.get(x.id) === a).length > 1), unicas = areas.filter(a => !grandes.includes(a));
         const card = (cor, tit, sub, lst, fm) => `<div class="tv-area" style="--c:${cor}"><b>${esc(tit)}</b><small>${esc(sub)}</small><div class="nums"><span><b>${lst.length}</b>setores</span><span><b>${lst.reduce((t, x) => t + num(x.servidores), 0).toLocaleString('pt-BR')}</b>servidores</span>${fm ? `<span><b>${fmtRc(fm)}</b>por mês</span>` : ''}</div></div>`;
         const ativos = a => DB.setores.filter(x => areaDe.get(x.id) === a && x.status !== 'Extinto');
-        return grandes.sort((x, y) => ativos(y).length - ativos(x).length).map(a => card(corArea(a), nomeCurto(porId.get(a)), (porId.get(a) || {}).nome || '', ativos(a), f.get(a))).join('')
+        return grandes.sort((x, y) => ativos(y).length - ativos(x).length).map(a => card(corArea(a), nomeCurto(porId.get(a)), (porId.get(a) || {}).nome || '', ativos(a), f.get(a)).replace('<div class="tv-area"', `<div class="tv-area tv-clic" onclick="tvDetalhe('area',${arg(a)})" title="Ver o detalhe"`)).join('')
           + (unicas.length ? card('#94a3b8', 'Unidades do Gabinete', unicas.map(a => nomeCurto(porId.get(a))).join(' · '), unicas.flatMap(ativos), unicas.reduce((t, a) => t + (f.get(a) || 0), 0)) : '');
       })()}</div>`;
   },
@@ -4380,10 +4742,168 @@ function tvMontarMapa(){
   cx.addEventListener('dblclick', () => { v = fit(); ap(); });
   tv.moverMapa = (dx, dy, z) => { if (z) { const b = cx.getBoundingClientRect(), mx = b.width / 2, my = b.height / 2, k = Math.max(.08, Math.min(3, v.k * z)), q = k / v.k; v = { k, x:mx - (mx - v.x) * q, y:my - (my - v.y) * q }; } else { v.x += dx; v.y += dy; } ap(); };
 }
+/* ===================== MODO TV: ROTEIROS, TELAS NOVAS E INTERAÇÃO ===================== */
+const ROTEIROS_TV = {
+  panorama:['fa-earth-americas', 'Panorama completo', 'Todas as telas, da estrutura à rede escolar', ['visao', 'indicadores', 'mapa', 'areas', 'chefias', 'riscos', 'rede', 'mapamt', 'distancias', 'regional', 'fin', 'props', 'implantacao', 'metas', 'agenda', 'val']],
+  estrutura:['fa-sitemap', 'Estrutura e pessoas', 'Organograma, áreas, chefias, riscos e validações', ['visao', 'mapa', 'areas', 'chefias', 'riscos', 'val']],
+  rede:['fa-school', 'Rede escolar', 'As 631 escolas, o mapa de MT, distâncias e DREs', ['rede', 'mapamt', 'distancias', 'regional']],
+  gestao:['fa-compass-drafting', 'Gestão e decisões', 'Maturidade, propostas, implantação, metas e agenda', ['indicadores', 'props', 'implantacao', 'metas', 'agenda']],
+  propostas:['fa-lightbulb', 'Propostas', 'Uma tela para cada proposta, com custo e metas', ['props']],
+  personalizado:['fa-hand-pointer', 'Personalizado', 'Você escolhe as telas', null]
+};
+const TELAS_TV = { visao:'Visão geral', indicadores:'Maturidade e alertas', mapa:'Mapa da estrutura', areas:'Estrutura por área', chefias:'Chefias', riscos:'Riscos', rede:'Rede escolar', mapamt:'Mapa de Mato Grosso', distancias:'Distâncias até as DREs', regional:'Gestão regional', fin:'Financeiro', props:'Propostas (uma por tela)', implantacao:'Implantação', metas:'Pacto de resultados', agenda:'Agenda e encaminhamentos', val:'Validações e impacto' };
+Object.assign(tv, { roteiro:store.get('gaborg_tv_rot', 'panorama'), pers:store.get('gaborg_tv_pers', ['visao', 'rede', 'mapamt']), trans:store.get('gaborg_tv_trans', 'deslizar'), ticker:store.get('gaborg_tv_ticker', true), cont:null, det:null });
+function tvSlides(){
+  const r = ROTEIROS_TV[tv.roteiro] || ROTEIROS_TV.panorama, base = r[3] || tv.pers, L = [];
+  base.forEach(k => {
+    if (k === 'fin' && !DB.despesas.length) return;
+    if (k === 'implantacao' && !(DB.etapas || []).length) return;
+    if (k === 'metas' && !(DB.metas || []).length) return;
+    if (k === 'agenda' && !(DB.reunioes || []).length) return;
+    if (k === 'props') { (DB.propostas || []).filter(p => p.status !== 'Arquivada').forEach(p => L.push(['prop', 'Proposta: ' + p.nome, p.id])); return; }
+    if (TV_SLIDE[k]) L.push([k, TELAS_TV[k] || k]);
+  });
+  return L.length ? L : [['visao', 'Visão geral']];
+}
+function abrirModoTV(){
+  if (vistaAtual !== 'mapa') { const v = vistaAtual; vistaAtual = 'mapa'; calcularLayout(); vistaAtual = v; } else calcularLayout();
+  tv.pausado = false; tv.voltas = 0; tv.det = null;
+  $('#tv-seg').value = String(tv.seg);
+  const el = $('#tv-modo'); el.classList.remove('hidden'); el.focus();
+  if (document.documentElement.requestFullscreen && !document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
+  tvRelogio(); clearInterval(tv.relogio); tv.relogio = setInterval(tvRelogio, 1000);
+  tvMenu();
+}
+function tvMenu(){
+  clearTimeout(tv.timer); cancelAnimationFrame(tv.prog); clearInterval(tv.cont); tv.det = null; tv.slides = tvSlides(); tv.i = 0;
+  $('#tv-titulo-slide').textContent = 'Escolha a apresentação'; $('#tv-pontos').innerHTML = ''; $('#tv-barra').style.width = '0';
+  let n = 12;
+  $('#tv-palco').innerHTML = `<div class="tv-slide tv-menu"><div class="tv-h" style="--c:#60a5fa"><i class="fa-solid fa-display"></i>Modo TV<small id="tv-cont">começa sozinho em ${n} s</small></div>
+    <div class="tv-rots">${Object.entries(ROTEIROS_TV).map(([k, [ic, nm, d]]) => `<button class="tv-rot ${tv.roteiro === k ? 'on' : ''}" onclick="tvIniciar('${k}')"><i class="fa-solid ${ic}"></i><b>${nm}</b><span>${d}</span>${k !== 'personalizado' ? `<small>${tvContar(k)} telas</small>` : ''}</button>`).join('')}</div>
+    <div class="tv-opcoes"><div class="tv-pers"><b>Telas do roteiro personalizado</b><div>${Object.entries(TELAS_TV).map(([k, nm]) => `<label><input type="checkbox" data-tvp="${k}" ${tv.pers.includes(k) ? 'checked' : ''} onchange="tvPersMudou()">${nm}</label>`).join('')}</div></div>
+      <div class="tv-cfgs"><label>Transição<select onchange="tv.trans=this.value;store.set('gaborg_tv_trans',tv.trans);tvParar()">${[['deslizar', 'Deslizar'], ['esmaecer', 'Esmaecer'], ['zoom', 'Aproximar'], ['virar', 'Virar']].map(([k, nm]) => `<option value="${k}" ${tv.trans === k ? 'selected' : ''}>${nm}</option>`).join('')}</select></label>
+        <label><input type="checkbox" ${tv.ticker ? 'checked' : ''} onchange="tv.ticker=this.checked;store.set('gaborg_tv_ticker',tv.ticker);tvTicker();tvParar()">Faixa de alertas no rodapé</label>
+        <p>Teclas: ← → mudar de tela · espaço pausar · S sumário · M este menu · 1 a 9 ir para a tela · F tela cheia · Esc sair. Clique nas áreas, DREs e propostas para ver o detalhe.</p></div></div></div>`;
+  tv.cont = setInterval(() => { n--; const c = $('#tv-cont'); if (c) c.textContent = `começa sozinho em ${n} s`; if (n <= 0) tvIniciar(tv.roteiro); }, 1000);
+}
+function tvParar(){ clearInterval(tv.cont); const c = $('#tv-cont'); if (c) c.textContent = 'escolha um roteiro'; }
+function tvContar(k){ const a = tv.roteiro; tv.roteiro = k; const n = tvSlides().length; tv.roteiro = a; return n; }
+function tvPersMudou(){ tvParar(); tv.pers = [...document.querySelectorAll('[data-tvp]:checked')].map(x => x.dataset.tvp); store.set('gaborg_tv_pers', tv.pers); }
+function tvIniciar(k){ clearInterval(tv.cont); tv.roteiro = k; store.set('gaborg_tv_rot', k); tv.slides = tvSlides(); tv.i = 0; tv.det = null; tvTicker(); tvMostrar(0); }
+async function tvMostrar(i){
+  clearInterval(tv.cont); tv.det = null;
+  if (i === 0 && tv.voltas++ > 0 && online()) { try { await lerNuvem(); calcularLayout(); tv.slides = tvSlides(); tvTicker(); } catch (e) {} }
+  if (!tv.slides.length) tv.slides = tvSlides();
+  tv.i = Math.max(0, Math.min(i, tv.slides.length - 1));
+  const [k, t, a] = tv.slides[tv.i];
+  $('#tv-titulo-slide').textContent = t + ' · ' + (tv.i + 1) + '/' + tv.slides.length + ' · ' + (ROTEIROS_TV[tv.roteiro] || [, ''])[1];
+  $('#tv-pontos').innerHTML = tv.slides.map((s, j) => `<button class="${j === tv.i ? 'on' : ''}" title="${esc(s[1])}" onclick="tvMostrar(${j})"></button>`).join('');
+  let html; try { html = TV_SLIDE[k](a); } catch (e) { console.error(e); html = `<div class="tv-h">${esc(t)}</div><p>Não foi possível montar esta tela.</p>`; }
+  $('#tv-palco').innerHTML = `<div class="tv-slide tr-${tv.trans}">${html}</div>`;
+  if (k === 'mapa') tvMontarMapa();
+  tvAgendar();
+}
+function tvSumario(){
+  tvPausar(true); tv.det = 'sumario';
+  $('#tv-palco').innerHTML = `<div class="tv-slide tr-esmaecer"><div class="tv-h" style="--c:#60a5fa"><i class="fa-solid fa-table-cells"></i>Telas desta apresentação<small>clique para ir</small></div>
+    <div class="tv-sum">${tv.slides.map((s, j) => `<button class="${j === tv.i ? 'on' : ''}" onclick="tvPausar(false);tvMostrar(${j})"><span>${j + 1}</span><b>${esc(s[1])}</b></button>`).join('')}</div>
+    <div class="tv-acoes"><button onclick="tvMenu()"><i class="fa-solid fa-layer-group"></i>Trocar de apresentação</button><button onclick="tvPausar(false);tvMostrar(tv.i)"><i class="fa-solid fa-arrow-left"></i>Voltar</button></div></div>`;
+}
+/* faixa de alertas */
+function tvTicker(){
+  const el = $('#tv-ticker'); if (!el) return;
+  if (!tv.ticker) { el.classList.add('hidden'); return; }
+  const it = [];
+  try { insightsInd(dadosInd(''), '').filter(x => x[0] === 'alerta' || x[0] === 'atencao').forEach(x => it.push(x[1].replace(/<[^>]+>/g, ''))); } catch (e) {}
+  const at = (DB.etapas || []).filter(atrasada); if (at.length) it.push(`${at.length} etapa(s) de implantação atrasada(s): ${at.slice(0, 3).map(e => e.titulo).join('; ')}`);
+  const vag = setoresOficiais().filter(s => s.status !== 'Extinto' && CHEFIAS.includes(s.tipo) && chefiaDe(s).situacao === 'Vago'); if (vag.length) it.push(`${vag.length} chefia(s) vaga(s): ${vag.slice(0, 4).map(s => s.sigla || s.nome).join(', ')}`);
+  (DB.reunioes || []).forEach(r => itensReu(r).forEach(x => { if (x.encaminhamento && !x.feito && x.prazo && diasAte(x.prazo) <= 7) it.push(`Encaminhamento ${diasAte(x.prazo) < 0 ? 'atrasado' : 'vence em breve'}: ${x.encaminhamento}${x.responsavel ? ' (' + x.responsavel + ')' : ''}`); }));
+  if (!it.length) it.push('Nenhum alerta no momento.');
+  el.classList.remove('hidden');
+  el.innerHTML = `<span class="tg"><i class="fa-solid fa-bell"></i>Alertas</span><div class="fx"><div class="tr" style="animation-duration:${Math.max(30, it.join(' ').length / 7)}s">${it.concat(it).map(x => `<span>${esc(x)}</span>`).join('')}</div></div>`;
+}
+/* detalhe ao clicar (pausa a apresentação) */
+function tvDetalhe(tipo, ref){
+  tvPausar(true); tv.det = tipo; let h = '';
+  if (tipo === 'area') { const a = porId.get(ref), l = DB.setores.filter(s => areaDe.get(s.id) === ref && s.status !== 'Extinto'), tp = {}; l.forEach(s => tp[s.tipo] = (tp[s.tipo] || 0) + 1);
+    const ch = l.filter(s => CHEFIAS.includes(s.tipo)), vag = ch.filter(s => chefiaDe(s).situacao === 'Vago' || !s.responsavel);
+    h = `<div class="tv-h" style="--c:${corArea(ref)}"><i class="fa-solid fa-building-columns"></i>${esc(a ? a.nome : '')}<small>${l.length} setores</small></div>
+      <div class="tv-kpis" style="grid-template-columns:repeat(4,1fr)">${tvKpi('#3b82f6', 'Setores', l.length, Object.keys(tp).length + ' tipos')}${tvKpi('#22c55e', 'Servidores', fmtN(l.reduce((t, s) => t + num(s.servidores), 0)), 'informados')}${tvKpi('#a855f7', 'Chefias', ch.length, vag.length + ' sem titular')}${tvKpi('#f97316', 'Impacto alto', l.filter(s => num(s.impacto) >= 4).length, 'alto ou crítico')}</div>
+      <div class="tv-duas"><div class="tv-caixa"><h4>Setores por tipo</h4>${tvBarras(Object.entries(tp).sort((x, y) => y[1] - x[1]).map(([t, n]) => [t, n, corTipo(t), n]))}</div><div class="tv-caixa"><h4>Chefias</h4><div class="tv-lista">${ch.slice(0, 9).map(s => `<div><span>${esc(s.nome)}</span><b>${esc(s.responsavel || 'sem titular')}</b></div>`).join('')}</div></div></div>`; }
+  if (tipo === 'dre') { const X = distanciasMT(), l = X.lista.filter(o => o.e.dre === ref), mun = {}; l.forEach(o => mun[o.e.municipio] = (mun[o.e.municipio] || 0) + 1);
+    const med = l.reduce((t, o) => t + o.km, 0) / Math.max(1, l.length), s = setorDaDRE(ref), cor = corDRE(X.dres, ref);
+    h = `<div class="tv-h" style="--c:${cor}"><i class="fa-solid fa-building-flag"></i>${esc(ref)}<small>${s && s.responsavel ? esc(s.responsavel) : ''}</small></div>
+      <div class="tv-kpis" style="grid-template-columns:repeat(4,1fr)">${tvKpi(cor, 'Escolas', l.length, Object.keys(mun).length + ' municípios')}${tvKpi('#65a30d', 'Rurais', l.filter(o => o.e.localidade === 'RURAL').length, pct(l.filter(o => o.e.localidade === 'RURAL').length, l.length) + '%')}${tvKpi('#f97316', 'Distância média', fmtKm(med), '~' + fmtHoras(med) + ' por estrada', true)}${tvKpi('#dc2626', 'Mais distante', fmtKm(Math.max(0, ...l.map(o => o.km))), 'em linha reta', true)}</div>
+      <div class="tv-duas"><div class="tv-caixa"><h4>Escolas por município</h4>${tvBarras(Object.entries(mun).sort((x, y) => y[1] - x[1]).slice(0, 9).map(([m, n]) => [m, n, cor, n]))}</div><div class="tv-caixa"><h4>Escolas mais distantes da sede</h4><div class="tv-lista">${l.slice().sort((x, y) => y.km - x.km).slice(0, 8).map(o => `<div><span>${esc(o.e.nome)} · ${esc(o.e.municipio)}</span><b>${fmtKm(o.km)}</b></div>`).join('')}</div></div></div>`; }
+  $('#tv-palco').innerHTML = `<div class="tv-slide tr-zoom">${h}<div class="tv-acoes"><button onclick="tvPausar(false);tvMostrar(tv.i)"><i class="fa-solid fa-arrow-left"></i>Voltar à apresentação</button></div></div>`;
+}
+/* projeção simples para o mapa de MT na TV (SVG leve, sem bibliotecas externas) */
+function tvMapaMT(dresSel){
+  const fc = topojson.feature(MALHA_MT, MALHA_MT.objects[Object.keys(MALHA_MT.objects)[0]]), X = distanciasMT(), dres = X.dres, porMun = dreDosMunicipios();
+  let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; const kx = Math.cos(-13 * Math.PI / 180);
+  const pts = []; fc.features.forEach(f => (f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates).forEach(pl => pl[0].forEach(([lo, la]) => { const x = lo * kx, y = -la; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; })));
+  const W = 1000, s = W / (x1 - x0), Hh = (y1 - y0) * s, P = (lo, la) => [((lo * kx - x0) * s).toFixed(1), ((-la - y0) * s).toFixed(1)];
+  const path = g => (g.type === 'Polygon' ? [g.coordinates] : g.coordinates).map(pl => pl.map(r => 'M' + r.map(([lo, la]) => P(lo, la).join(',')).join('L') + 'Z').join('')).join('');
+  const mun = fc.features.map(f => { const o = porMun.get(chaveMun(f.properties.nome)), d = o ? Object.entries(o).sort((a, b) => b[1] - a[1])[0][0] : ''; return `<path d="${path(f.geometry)}" fill="${d ? corDRE(dres, d) : '#334155'}" fill-opacity="${d && (!dresSel || dresSel === d) ? .42 : .06}" stroke="#0b1220" stroke-width="1"><title>${esc(f.properties.nome)}${d ? ' · ' + esc(nomeDRE(d)) : ''}</title></path>`; }).join('');
+  const esc_ = X.lista.filter(o => !dresSel || o.e.dre === dresSel).map(o => { const [x, y] = P(o.e.longitude, o.e.latitude); return `<circle cx="${x}" cy="${y}" r="3.4" fill="${corDRE(dres, o.e.dre)}" stroke="#0b1220" stroke-width=".8"/>`; }).join('');
+  const sedes = dres.map(d => { const [x, y] = P(X.sedes.get(d)[1], X.sedes.get(d)[0]), n = X.lista.filter(o => o.e.dre === d).length; return `<g class="tv-sede" onclick="tvDetalhe('dre',${arg(d)})" style="cursor:pointer"><circle cx="${x}" cy="${y}" r="13" fill="${corDRE(dres, d)}" stroke="#fff" stroke-width="2.5"/><text x="${x}" y="${(+y + 4).toFixed(1)}" text-anchor="middle" font-size="11" font-weight="800" fill="#fff">${n}</text><text x="${(+x + 17).toFixed(1)}" y="${(+y + 4).toFixed(1)}" font-size="13" font-weight="700" fill="#e2e8f0" stroke="#0b1220" stroke-width="3" paint-order="stroke">${esc(nomeDRE(d))}</text></g>`; }).join('');
+  return `<svg viewBox="-10 -10 ${W + 140} ${(Hh + 20).toFixed(0)}" preserveAspectRatio="xMidYMid meet" class="tv-svgmt">${mun}${esc_}${sedes}</svg>`;
+}
+Object.assign(TV_SLIDE, {
+  indicadores(){ const D = dadosInd(''), ins = insightsInd(D, ''), idx = D.porArea.length ? Math.round(D.porArea.reduce((t, x) => t + x.idx * x.n, 0) / Math.max(1, D.porArea.reduce((t, x) => t + x.n, 0))) : 0, cor = idx >= 75 ? '#22c55e' : idx >= 50 ? '#f59e0b' : '#ef4444';
+    return `<div class="tv-h" style="--c:${cor}"><i class="fa-solid fa-gauge-high"></i>Maturidade da estrutura<small>leitura automática dos dados</small></div>
+      <div class="tv-duas" style="grid-template-columns:.8fr 2fr"><div class="tv-caixa tv-gauge" style="--c:${cor}"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15.9" class="f"/><circle cx="18" cy="18" r="15.9" class="v" stroke-dasharray="${idx} 100"/></svg><b>${idx}</b><span>índice de maturidade (0 a 100)</span></div>
+      <div class="tv-caixa"><h4>Pontos de atenção</h4><div class="tv-ins">${ins.slice(0, 7).map(([t, h]) => `<div class="${t}">${h}</div>`).join('')}</div></div></div>`; },
+  rede(){ const E = escolasLista(), dres = dresDe(E), rur = E.filter(e => e.localidade === 'RURAL').length, tp = {}; E.forEach(e => { const g = grupoTipo(e.tipo); tp[g] = (tp[g] || 0) + 1; });
+    return `<div class="tv-h" style="--c:#4ade80"><i class="fa-solid fa-school"></i>Rede estadual de ensino<small>clique numa DRE para detalhar</small></div>
+      <div class="tv-kpis">${tvKpi('#22c55e', 'Unidades escolares', fmtN(E.length), dres.length + ' DREs')}${tvKpi('#06b6d4', 'Municípios', new Set(E.map(e => e.municipio)).size, 'atendidos')}${tvKpi('#84cc16', 'Rurais', rur, pct(rur, E.length) + '% da rede')}${tvKpi('#f97316', 'Indígenas', tp['Indígena'] || 0, (tp.Quilombola || 0) + ' quilombolas')}${tvKpi('#14b8a6', 'Cívico-militares', tp['Cívico-militar'] || 0, (tp.Militar || 0) + ' militares')}</div>
+      <div class="tv-duas"><div class="tv-caixa"><h4>Escolas por DRE</h4>${dres.map(d => [d, E.filter(e => e.dre === d).length]).sort((a, b) => b[1] - a[1]).map(([d, n]) => `<div class="tv-bar tv-clic" style="--c:${corDRE(dres, d)}" onclick="tvDetalhe('dre',${arg(d)})"><span class="n">${esc(nomeDRE(d))}</span><span class="t"><span style="width:${n / Math.max(...dres.map(x => E.filter(e => e.dre === x).length)) * 100}%"></span></span><span class="v">${n}</span></div>`).join('')}</div>
+      <div class="tv-caixa"><h4>Escolas por tipo</h4>${tvBarras(Object.entries(tp).sort((a, b) => b[1] - a[1]).map(([g, n]) => [g, n, CORES_TIPO[g] || '#94a3b8', n]))}</div></div>`; },
+  mapamt(){ return `<div class="tv-h" style="--c:#22d3ee"><i class="fa-solid fa-map-location-dot"></i>Mato Grosso: escolas e DREs<small>clique numa sede para detalhar</small></div><div class="tv-mapa tv-mapamt">${tvMapaMT()}</div>`; },
+  distancias(){ const X = distanciasMT(), l = X.lista, med = l.reduce((t, o) => t + o.km, 0) / l.length, por = X.dres.map(d => { const x = l.filter(o => o.e.dre === d); return [d, x.reduce((t, o) => t + o.km, 0) / x.length]; }).sort((a, b) => b[1] - a[1]);
+    return `<div class="tv-h" style="--c:#fb923c"><i class="fa-solid fa-route"></i>Distância das escolas até a sua DRE<small>em linha reta</small></div>
+      <div class="tv-kpis" style="grid-template-columns:repeat(4,1fr)">${tvKpi('#3b82f6', 'Média', fmtKm(med), '~' + fmtHoras(med) + ' por estrada', true)}${tvKpi('#f97316', 'A mais de 100 km', l.filter(o => o.km > 100).length, pct(l.filter(o => o.km > 100).length, l.length) + '% das escolas')}${tvKpi('#dc2626', 'A mais de 300 km', l.filter(o => o.km > 300).length, 'escolas')}${tvKpi('#a855f7', 'Mais perto de outra DRE', l.filter(o => o.prox && o.km - o.prox.km >= 40 && o.prox.km < o.km * .7).length, '40 km ou mais')}</div>
+      <div class="tv-duas"><div class="tv-caixa"><h4>Distância média por DRE</h4>${por.map(([d, v]) => `<div class="tv-bar tv-clic" style="--c:${faixaDist(v)[2]}" onclick="tvDetalhe('dre',${arg(d)})"><span class="n">${esc(nomeDRE(d))}</span><span class="t"><span style="width:${v / por[0][1] * 100}%"></span></span><span class="v">${fmtKm(v)}</span></div>`).join('')}</div>
+      <div class="tv-caixa"><h4>Escolas mais distantes</h4><div class="tv-lista">${l.slice().sort((a, b) => b.km - a.km).slice(0, 8).map(o => `<div><span>${esc(o.e.nome)} · ${esc(o.e.municipio)}</span><b>${fmtKm(o.km)}</b></div>`).join('')}</div></div></div>`; },
+  regional(){ const R = dadosRegionais().sort((a, b) => b.custo - a.custo), dres = R.map(x => x.d).sort();
+    return `<div class="tv-h" style="--c:#f472b6"><i class="fa-solid fa-building-flag"></i>Gestão regional<small>custo estimado de deslocamento por ano</small></div>
+      <div class="tv-grade">${R.map(x => `<div class="tv-area tv-clic" style="--c:${corDRE(dres, x.d)}" onclick="tvDetalhe('dre',${arg(x.d)})"><b>${esc(nomeDRE(x.d))}</b><small>${x.s && x.s.responsavel ? esc(x.s.responsavel) : 'sem responsável indicado'}</small><div class="nums"><span><b>${x.n}</b>escolas</span><span><b>${fmtKm(x.med)}</b>média</span><span><b>${fmtRc(x.custo)}</b>/ano</span></div></div>`).join('')}</div>`; },
+  chefias(){ const T = setoresOficiais().filter(s => s.status !== 'Extinto' && CHEFIAS.includes(s.tipo)).map(s => ({ s, c:chefiaDe(s) })), n = k => T.filter(y => y.c.situacao === k).length;
+    return `<div class="tv-h" style="--c:#818cf8"><i class="fa-solid fa-user-tie"></i>Chefias e sucessão<small>${T.length} chefias</small></div>
+      <div class="tv-kpis" style="grid-template-columns:repeat(5,1fr)">${tvKpi('#22c55e', 'Com titular', n('Titular'), pct(n('Titular'), T.length) + '%')}${tvKpi('#f59e0b', 'Interinos', n('Interino'), '')}${tvKpi('#3b82f6', 'Em nomeação', n('Em nomeação'), '')}${tvKpi('#ef4444', 'Vagos', n('Vago'), '')}${tvKpi('#94a3b8', 'Sem registro', n('Não informado'), 'a cadastrar')}</div>
+      <div class="tv-caixa" style="flex:1"><h4>Vagas e interinidades</h4><div class="tv-lista">${T.filter(y => ['Vago', 'Interino', 'Em nomeação'].includes(y.c.situacao)).sort((a, b) => (prof.get(a.s.id) || 0) - (prof.get(b.s.id) || 0)).slice(0, 8).map(y => `<div><span>${esc(y.s.nome)}</span><b style="color:${SIT_CH[y.c.situacao]}">${esc(y.c.situacao)}${y.c.desde ? ' há ' + diasDesdeData(y.c.desde) + ' dias' : ''}</b></div>`).join('') || '<div><span>Nenhuma vaga ou interinidade registrada.</span></div>'}</div></div>`; },
+  riscos(){ const D = dadosInd(''), r = D.base.filter(emRisco), M = metricasEstrutura(D.base);
+    return `<div class="tv-h" style="--c:#f87171"><i class="fa-solid fa-triangle-exclamation"></i>Riscos e prioridades</div>
+      <div class="tv-kpis" style="grid-template-columns:repeat(4,1fr)">${tvKpi('#ef4444', 'Setores em risco', r.length, 'impacto alto com ponto fraco')}${tvKpi('#f59e0b', 'Validações pendentes', D.pend.length, D.pend.filter(v => diasDesde(v.solicitadoEm) > 15).length + ' há mais de 15 dias')}${tvKpi('#a855f7', 'Chefias sobrecarregadas', M.comSub.filter(x => x[1] > 8).length, 'mais de 8 subordinados')}${tvKpi('#64748b', 'Chefias sem responsável', M.semResp, 'de ' + M.chefias.length)}</div>
+      <div class="tv-caixa" style="flex:1"><h4>Setores de impacto alto ou crítico com ponto fraco</h4><div class="tv-lista">${r.slice(0, 8).map(s => `<div><span>${esc(s.nome)}</span><b style="color:${IMPACTO[num(s.impacto)][1]}">${IMPACTO[num(s.impacto)][0]} · ${esc(statusVal(s.id))}</b></div>`).join('') || '<div><span>Nenhum setor em risco.</span></div>'}</div></div>`; },
+  prop(id){ const p = (DB.propostas || []).find(x => x.id === id); if (!p) return '<div class="tv-h">Proposta removida</div>';
+    const X = diffCenarios('', p.id), c = t => X.est.filter(e => e.tipo === t).length, d = X.aB - X.aA, mt = Object.assign({}, METAS_PADRAO, param('metasReestr', {})), C = cenariosRe(), cen = C.find(q => q.id === p.id), av = cen ? avaliarCenario(cen, metricasEstrutura(cen.lista), C[0], mt) : [];
+    return `<div class="tv-h" style="--c:#fbbf24"><i class="fa-solid fa-lightbulb"></i>${esc(p.nome)}<small>${esc(p.status || 'Em elaboração')}</small></div>${p.descricao ? `<p class="tv-desc">${esc(p.descricao)}</p>` : ''}
+      <div class="tv-kpis">${tvKpi('#22c55e', 'Criadas', c('novo') + c('reativado'), 'unidades')}${tvKpi('#ef4444', 'Extintas', c('extinto'), 'unidades')}${tvKpi('#3b82f6', 'Movidas', c('movido'), '')}${tvKpi('#a855f7', 'Renomeadas', c('renomeado') + c('tipo'), '')}${tvKpi(d > 0 ? '#ef4444' : '#22c55e', 'Custo anual', fmtRc(X.aB), (d >= 0 ? '+' : '') + fmtRs(d) + ' sobre o atual', true)}</div>
+      <div class="tv-duas"><div class="tv-caixa"><h4>Principais alterações</h4><div class="tv-lista">${X.est.filter(e => e.tipo !== 'editado').slice(0, 7).map(e => `<div><span>${e.txt}</span><b>${esc(e.tipo)}</b></div>`).join('') || '<div><span>Sem alterações de unidades.</span></div>'}</div></div>
+      <div class="tv-caixa"><h4>Metas da reorganização</h4><div class="tv-ins">${av.map(y => `<div class="${y.ok ? 'ok' : 'alerta'}">${y.ok ? '✓' : '✗'} ${esc(y.nome)}: <b>${esc(y.valor)}</b></div>`).join('') || '<div class="info">Defina as metas em Reestruturação.</div>'}</div></div></div>`; },
+  implantacao(){ const L = DB.etapas || [], co = L.filter(e => e.status === 'Concluída').length, at = L.filter(atrasada);
+    return `<div class="tv-h" style="--c:#2dd4bf"><i class="fa-solid fa-list-check"></i>Implantação<small>${pct(co, L.length)}% concluído</small></div>
+      <div class="tv-kpis" style="grid-template-columns:repeat(4,1fr)">${tvKpi('#14b8a6', 'Etapas', L.length, co + ' concluídas')}${tvKpi('#3b82f6', 'Em andamento', L.filter(e => e.status === 'Em andamento').length, '')}${tvKpi('#ef4444', 'Atrasadas', at.length, '')}${tvKpi('#7f1d1d', 'Bloqueadas', L.filter(e => e.status === 'Bloqueada').length, '')}</div>
+      <div class="tv-duas"><div class="tv-caixa"><h4>Andamento por fase</h4>${tvBarras(FASES_IM.map(f => { const l = L.filter(e => e.fase === f); return [f, l.length ? Math.round(l.filter(e => e.status === 'Concluída').length * 100 / l.length) : 0, '#14b8a6', l.length ? Math.round(l.filter(e => e.status === 'Concluída').length * 100 / l.length) + '%' : '—']; }))}</div>
+      <div class="tv-caixa"><h4>Atrasadas</h4><div class="tv-lista">${at.slice(0, 7).map(e => `<div><span>${esc(e.titulo)}</span><b style="color:#f87171">${fmtDia(e.prazo)}</b></div>`).join('') || '<div><span>Nenhuma etapa atrasada.</span></div>'}</div></div></div>`; },
+  metas(){ const M = DB.metas || [], O = objetivosRS();
+    return `<div class="tv-h" style="--c:#f472b6"><i class="fa-solid fa-bullseye"></i>Pacto de resultados<small>${M.length} metas</small></div>
+      <div class="tv-caixa" style="flex:1"><h4>Atingimento por objetivo estratégico</h4>${tvBarras(O.map(o => { const p = M.filter(m => m.objetivo === o).map(progressoMeta).filter(v => v !== null), v = p.length ? Math.round(p.reduce((a, b) => a + b, 0) / p.length * 100) : 0; return [o, v, v >= 60 ? '#22c55e' : v >= 30 ? '#f59e0b' : '#ef4444', p.length ? v + '%' : '—']; }))}</div>`; },
+  agenda(){ const R = (DB.reunioes || []).slice().sort((a, b) => String(a.data).localeCompare(String(b.data))), prox = R.filter(r => r.status !== 'Realizada' && tData(r.data) >= Date.now() - 864e5), enc = []; R.forEach(r => itensReu(r).forEach(x => { if (x.encaminhamento && !x.feito) enc.push({ r, x }); }));
+    return `<div class="tv-h" style="--c:#c084fc"><i class="fa-solid fa-people-group"></i>Agenda e encaminhamentos</div>
+      <div class="tv-duas"><div class="tv-caixa"><h4>Próximas reuniões</h4><div class="tv-lista">${prox.slice(0, 6).map(r => `<div><span>${esc(r.titulo)}</span><b>${fmtData(r.data)}</b></div>`).join('') || '<div><span>Nenhuma reunião marcada.</span></div>'}</div></div>
+      <div class="tv-caixa"><h4>Encaminhamentos em aberto</h4><div class="tv-lista">${enc.sort((a, b) => String(a.x.prazo || '9').localeCompare(String(b.x.prazo || '9'))).slice(0, 7).map(({ x }) => `<div><span>${esc(x.encaminhamento)}${x.responsavel ? ' · ' + esc(x.responsavel) : ''}</span><b style="color:${x.prazo && diasAte(x.prazo) < 0 ? '#f87171' : '#e2e8f0'}">${x.prazo ? fmtDia(x.prazo) : '—'}</b></div>`).join('') || '<div><span>Nenhum encaminhamento em aberto.</span></div>'}</div></div></div>`; }
+});
+
 document.addEventListener('keydown', e => {
   if ($('#tv-modo').classList.contains('hidden')) return;
   const noMapa = tv.slides[tv.i] && tv.slides[tv.i][0] === 'mapa' && tv.pausado && tv.moverMapa;
-  if (e.key === 'Escape') { e.preventDefault(); fecharModoTV(); }
+  if (e.target.closest && e.target.closest('input,select,textarea')) { if (e.key === 'Escape') fecharModoTV(); return; }
+  if (e.key === 'Escape') { e.preventDefault(); if (tv.det && tv.slides.length) { tvPausar(false); tvMostrar(tv.i); } else fecharModoTV(); }
+  else if (e.key.toLowerCase() === 's' && tv.slides.length) { e.preventDefault(); tvSumario(); }
+  else if (e.key.toLowerCase() === 'm') { e.preventDefault(); tvMenu(); }
+  else if (/^[1-9]$/.test(e.key) && tv.slides.length) { e.preventDefault(); tvPausar(false); tvMostrar(Number(e.key) - 1); }
   else if (noMapa && ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','+','-','='].includes(e.key)) { e.preventDefault(); const p = 60; ({ ArrowLeft:() => tv.moverMapa(p, 0), ArrowRight:() => tv.moverMapa(-p, 0), ArrowUp:() => tv.moverMapa(0, p), ArrowDown:() => tv.moverMapa(0, -p), '+':() => tv.moverMapa(0, 0, 1.2), '=':() => tv.moverMapa(0, 0, 1.2), '-':() => tv.moverMapa(0, 0, 1 / 1.2) })[e.key](); }
   else if (e.key === 'ArrowRight' || e.key === 'PageDown') { e.preventDefault(); tvPasso(1); }
   else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); tvPasso(-1); }
