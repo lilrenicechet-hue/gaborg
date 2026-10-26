@@ -74,9 +74,9 @@ textarea.campo{height:auto;min-height:74px;padding:9px 11px;line-height:1.5;resi
 .vazio i{display:block;font-size:24px;margin-bottom:8px;opacity:.6}
 
 /* ===================== LOGIN ===================== */
-#login{position:fixed;inset:0;z-index:300;display:grid;grid-template-columns:1.05fr 1fr;background:var(--sup)}
-.lg-marca{position:relative;overflow:hidden;background:radial-gradient(900px 500px at 20% 0%,#1d4ed8 0%,transparent 60%),radial-gradient(700px 500px at 100% 100%,#0e7490 0%,transparent 55%),#0b1222;color:#fff;display:flex;flex-direction:column;justify-content:space-between;padding:44px}
-.lg-org{position:absolute;inset:0;opacity:.22;pointer-events:none}
+#login{position:fixed;inset:0;z-index:300;display:grid;grid-template-columns:minmax(380px,470px) 1fr;background:var(--sup)}
+.lg-marca{position:relative;overflow:hidden;background:radial-gradient(900px 500px at 20% 0%,#1d4ed8 0%,transparent 60%),radial-gradient(700px 500px at 100% 100%,#0e7490 0%,transparent 55%),#0b1222;color:#fff;display:flex;flex-direction:column;justify-content:space-between;align-items:center;text-align:center;padding:40px 44px}
+.lg-org{position:absolute;inset:0;opacity:.1;pointer-events:none}
 .lg-logo{display:flex;align-items:center;gap:14px;position:relative}
 .lg-logo .ic{width:52px;height:52px;border-radius:15px;background:linear-gradient(135deg,#3b82f6,#0e7490);display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 10px 30px -8px #3b82f6}
 .lg-logo b{font-size:30px;font-weight:900;letter-spacing:-.03em}.lg-logo b span{color:#7dd3fc}
@@ -84,7 +84,7 @@ textarea.campo{height:auto;min-height:74px;padding:9px 11px;line-height:1.5;resi
 .lg-tit h1{font-size:40px;line-height:1.08;margin:0 0 14px;font-weight:800;letter-spacing:-.03em}
 .lg-tit p{color:#bfdbfe;font-size:15px;line-height:1.6;margin:0}
 .lg-pe{position:relative;font-size:12px;color:#93c5fd}
-.lg-form{display:flex;align-items:center;justify-content:center;padding:32px;overflow:auto}
+.lg-form{display:flex;align-items:center;justify-content:center;padding:40px 44px;overflow:auto;border-right:1px solid var(--linha);box-shadow:12px 0 40px -24px rgba(15,23,42,.35);position:relative;z-index:1}
 .lg-form form{width:100%;max-width:380px;display:flex;flex-direction:column;gap:14px}
 .lg-form h2{margin:0;font-size:24px;font-weight:800;letter-spacing:-.02em}
 .lg-form .sub{margin:-6px 0 6px;color:var(--mut);font-size:13.5px;line-height:1.5}
@@ -95,7 +95,18 @@ textarea.campo{height:auto;min-height:74px;padding:9px 11px;line-height:1.5;resi
 details.lg-adv summary{cursor:pointer;font-size:12.5px;font-weight:600;color:var(--mut);list-style:none}
 details.lg-adv summary::before{content:'\f013';font-family:'Font Awesome 6 Free';font-weight:900;margin-right:6px}
 details.lg-adv[open] summary{margin-bottom:8px}
-@media (max-width:860px){#login{grid-template-columns:1fr}.lg-marca{min-height:220px;padding:26px}.lg-tit h1{font-size:28px}.lg-tit p{display:none}}
+
+.lg-topo{position:relative;display:flex;flex-direction:column;gap:2px;font-size:13px;color:#bfdbfe;letter-spacing:.02em}.lg-topo span:first-child{font-size:14px;font-weight:700;color:#fff;text-transform:uppercase;letter-spacing:.08em}
+.lg-hero{position:relative;display:flex;flex-direction:column;align-items:center;gap:10px;animation:lgEntra .9s cubic-bezier(.16,1,.3,1)}
+.lg-hero-ic{width:clamp(96px,11vw,148px);height:clamp(96px,11vw,148px);border-radius:32%;background:linear-gradient(135deg,#3b82f6,#0e7490);display:flex;align-items:center;justify-content:center;font-size:clamp(42px,5vw,66px);color:#fff;box-shadow:0 24px 60px -16px rgba(59,130,246,.65),inset 0 1px 0 rgba(255,255,255,.25);animation:lgFlutua 6s ease-in-out infinite}
+.lg-hero-t{margin:14px 0 0;font-size:clamp(64px,9vw,136px);line-height:.95;font-weight:900;letter-spacing:-.045em;color:#fff;text-shadow:0 10px 40px rgba(15,23,42,.5)}.lg-hero-t span{color:#7dd3fc}
+.lg-hero-s{margin:0;font-size:clamp(16px,1.6vw,22px);font-weight:700;letter-spacing:.32em;text-transform:uppercase;color:#bfdbfe}
+.lg-hero-d{margin:10px 0 0;font-size:15px;color:#93c5fd}
+@keyframes lgEntra{from{opacity:0;transform:translateY(18px) scale(.98)}to{opacity:1;transform:none}}
+@keyframes lgFlutua{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+@media (prefers-reduced-motion:reduce){.lg-hero,.lg-hero-ic{animation:none}}
+.lg-form .lg-marca-mob{display:none}
+@media (max-width:860px){#login{grid-template-columns:1fr;grid-template-rows:auto 1fr;overflow:auto}.lg-marca{order:-1;min-height:0;padding:22px 20px 26px;gap:10px}.lg-topo{font-size:11.5px}.lg-topo span:first-child{font-size:12px}.lg-hero{gap:4px}.lg-hero-ic{width:64px;height:64px;font-size:28px}.lg-hero-t{font-size:56px;margin-top:8px}.lg-hero-s{font-size:13px;letter-spacing:.24em}.lg-hero-d,.lg-pe{display:none}.lg-form{border-right:0;box-shadow:none;padding:26px 22px;align-items:flex-start}.lg-form .lg-inst{display:none}}
 
 /* ===================== SHELL ===================== */
 #app{display:flex;height:100vh;height:100dvh}
@@ -965,8 +976,8 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background
 <body>
 <!-- Vigia de inicialização: se o arquivo.js não carregar ou falhar, mostra o motivo em vez de uma tela vazia -->
 <script>
-window.GABORG_VERSAO_HTML = '1.22.0'; window.GABORG_ERROS = [];
-window.GABORG_NOVIDADES = "Nova seção Relatórios e minutas (relatório em PDF montado por você, minuta de portaria por proposta, código de verificação e selo) e Modo TV com roteiros, mapa de MT, detalhes ao clicar e faixa de alertas.";
+window.GABORG_VERSAO_HTML = '1.22.1'; window.GABORG_ERROS = [];
+window.GABORG_NOVIDADES = "Nova tela de entrada: acesso à esquerda e o logo GABOrg em destaque.";
 window.addEventListener('error', function (e) {
   var alvo = e.target || {};
   if (alvo.tagName === 'SCRIPT') window.GABORG_ERROS.push('Não foi possível baixar o arquivo ' + (alvo.getAttribute('src') || '') + '.');
@@ -1002,26 +1013,9 @@ window.addEventListener('load', function () { setTimeout(function () { window.GA
 
 <!-- ===================== LOGIN ===================== -->
 <div id="login" class="hidden">
-  <div class="lg-marca">
-    <svg class="lg-org" viewBox="0 0 600 600" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-      <g fill="none" stroke="#93c5fd" stroke-width="1.4">
-        <path d="M300 120V170H120V230M300 170H480V230M300 170V230M120 290V340H60V390M120 340H180V390M300 290V340M480 290V340H420V390M480 340H540V390"/>
-      </g>
-      <g fill="#bfdbfe">
-        <rect x="250" y="90" width="100" height="32" rx="7"/><rect x="70" y="230" width="100" height="60" rx="7" opacity=".7"/><rect x="250" y="230" width="100" height="60" rx="7" opacity=".7"/><rect x="430" y="230" width="100" height="60" rx="7" opacity=".7"/>
-        <rect x="30" y="390" width="60" height="34" rx="6" opacity=".45"/><rect x="150" y="390" width="60" height="34" rx="6" opacity=".45"/><rect x="270" y="340" width="60" height="34" rx="6" opacity=".45"/><rect x="390" y="390" width="60" height="34" rx="6" opacity=".45"/><rect x="510" y="390" width="60" height="34" rx="6" opacity=".45"/>
-      </g>
-    </svg>
-    <div class="lg-logo"><span class="ic"><i class="fa-solid fa-sitemap"></i></span><b>GAB<span>Org</span></b></div>
-    <div class="lg-tit">
-      <h1>A estrutura da SEDUC-MT, viva e editável.</h1>
-      <p>Organize setores, competências, valores, impactos e validações em um mapa interativo, com a estrutura do Decreto nº 2.236/2026 já carregada.</p>
-    </div>
-    <div class="lg-pe">Governo de Mato Grosso · Secretaria de Estado de Educação</div>
-  </div>
   <div class="lg-form">
     <form id="f-login" autocomplete="on">
-      <div class="lg-inst"><b>Secretaria de Estado de Educação</b>Unidade de Assessoria · Unidade de Apoio Estratégico</div>
+      <div class="lg-inst"><b>Secretaria de Estado de Educação</b>Gabinete do Secretário</div>
       <h2>Acessar o GABOrg</h2>
       <p class="sub">Entre com o seu usuário e senha. Não tem acesso? Peça a um administrador do GABOrg.</p>
       <div id="lg-aviso" class="lg-aviso hidden"></div>
@@ -1034,6 +1028,26 @@ window.addEventListener('load', function () { setTimeout(function () { window.GA
       <button type="submit" class="btn btn-p" style="height:44px" id="lg-btn"><i class="fa-solid fa-arrow-right-to-bracket"></i>Entrar</button>
       <button type="button" class="btn btn-s btn-instalar lg-instalar" onclick="instalarApp()"><i class="fa-solid fa-download"></i>Instalar o GABOrg como app</button>
     </form>
+  </div>
+
+  <div class="lg-marca">
+    <svg class="lg-org" viewBox="0 0 600 600" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      <g fill="none" stroke="#93c5fd" stroke-width="1.4">
+        <path d="M300 120V170H120V230M300 170H480V230M300 170V230M120 290V340H60V390M120 340H180V390M300 290V340M480 290V340H420V390M480 340H540V390"/>
+      </g>
+      <g fill="#bfdbfe">
+        <rect x="250" y="90" width="100" height="32" rx="7"/><rect x="70" y="230" width="100" height="60" rx="7" opacity=".7"/><rect x="250" y="230" width="100" height="60" rx="7" opacity=".7"/><rect x="430" y="230" width="100" height="60" rx="7" opacity=".7"/>
+        <rect x="30" y="390" width="60" height="34" rx="6" opacity=".45"/><rect x="150" y="390" width="60" height="34" rx="6" opacity=".45"/><rect x="270" y="340" width="60" height="34" rx="6" opacity=".45"/><rect x="390" y="390" width="60" height="34" rx="6" opacity=".45"/><rect x="510" y="390" width="60" height="34" rx="6" opacity=".45"/>
+      </g>
+    </svg>
+    <div class="lg-topo"><span>Secretaria de Estado de Educação</span><span>Gabinete do Secretário</span></div>
+    <div class="lg-hero">
+      <span class="lg-hero-ic"><i class="fa-solid fa-sitemap"></i></span>
+      <h1 class="lg-hero-t">GAB<span>Org</span></h1>
+      <p class="lg-hero-s">Organização Institucional</p>
+      <p class="lg-hero-d">A estrutura da SEDUC-MT, viva e editável.</p>
+    </div>
+    <div class="lg-pe">Governo de Mato Grosso · Secretaria de Estado de Educação</div>
   </div>
 </div>
 
@@ -1321,6 +1335,6 @@ window.addEventListener('load', function () { setTimeout(function () { window.GA
 
 <div id="toast"><i class="fa-solid fa-check"></i><span></span></div>
 
-<script src="arquivo.js?v=1.22.0" onerror="window.GABORG_ERROS.push('O arquivo arquivo.js não foi encontrado no servidor (erro 404).');GABORG_DIAGNOSTICO()"></script>
+<script src="arquivo.js?v=1.22.1" onerror="window.GABORG_ERROS.push('O arquivo arquivo.js não foi encontrado no servidor (erro 404).');GABORG_DIAGNOSTICO()"></script>
 </body>
 </html>
