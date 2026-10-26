@@ -317,6 +317,7 @@ html[data-tema="escuro"] .mt-mun-n{color:#f8fafc;text-shadow:0 0 3px #000,0 0 3p
 @keyframes mtPulso{from{transform:scale(.2);opacity:1}to{transform:scale(1.4);opacity:0}}
 .mt-leg-c .it{display:flex;align-items:center;gap:7px;width:100%;text-align:left;padding:2px 4px;margin:0 -4px;border-radius:6px;font-size:11.5px}
 .mt-leg-c button.it:hover,.mt-leg-c button.it.on{background:var(--sup2)}.mt-leg-c .it i{width:12px;height:12px;border-radius:4px;flex:none;border:1px solid rgba(15,23,42,.15)}
+.mt-leg-c .mt-leg-formas{display:block;border-top:1px solid var(--linha);margin-top:6px;padding-top:7px}.mt-leg-c .mt-leg-formas>b{display:block;font-size:11px;margin-bottom:4px}.mt-leg-c .mt-leg-formas>div{display:grid;grid-template-columns:1fr 1fr;gap:2px 12px}.mt-leg-c .mt-leg-formas span{display:flex;align-items:center;gap:6px;font-size:11px;margin:0;padding:0;font-weight:500;color:var(--txt)}.mt-leg-c .mt-leg-formas small{margin-left:auto;color:var(--mut);font-weight:700}.ic-tipo{flex:none;vertical-align:-2px}
 .mt-leg-c .it span{margin-left:auto;font-weight:700;font-variant-numeric:tabular-nums;color:var(--mut);padding-left:10px}
 .mt-muns{display:flex;flex-direction:column;gap:2px}
 .mt-mu{display:grid;grid-template-columns:14px 1fr auto;column-gap:9px;align-items:center;padding:7px 10px;border-radius:9px;text-align:left;border:1px solid transparent}
@@ -1055,8 +1056,8 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background
 <body>
 <!-- Vigia de inicialização: se o arquivo.js não carregar ou falhar, mostra o motivo em vez de uma tela vazia -->
 <script>
-window.GABORG_VERSAO_HTML = '1.25.0'; window.GABORG_ERROS = [];
-window.GABORG_NOVIDADES = "Nova capa em todos os documentos (relatórios, minuta de portaria e minuta de decreto), no estilo da página inicial: dia, data, hora, usuário, código, selo e os filtros utilizados.";
+window.GABORG_VERSAO_HTML = '1.26.1'; window.GABORG_ERROS = [];
+window.GABORG_NOVIDADES = "Novos símbolos das unidades escolares, que lembram cada tipo: prédio escolar (regular), estrela de insígnia (cívico-militar), escudo (militar), planta (campo), pena (indígena), pessoas (quilombola), relógio (integral), acessibilidade (especializada) e cruz (confessional).";
 window.addEventListener('error', function (e) {
   var alvo = e.target || {};
   if (alvo.tagName === 'SCRIPT') window.GABORG_ERROS.push('Não foi possível baixar o arquivo ' + (alvo.getAttribute('src') || '') + '.');
@@ -1417,6 +1418,6 @@ window.addEventListener('load', function () { setTimeout(function () { window.GA
 
 <div id="toast"><i class="fa-solid fa-check"></i><span></span></div>
 
-<script src="arquivo.js?v=1.25.0" onerror="window.GABORG_ERROS.push('O arquivo arquivo.js não foi encontrado no servidor (erro 404).');GABORG_DIAGNOSTICO()"></script>
+<script src="arquivo.js?v=1.26.1" onerror="window.GABORG_ERROS.push('O arquivo arquivo.js não foi encontrado no servidor (erro 404).');GABORG_DIAGNOSTICO()"></script>
 </body>
 </html>

@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.25.0';
+const VERSAO = '1.26.1';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -1380,7 +1380,7 @@ function renderPainelInd(){
   opcoesFiltro('#p-area', 'Toda a Secretaria', areas.map(a => [a, nomeCurto(porId.get(a))]));
   const fa = $('#p-area').value, D = dadosInd(fa);
   const kpi = (c, ic, r, v, s, on) => `<div class="cartao kpi ${on ? 'clic' : ''}" style="--c:${c}" ${on ? `onclick="${on}"` : ''}><div class="r"><i class="fa-solid ${ic}"></i>${r}</div><div class="v">${v}</div><div class="s">${s}</div></div>`;
-  const barras = (pares, fmt) => { const mx = Math.max(1, ...pares.map(p => p[1])); return pares.map(([n, v, c, on, extra]) => `<div class="barra-l" ${on ? `style="cursor:pointer" onclick="${on}"` : ''}><span class="n" title="${esc(n)}">${esc(n)}</span><span class="t"><span style="width:${v / mx * 100}%;background:${c || 'var(--marca)'}"></span></span><b>${fmt ? fmt(v) : fmtN(v)}</b>${extra || ''}</div>`).join(''); };
+  const barras = (pares, fmt) => { const mx = Math.max(1, ...pares.map(p => p[1])); return pares.map(([n, v, c, on, extra, ic]) => `<div class="barra-l" ${on ? `style="cursor:pointer" onclick="${on}"` : ''}><span class="n" title="${esc(n)}">${ic || ''}${esc(n)}</span><span class="t"><span style="width:${v / mx * 100}%;background:${c || 'var(--marca)'}"></span></span><b>${fmt ? fmt(v) : fmtN(v)}</b>${extra || ''}</div>`).join(''); };
   const nav = `<div class="ind-abas">${IND_ABAS.map(([k, n, ic]) => `<button class="${indAba === k ? 'on' : ''}" onclick="abaInd('${k}')"><i class="fa-solid ${ic}"></i><span>${n}</span></button>`).join('')}<span class="esp"></span><button class="btn btn-s btn-sm" onclick="exportarIndicadores()"><i class="fa-solid fa-file-csv"></i>Exportar</button><button class="btn btn-s btn-sm" onclick="window.print()"><i class="fa-solid fa-print"></i>Imprimir</button></div>`;
   let h = '';
   if (indAba === 'geral') h = indGeral(D, fa, kpi);
@@ -1499,7 +1499,7 @@ function indRede(D, kpi, barras){
         <td onclick="event.stopPropagation()">${x.s ? `<button class="btn btn-g btn-sm btn-i" title="Ver no organograma" onclick="trocarVista('mapa');setTimeout(()=>irPara(${arg(x.s.id)}),60)"><i class="fa-solid fa-sitemap"></i></button>` : ''}</td></tr>`).join('')}
       </tbody><tfoot><tr><td><b>Total</b></td><td><b>${E.length}</b></td><td></td><td>${mun.size}</td><td>${(E.length / mun.size).toLocaleString('pt-BR', { maximumFractionDigits:1 })}</td><td>${rur} <small>(${pct(rur, E.length)}%)</small></td>${T.map(t => `<td>${lin.reduce((a, x) => a + (x.tp[t] || 0), 0)}</td>`).join('')}<td></td></tr></tfoot></table></div></div>
     <div class="grade2">
-      <div class="cartao bl" style="--c:#2563eb"><h3><i class="fa-solid fa-shapes"></i>Escolas por tipo</h3><p class="s">Classificação da base</p>${barras(Object.entries(tipos).sort((a, b) => b[1] - a[1]).map(([k, n]) => [k, n, CORES_TIPO[k] || '#94a3b8']))}</div>
+      <div class="cartao bl" style="--c:#2563eb"><h3><i class="fa-solid fa-shapes"></i>Escolas por tipo</h3><p class="s">Classificação da base</p>${barras(Object.entries(tipos).sort((a, b) => b[1] - a[1]).map(([k, n]) => [k, n, CORES_TIPO[k] || '#94a3b8', '', '', iconeTipoSVG(k, CORES_TIPO[k], 13) + ' ']))}</div>
       <div class="cartao bl" style="--c:#0891b2"><h3><i class="fa-solid fa-city"></i>Municípios com mais escolas</h3><p class="s">Onde a rede estadual se concentra</p>${barras(munT.slice(0, 10).map(([m, n]) => [m, n, '#0891b2']))}</div>
     </div>`;
 }
@@ -3130,6 +3130,44 @@ function dresDe(lista){ return [...new Set(lista.map(e => e.dre))].sort((a, b) =
 const corDRE = (dres, d) => CORES_DRE[Math.max(0, dres.indexOf(d)) % CORES_DRE.length];
 const nomeDRE = d => String(d || '').replace(/^DRE\s+/i, '').toLowerCase().replace(/(^|\s|-)(\S)/g, (m, a, b) => a + b.toUpperCase()).replace(/\b(De|Da|Do|Das|Dos|E)\b/g, x => x.toLowerCase());
 const grupoTipo = t => (GRUPOS_TIPO.find(([, re]) => re.test(String(t).toUpperCase())) || ['Outro'])[0];
+/* ---------- símbolo de cada tipo de unidade escolar: selo na cor (DRE ou modo do mapa) com um desenho branco que lembra o tipo ---------- */
+const FORMAS_TIPO = { 'Regular':'escola', 'Cívico-militar':'insignia', 'Militar':'escudo', 'Campo':'broto', 'Indígena':'pena', 'Quilombola':'comunidade', 'Integral':'relogio', 'Especializada':'acessivel', 'Confessional':'cruz', 'Outro':'ponto' };
+const NOMES_FORMA = { escola:'prédio escolar', insignia:'estrela de insígnia', escudo:'escudo militar', broto:'planta do campo', pena:'pena (cocar)', comunidade:'comunidade (pessoas)', relogio:'relógio (tempo integral)', acessivel:'acessibilidade (educação especial)', cruz:'cruz', ponto:'ponto' };
+const GLIFOS = {
+  escola:'M0 -7.2L7.4 -1.6H5.6V6.6H1.6V2.4H-1.6V6.6H-5.6V-1.6H-7.4Z',
+  insignia:'M0 -7.6L2.2 -2.6L7.4 -2.3L3.4 1.1L4.7 6.4L0 3.5L-4.7 6.4L-3.4 1.1L-7.4 -2.3L-2.2 -2.6Z',
+  escudo:'M0 -7.6L6.6 -5V0.2C6.6 3.9 3.8 6.4 0 7.6C-3.8 6.4 -6.6 3.9 -6.6 0.2V-5ZM0 -5.3V5.4C2.6 4.4 4.5 2.6 4.5 0.1V-3.6Z',
+  broto:'M-0.9 7.2V-0.6H0.9V7.2ZM-0.6 1.8C-5.4 1.8 -7.2 -1.8 -7.2 -4.6C-2.6 -4.6 -0.6 -2.2 -0.6 1.8ZM0.6 -0.4C0.6 -4.6 2.8 -7.4 7.2 -7.4C7.2 -3.8 5.2 -0.4 0.6 -0.4Z',
+  pena:'M6.8 -7.4C-1.2 -6.8 -5.6 -1 -5.8 5.2L-7.2 7.4L-6 7.6L-4.6 5.6C0.8 5.2 5.8 1.2 6.8 -7.4ZM4 -4.2L-3.6 4.6L-4.2 4.1L3.5 -4.7Z',
+  comunidade:'M0 -6.8A2.3 2.3 0 1 1 0 -2.2A2.3 2.3 0 1 1 0 -6.8ZM-3.8 6.2C-3.8 1.6 -2.2 -0.8 0 -0.8C2.2 -0.8 3.8 1.6 3.8 6.2ZM-5 -4.6A1.8 1.8 0 1 1 -5 -1A1.8 1.8 0 1 1 -5 -4.6ZM-7.6 6.2C-7.6 2.4 -6.6 0.4 -5 0.4C-4.4 0.4 -3.9 0.6 -3.5 1C-4.4 2.4 -4.8 4.2 -4.8 6.2ZM5 -4.6A1.8 1.8 0 1 1 5 -1A1.8 1.8 0 1 1 5 -4.6ZM7.6 6.2C7.6 2.4 6.6 0.4 5 0.4C4.4 0.4 3.9 0.6 3.5 1C4.4 2.4 4.8 4.2 4.8 6.2Z',
+  relogio:'M0 -7.4A7.4 7.4 0 1 1 0 7.4A7.4 7.4 0 1 1 0 -7.4ZM0 -5.6A5.6 5.6 0 1 0 0 5.6A5.6 5.6 0 1 0 0 -5.6ZM-0.9 -4.4H0.9V-0.4L3.6 1.9L2.5 3.3L-0.9 0.5Z',
+  acessivel:'M0 -7.6A1.9 1.9 0 1 1 0 -3.8A1.9 1.9 0 1 1 0 -7.6ZM-7 -3H7V-1.3H1.9V1.4L3.6 7H1.7L0 2.6L-1.7 7H-3.6L-1.9 1.4V-1.3H-7Z',
+  cruz:'M-1.3 -7.6H1.3V-3.4H5V-0.9H1.3V7.6H-1.3V-0.9H-5V-3.4H-1.3Z',
+  ponto:'M0 -3A3 3 0 1 1 0 3A3 3 0 1 1 0 -3Z'
+};
+const formaTipo = t => FORMAS_TIPO[grupoTipo(t)] || 'ponto';
+/* selo (círculo na cor + desenho branco) como SVG; r = raio do selo */
+function simbolo(f, x, y, r, cor, op){ const k = r * .7 / 7.6, o = op === undefined ? 1 : op;
+  return `<circle cx="${(+x).toFixed(1)}" cy="${(+y).toFixed(1)}" r="${r.toFixed(2)}" fill="${cor}" fill-opacity="${o}" stroke="#ffffff" stroke-width="${(r * .14).toFixed(2)}"/>${r >= 2 ? `<path transform="translate(${(+x).toFixed(1)} ${(+y).toFixed(1)}) scale(${k.toFixed(3)})" d="${GLIFOS[f] || GLIFOS.ponto}" fill="#ffffff" fill-opacity="${o}" fill-rule="evenodd"/>` : ''}`; }
+function iconeTipoSVG(tipo, cor, t){ t = t || 14; const f = FORMAS_TIPO[tipo] || formaTipo(tipo), c = t / 2;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${t} ${t}" width="${t}" height="${t}" class="ic-tipo">${simbolo(f, c, c, c - .4, cor || CORES_TIPO[tipo] || '#2563eb')}</svg>`; }
+/* marcador do Leaflet: o círculo continua sendo um CircleMarker (cluster, tooltip, setRadius) e o desenho vai por cima */
+function prepararMarcadorEscola(){
+  if (!window.L || L.EscolaMarker) return;
+  const visivel = l => !l._empty() && l._radius >= 4.2, kk = l => l._radius * .7 / 7.6, opG = l => l.options.fillOpacity < .5 ? .35 : 1;
+  L.SVG.include({ _updateGlifo(l){ let g = l._gl; if (!g) { g = l._gl = L.SVG.create('path'); g.setAttribute('fill', '#ffffff'); g.setAttribute('fill-rule', 'evenodd'); g.setAttribute('pointer-events', 'none'); g.setAttribute('d', GLIFOS[l.options.forma] || GLIFOS.ponto); }
+    if (l._path && l._path.parentNode && g.previousSibling !== l._path) l._path.parentNode.insertBefore(g, l._path.nextSibling);
+    if (!visivel(l)) { g.setAttribute('display', 'none'); return; } g.removeAttribute('display'); const p = l._point; g.setAttribute('transform', `translate(${p.x} ${p.y}) scale(${kk(l).toFixed(3)})`); g.setAttribute('fill-opacity', opG(l)); } });
+  L.Canvas.include({ _updateGlifo(l){ if (!this._drawing || !visivel(l)) return; const ctx = this._ctx, p = l._point, k = kk(l); l._p2d = l._p2d || new Path2D(GLIFOS[l.options.forma] || GLIFOS.ponto);
+    ctx.save(); ctx.translate(p.x, p.y); ctx.scale(k, k); ctx.globalAlpha = opG(l); ctx.fillStyle = '#ffffff'; ctx.fill(l._p2d, 'evenodd'); ctx.restore(); } });
+  L.EscolaMarker = L.CircleMarker.extend({ options:{ forma:'ponto' },
+    _updatePath(){ L.CircleMarker.prototype._updatePath.call(this); if (this._renderer && this._renderer._updateGlifo) this._renderer._updateGlifo(this); },
+    onAdd(map){ L.CircleMarker.prototype.onAdd.call(this, map); if (this._renderer && this._renderer._updateGlifo && this._point) this._renderer._updateGlifo(this); },
+    onRemove(map){ L.CircleMarker.prototype.onRemove.call(this, map); if (this._gl && this._gl.parentNode) this._gl.parentNode.removeChild(this._gl); },
+    bringToFront(){ L.CircleMarker.prototype.bringToFront.call(this); if (this._gl && this._path && this._path.parentNode) this._path.parentNode.insertBefore(this._gl, this._path.nextSibling); return this; } });
+  L.escolaMarker = (ll, o) => new L.EscolaMarker(ll, o);
+}
+
 const ALIAS_MUN = { julio:'camposdejulio', conquistadoeste:'conquistadooeste', poxoreo:'poxoreu' };
 const chaveMun = n => { const k = norm(n).replace(/[^a-z]/g, ''); return ALIAS_MUN[k] || k; };
 function sedeDRE(d, lista){
@@ -3272,7 +3310,7 @@ const distEscola = e => { const o = distanciasMT().porCod.get(e.codigo); return 
 function rotaDRE(e){ const s = distanciasMT().sedes.get(e.dre); return `https://www.google.com/maps/dir/?api=1&origin=${s[0].toFixed(5)},${s[1].toFixed(5)}&destination=${e.latitude},${e.longitude}&travelmode=driving`; }
 function popupEscola(e, dres){
   const cor = corDRE(dres, e.dre), end = [e.endereco, e.numero && e.numero !== '0' ? e.numero : '', e.bairro].filter(Boolean).join(', ');
-  return `<div class="mt-pop"><div class="t" style="--c:${cor}"><i class="fa-solid fa-school"></i>${esc(e.tipo)} · ${esc(e.localidade === 'RURAL' ? 'Rural' : 'Urbana')}</div><b>${esc(e.nome)}</b><small>Código ${esc(e.codigo)} · ${esc(e.municipio)}</small>
+  return `<div class="mt-pop"><div class="t" style="--c:${cor}">${iconeTipoSVG(grupoTipo(e.tipo), cor, 15)}${esc(e.tipo)} · ${esc(e.localidade === 'RURAL' ? 'Rural' : 'Urbana')}</div><b>${esc(e.nome)}</b><small>Código ${esc(e.codigo)} · ${esc(e.municipio)}</small>
     <div class="l"><i class="fa-solid fa-sitemap"></i><a href="#" onclick="event.preventDefault();focarDREmt(${dres.indexOf(e.dre)})" style="color:${cor}">${esc(e.dre)}</a></div>
     <div class="l"><i class="fa-solid fa-ruler"></i><span><b style="color:${faixaDist(distEscola(e))[2]}">${fmtKm(distEscola(e))}</b> em linha reta até a sede da DRE · ~${fmtKm(distEscola(e) * FATOR_ESTRADA)} por estrada · ~${fmtHoras(distEscola(e))} <a href="${rotaDRE(e)}" target="_blank" rel="noopener">rota real</a></span></div>
     ${end ? `<div class="l"><i class="fa-solid fa-location-dot"></i>${esc(end)}${e.cep ? ' · ' + esc(e.cep) : ''}</div>` : ''}
@@ -3306,9 +3344,9 @@ function desenharEscolasMT(){
   }
   if (modo !== 'sodre') lista.forEach(e => {
     const cor = corEscolaMT(e, dres), apagada = (foco && e.dre !== foco) || (mun && chaveMun(e.municipio) !== mun);
-    const opts = { radius:pequeno ? 3.2 : (foco && !apagada ? 6.5 : 5.2), color:'#fff', weight:pequeno ? .8 : 1.4, fillColor:cor, fillOpacity:apagada ? .12 : (modo === 'municipio' ? .55 : .92), opacity:apagada ? .2 : 1 };
+    const opts = { radius:pequeno ? 4.6 : (foco && !apagada ? 8.5 : 7), color:'#fff', weight:pequeno ? .8 : 1.3, fillColor:cor, fillOpacity:apagada ? .12 : (modo === 'municipio' ? .55 : .92), opacity:apagada ? .2 : 1 };
     if (destino === mt.camadas.escolas) opts.renderer = mt.render;
-    const m = L.circleMarker([e.latitude, e.longitude], opts);
+    prepararMarcadorEscola(); opts.forma = formaTipo(e.tipo); const m = L.escolaMarker([e.latitude, e.longitude], opts);
     if (!apagada) { m.on('mouseover', () => m.setRadius(opts.radius + 3)); m.on('mouseout', () => m.setRadius(opts.radius)); }
     m.bindTooltip(`<b>${esc(e.nome)}</b><br>${esc(e.municipio)} · ${esc(nomeDRE(e.dre))} · ${fmtKm(distEscola(e))} da DRE`, { direction:'top', offset:[0, -4], className:'mt-tip' });
     m.bindPopup(() => popupEscola(e, dres), { maxWidth:320, className:'mt-popup' });
@@ -3534,6 +3572,7 @@ function legendaMT(dres, lista){
   else it = dres.map((d, i) => [corDRE(dres, d), nomeDRE(d), lista.filter(e => e.dre === d).length, i]);
   el.innerHTML = `<button class="mt-leg-tg" onclick="mt.leg=!mt.leg;store.set('gaborg_mt_leg2',mt.leg);this.parentNode.classList.toggle('fechada',!mt.leg)" title="Mostrar ou esconder a legenda"><i class="fa-solid fa-list"></i><span>Legenda</span></button>
     <div class="mt-leg-c"><b>${esc(MODOS_MT[mt.modo][1])}</b><small>${esc(MODOS_MT[mt.modo][2])}</small><div class="its ${it.length > 8 ? 'duas' : ''}">${it.map(([c, n, q, i]) => i !== undefined ? `<button class="it ${mt.foco === i ? 'on' : ''}" onclick="focarDREmt(${mt.foco === i ? -1 : i})" onmouseenter="realcarDREmt(${i})" onmouseleave="realcarDREmt(-1)"><i style="background:${c}"></i>${esc(n)}<span>${q}</span></button>` : `<div class="it"><i style="background:${c}"></i>${esc(n)}${q !== undefined ? `<span>${q}</span>` : ''}</div>`).join('')}</div>
+    ${(() => { const c = {}; lista.forEach(e => { const g = grupoTipo(e.tipo); c[g] = (c[g] || 0) + 1; }); const ks = Object.keys(FORMAS_TIPO).filter(k => c[k]); return ks.length ? `<div class="mt-leg-formas"><b>Tipo de unidade (forma do ícone)</b><div>${ks.map(k => `<span title="${esc(k)}: ${NOMES_FORMA[FORMAS_TIPO[k]]}">${iconeTipoSVG(k, mt.modo === 'tipo' ? CORES_TIPO[k] : '#475569', 15)}${esc(k)}<small>${c[k]}</small></span>`).join('')}</div></div>` : ''; })()}
     ${!['municipio', 'divisao'].includes(mt.modo) ? '<div class="sede"><span class="mt-dre" style="--c:#475569;transform:scale(.8);transform-origin:left"><i class="fa-solid fa-building-flag"></i><b>n</b></span>sede da DRE (nº de escolas)</div>' : ''}</div>`;
 }
 function painelEscolasMT(todas, dres, lista){
@@ -3546,14 +3585,14 @@ function painelEscolasMT(todas, dres, lista){
     const l = todas.filter(e => e.dre === foco), m = [...new Set(l.map(e => e.municipio))].sort(), u = l.filter(e => e.localidade !== 'RURAL').length, s = setorDaDRE(foco);
     const tipos = {}; l.forEach(e => { const g = grupoTipo(e.tipo); tipos[g] = (tipos[g] || 0) + 1; });
     fc.innerHTML = `<div class="mt-foco" style="--c:${corDRE(dres, foco)}"><div class="h"><i class="fa-solid fa-building-flag"></i><div><b>${esc(foco)}</b><small>${l.length} escolas · ${m.length} municípios · ${u} urbanas · ${l.length - u} rurais</small></div><button class="btn btn-s btn-sm btn-i" onclick="focarDREmt(-1)" title="Mostrar todas"><i class="fa-solid fa-xmark"></i></button></div>
-      <div class="tp">${Object.entries(tipos).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<span>${esc(k)} <b>${v}</b></span>`).join('')}</div>
+      <div class="tp">${Object.entries(tipos).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<span>${iconeTipoSVG(k, CORES_TIPO[k], 12)} ${esc(k)} <b>${v}</b></span>`).join('')}</div>
       <div class="mu">${m.map(x => esc(x)).join(' · ')}</div>
       ${s ? `<button class="btn btn-s btn-sm" onclick="trocarVista('mapa');setTimeout(()=>irPara(${arg(s.id)}),60)"><i class="fa-solid fa-diagram-project"></i>Ver no organograma</button>` : ''}</div>`;
   } else fc.innerHTML = '';
   if (mt.mun && mt.munF && mt.munF.get(mt.mun)) {
     const f = mt.munF.get(mt.mun), l = todas.filter(e => chaveMun(e.municipio) === mt.mun).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')), d = f.properties.dre;
     fc.innerHTML = `<div class="mt-foco" style="--c:${d ? corDRE(dres, d) : '#94a3b8'}"><div class="h"><i class="fa-solid fa-city"></i><div><b>${esc(f.properties.nome)}</b><small>${d ? esc(d) + ' · ' : ''}${l.length} escola(s)</small></div><button class="btn btn-s btn-sm btn-i" onclick="voltarMT(1)" title="Voltar para a DRE"><i class="fa-solid fa-xmark"></i></button></div>
-      <div class="mt-mun-l">${l.map(e => `<button class="ei" onclick="irEscolaMT(${arg(e.codigo)})" onmouseenter="pulsarEscolaMT(${arg(e.codigo)})"><b>${esc(e.nome)}</b><small>${esc(grupoTipo(e.tipo))}${e.localidade === 'RURAL' ? ' · rural' : ''}${e.bairro ? ' · ' + esc(e.bairro) : ''}</small></button>`).join('') || '<small>Nenhuma escola estadual na base.</small>'}</div></div>`;
+      <div class="mt-mun-l">${l.map(e => `<button class="ei" onclick="irEscolaMT(${arg(e.codigo)})" onmouseenter="pulsarEscolaMT(${arg(e.codigo)})"><b>${esc(e.nome)}</b><small>${iconeTipoSVG(grupoTipo(e.tipo), CORES_TIPO[grupoTipo(e.tipo)], 12)} ${esc(grupoTipo(e.tipo))}${e.localidade === 'RURAL' ? ' · rural' : ''}${e.bairro ? ' · ' + esc(e.bairro) : ''}</small></button>`).join('') || '<small>Nenhuma escola estadual na base.</small>'}</div></div>`;
   }
   const sub = $('#esc-sub'); if (sub) sub.textContent = mt.modo === 'divisao' ? 'Municípios' : 'Escolas por DRE';
   if (mt.modo === 'divisao' && mt.munF) {
@@ -4342,13 +4381,13 @@ function mapaSVG(o){
   const W = 1000, s = W / (x1 - x0), Hh = (y1 - y0) * s, P = (lo, la) => [(lo * kx - x0) * s, (-la - y0) * s], f1 = v => v.toFixed(1);
   const path = g => anel(g).map(pl => pl.map(r => 'M' + r.map(([lo, la]) => P(lo, la).map(f1).join(',')).join('L') + 'Z').join('')).join('');
   const dreMun = f => { const q = porMun.get(chaveMun(f.properties.nome)); return q ? Object.entries(q).sort((a, b) => b[1] - a[1])[0][0] : ''; };
-  const cid = 'cl' + (++mapaSVG.n), zoom = !!(doDre && doDre.length), rp = zoom ? 4.2 : det ? 3.6 : 2.6, sw = zoom ? 1 : det ? .9 : .6;
+  const cid = 'cl' + (++mapaSVG.n), zoom = !!(doDre && doDre.length), rp = zoom ? 8 : det ? 7.5 : 5.6, sw = zoom ? 1 : det ? .9 : .6;
   const mun = fc.features.map((f, i) => { const d = dreMun(f); let fill = '#f1f5f9', op = 1;
     if (o.modo === 'mun') fill = viz[i]; else if (d) { fill = corDRE(dres, d); op = o.dre && d !== o.dre ? .06 : .22; }
     return `<path d="${path(f.geometry)}" fill="${fill}" fill-opacity="${op}" stroke="#64748b" stroke-width="${sw}" stroke-opacity=".55"/>`; }).join('');
   const lista = doDre || X.lista, sedes = X.sedes;
   const lig = (o.ligacoes || o.modo === 'dist') ? lista.map(e => { const a = P(e.e.longitude, e.e.latitude), b = P(sedes.get(e.e.dre)[1], sedes.get(e.e.dre)[0]); return `<path d="M${f1(a[0])},${f1(a[1])}L${f1(b[0])},${f1(b[1])}" stroke="${o.modo === 'dist' ? faixaDist(e.km)[2] : corDRE(dres, e.e.dre)}" stroke-width="${zoom ? .9 : .5}" stroke-opacity=".55"/>`; }).join('') : '';
-  const pts = lista.map(e => { const [x, y] = P(e.e.longitude, e.e.latitude), c = o.modo === 'dist' ? faixaDist(e.km)[2] : o.modo === 'mun' ? '#0f172a' : corDRE(dres, e.e.dre); return `<circle cx="${f1(x)}" cy="${f1(y)}" r="${rp}" fill="${c}" stroke="#ffffff" stroke-width=".7"/>`; }).join('');
+  const pts = lista.map(e => { const [x, y] = P(e.e.longitude, e.e.latitude), c = o.modo === 'dist' ? faixaDist(e.km)[2] : o.modo === 'mun' ? '#0f172a' : corDRE(dres, e.e.dre); return simbolo(formaTipo(e.e.tipo), x, y, rp, c); }).join('');
   const sd = dres.filter(d => !o.dre || d === o.dre).filter(d => { const [x, y] = P(sedes.get(d)[1], sedes.get(d)[0]); return x >= 0 && x <= W && y >= 0 && y <= Hh; }).map(d => { const [x, y] = P(sedes.get(d)[1], sedes.get(d)[0]), n = X.lista.filter(e => e.e.dre === d).length, c = corDRE(dres, d);
     return `<circle cx="${f1(x)}" cy="${f1(y)}" r="${zoom ? 14 : det ? 12 : 10}" fill="${c}" stroke="#ffffff" stroke-width="2"/><text x="${f1(x)}" y="${f1(y + 3.2)}" text-anchor="middle" font-family="${FIG_FONTE}" font-size="${zoom ? 10 : 8.5}" font-weight="bold" fill="#ffffff">${n}</text>${halo(f1(x + (zoom ? 18 : 13)), f1(y + 4), esc(nomeDRE(d)), `font-family="${FIG_FONTE}" font-size="${zoom ? 13 : det ? 12 : 10.5}" font-weight="bold" fill="#0f172a"`)}`; }).join('');
   let nomes = '';
@@ -4364,6 +4403,7 @@ function mapaSVG(o){
   else if (o.modo === 'mun') leg = [['#fde68a', 'Cada cor separa municípios vizinhos'], ['#0f172a', 'Unidade escolar']];
   else leg = dres.filter(d => !o.dre || d === o.dre).map(d => [corDRE(dres, d), `${nomeDRE(d)} (${X.lista.filter(e => e.e.dre === d).length})`]);
   leg.push(['#ffffff', 'Círculo grande: sede da DRE, com o número de escolas']);
+  const ct = {}; lista.forEach(x => { const g = grupoTipo(x.e.tipo); ct[g] = (ct[g] || 0) + 1; }); Object.keys(FORMAS_TIPO).filter(k => ct[k]).forEach(k => leg.push(['#475569', `${k} (${ct[k]}) – ${NOMES_FORMA[FORMAS_TIPO[k]]}`, FORMAS_TIPO[k]]));
   if (lig) leg.push(['#94a3b8', 'Linha: ligação da escola com a sede da sua DRE']);
   return { svg, w:W + 20, h:Hh + 20, leg, mapa:true };
 }
@@ -4404,14 +4444,14 @@ function docHTML(blocos, o){
       case 'p': return `<p class="${b.centro ? 'd-c' : ''} ${b.ementa ? 'd-ementa' : ''}" style="${b.recuo ? 'margin-left:' + (b.recuo * 26) + 'px' : ''}">${runsHTML(b.x)}</p>`;
       case 'kpis': return `<div class="d-kpis">${b.it.map(([r, v, s, c]) => `<div class="d-kpi" style="border-top-color:${c || '#1e3a8a'}"><small>${esc(r)}</small><b>${esc(v)}</b>${s ? `<span>${esc(s)}</span>` : ''}</div>`).join('')}</div>`;
       case 'tab': return `<table class="d-tab ${b.pq ? 'pq' : ''}"><thead><tr>${b.cab.map((c, i) => `<th class="${(b.dir || []).includes(i) ? 'dir' : ''}">${esc(c)}</th>`).join('')}</tr></thead><tbody>${b.lin.map(l => `<tr>${l.map((c, i) => `<td class="${(b.dir || []).includes(i) ? 'dir' : ''}" style="${c && c.cor ? 'background:' + c.cor : ''}${c && c.b ? ';font-weight:bold' : ''}">${esc(celTxt(c) ?? '')}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${b.cab.length}" class="d-vz">Sem registros.</td></tr>`}</tbody></table>`;
-      case 'barras': { if (!b.it.length) return '<p class="d-nota">Sem dados.</p>'; const mx = Math.max(1, ...b.it.map(x => x[1])); return `<div class="d-barras">${b.it.map(([n, v, r, c]) => `<div class="d-bar"><span class="n">${esc(n)}</span><span class="t"><i style="width:${(v / mx * 100).toFixed(1)}%;background:${c || '#2563eb'}"></i></span><b>${esc(r ?? fmtN(v))}</b></div>`).join('')}</div>`; }
+      case 'barras': { if (!b.it.length) return '<p class="d-nota">Sem dados.</p>'; const mx = Math.max(1, ...b.it.map(x => x[1])); return `<div class="d-barras">${b.it.map(([n, v, r, c, f]) => `<div class="d-bar"><span class="n">${f ? `<svg viewBox="0 0 12 12" width="11" height="11" style="vertical-align:-1px;margin-right:4px">${simbolo(f, 6, 6, 5.6, c || '#2563eb')}</svg>` : ''}${esc(n)}</span><span class="t"><i style="width:${(v / mx * 100).toFixed(1)}%;background:${c || '#2563eb'}"></i></span><b>${esc(r ?? fmtN(v))}</b></div>`).join('')}</div>`; }
       case 'lista': return `<div class="d-lista">${b.it.map(([x, n]) => `<p style="margin-left:${(n || 0) * 20}px">${runsHTML(x)}</p>`).join('')}</div>`;
       case 'alertas': return `<div class="d-alertas">${b.it.map(([t, x]) => `<p class="d-al ${t}">${runsHTML(x)}</p>`).join('')}</div>`;
       case 'nota': return `<p class="d-nota">${runsHTML(b.x)}</p>`;
       case 'quebra': return '<div class="d-quebra"></div>';
       case 'sumario': return `<h1 class="d-h1">Sumário</h1><div class="d-lista">${b.it.map((x, i) => `<p><b>${i + 1}.</b> ${esc(x)}</p>`).join('')}</div>`;
-      case 'legenda': return `<div class="d-leg">${b.it.map(([c, t]) => `<span><i style="background:${c}"></i>${esc(t)}</span>`).join('')}</div>`;
-      case 'fig': return `<figure class="d-fig ${b.paisagem ? 'pais' : ''}"><figcaption>Figura ${b.num} – ${esc(b.titulo)}</figcaption><div class="d-fig-img">${b.svg}</div>${b.leg && b.leg.length ? `<div class="d-leg"><b>Legenda</b>${b.leg.map(([c, t]) => `<span><i style="background:${c}"></i>${esc(t)}</span>`).join('')}</div>` : ''}${b.nota ? `<p class="d-nota">${esc(b.nota)}</p>` : ''}<p class="d-fonte">${esc(b.fonte || '')}</p></figure>`;
+      case 'legenda': return `<div class="d-leg">${b.it.map(([c, t, f]) => `<span>${f ? `<svg viewBox="0 0 12 12" width="11" height="11">${simbolo(f, 6, 6, 5.6, c)}</svg>` : `<i style="background:${c}"></i>`}${esc(t)}</span>`).join('')}</div>`;
+      case 'fig': return `<figure class="d-fig ${b.paisagem ? 'pais' : ''}"><figcaption>Figura ${b.num} – ${esc(b.titulo)}</figcaption><div class="d-fig-img">${b.svg}</div>${b.leg && b.leg.length ? `<div class="d-leg"><b>Legenda</b>${b.leg.map(([c, t, f]) => `<span>${f ? `<svg viewBox="0 0 12 12" width="11" height="11">${simbolo(f, 6, 6, 5.6, c)}</svg>` : `<i style="background:${c}"></i>`}${esc(t)}</span>`).join('')}</div>` : ''}${b.nota ? `<p class="d-nota">${esc(b.nota)}</p>` : ''}<p class="d-fonte">${esc(b.fonte || '')}</p></figure>`;
       case 'ass': return `<p class="d-ass">______________________________________<br><b>${esc(b.x)}</b>${b.sub ? '<br>' + esc(b.sub) : ''}</p>`;
       case 'selo': return `<div class="d-aut"><div>${seloSVG(b.codigo, b.data, 110)}</div><div><b>Autenticação</b><p>Documento gerado pelo ${esc(SISTEMA_NOME)} em ${esc(b.quando)}${b.por ? ' por ' + esc(b.por) : ''}.</p><p>Código de verificação: <b>${esc(b.codigo)}</b></p><p class="pq">Para conferir, abra o GABOrg › Relatórios e minutas › Verificar código.</p></div></div>`;
     } return '';
@@ -4555,7 +4595,7 @@ function docPDF(blocos, o){
   const base = o.paisagem ? 'landscape' : 'portrait', mg = o.minuta ? [85, 60, 57, 55] : [50, 58, 50, 50];
   const larg = or => (or === 'landscape' ? 842 : 595) - mg[0] - mg[2], alt = or => (or === 'landscape' ? 595 : 842) - mg[1] - mg[3];
   let orient = base, pend = false, primeiro = true, ultH1 = -1, capaBg = '', capaPe = null; const conteudo = [];
-  const legendaPDF = (it, W, nc) => { const cols = nc || (W > 600 ? 3 : 2), lin = []; for (let i = 0; i < it.length; i += cols) lin.push(it.slice(i, i + cols)); return { table:{ widths:Array(cols).fill('*'), body:lin.map(l => l.concat(Array(cols - l.length).fill(null)).map(x => x ? { columns:[{ canvas:[{ type:'rect', x:0, y:1, w:9, h:9, r:2, color:x[0], lineColor:'#94a3b8', lineWidth:.5 }], width:13 }, { text:x[1], fontSize:7.5 }] } : '')) }, layout:'noBorders', margin:[0, 4, 0, 2] }; };
+  const legendaPDF = (it, W, nc) => { const cols = nc || (W > 600 ? 3 : 2), lin = []; for (let i = 0; i < it.length; i += cols) lin.push(it.slice(i, i + cols)); return { table:{ widths:Array(cols).fill('*'), body:lin.map(l => l.concat(Array(cols - l.length).fill(null)).map(x => x ? { columns:[x[2] ? { width:15, stack:[{ svg:`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12" width="11" height="11">${simbolo(x[2], 6, 6, 5.6, x[0])}</svg>`, width:10, height:10, margin:[0, .5, 0, 0] }] } : { canvas:[{ type:'rect', x:0, y:1, w:9, h:9, r:2, color:x[0], lineColor:'#94a3b8', lineWidth:.5 }], width:13 }, { text:x[1], fontSize:7.5 }] } : '')) }, layout:'noBorders', margin:[0, 4, 0, 2] }; };
   blocos.forEach(b => {
     const quer = b.t === 'fig' && b.paisagem && base === 'portrait' ? 'landscape' : base, ns = [], W = larg(quer);
     if (quer !== orient && !primeiro) pend = true;
@@ -4574,7 +4614,7 @@ function docPDF(blocos, o){
         ns.push({ table:{ headerRows:1, keepWithHeaderRows:1, widths:b.larg || b.cab.map(() => '*'), dontBreakRows:true, body:[b.cab.map((c, i) => ({ text:c, bold:true, fillColor:o.minuta ? '#eeeeee' : '#e2e8f0', alignment:dir.includes(i) ? 'right' : 'left' }))].concat(b.lin.length ? b.lin.map(l => l.map((c, i) => ({ text:String(celTxt(c) ?? ''), alignment:dir.includes(i) ? 'right' : 'left', fillColor:c && c.cor ? c.cor : undefined, bold:!!(c && c.b) }))) : [[{ text:'Sem registros.', colSpan:b.cab.length, alignment:'center', color:'#94a3b8' }].concat(Array(b.cab.length - 1).fill(''))]) },
           layout:o.minuta ? { hLineWidth:() => .5, vLineWidth:() => .5, paddingLeft:() => 4, paddingRight:() => 4 } : layoutTab, fontSize:b.pq ? 7.5 : 8.5, margin:[0, 3, 0, 10] }); break; }
       case 'barras': { if (!b.it.length) { ns.push({ text:'Sem dados.', color:'#94a3b8', margin:[0, 2, 0, 8] }); break; } const mx = Math.max(1, ...b.it.map(x => x[1])), bw = W - 260;
-        ns.push({ table:{ widths:[160, bw, 80], body:b.it.map(([n, v, r, c]) => [{ text:n, fontSize:8.5 }, { canvas:[{ type:'rect', x:0, y:2, w:bw, h:7, r:3, color:'#f1f5f9' }, { type:'rect', x:0, y:2, w:Math.max(1, v / mx * bw), h:7, r:3, color:c || '#2563eb' }] }, { text:String(r ?? fmtN(v)), alignment:'right', bold:true, fontSize:8.5 }]) }, layout:'noBorders', margin:[0, 2, 0, 10] }); break; }
+        ns.push({ table:{ widths:[160, bw, 80], body:b.it.map(([n, v, r, c, f]) => [f ? { columns:[{ svg:`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12" width="10" height="10">${simbolo(f, 6, 6, 5.6, c || '#2563eb')}</svg>`, width:10, height:10, margin:[0, 1, 0, 0] }, { text:n, fontSize:8.5 }], columnGap:5 } : { text:n, fontSize:8.5 }, { canvas:[{ type:'rect', x:0, y:2, w:bw, h:7, r:3, color:'#f1f5f9' }, { type:'rect', x:0, y:2, w:Math.max(1, v / mx * bw), h:7, r:3, color:c || '#2563eb' }] }, { text:String(r ?? fmtN(v)), alignment:'right', bold:true, fontSize:8.5 }]) }, layout:'noBorders', margin:[0, 2, 0, 10] }); break; }
       case 'lista': b.it.forEach(([x, n]) => ns.push({ text:runsPDF(x), margin:[(n || 0) * 16, 0, 0, 2], fontSize:o.minuta ? 12 : 9.5 })); break;
       case 'alertas': if (!b.it.length) break; ns.push({ table:{ widths:[3, '*'], body:b.it.map(([t, x]) => [{ text:'', fillColor:{ alerta:'#dc2626', atencao:'#d97706', ok:'#16a34a' }[t] || '#2563eb' }, { text:runsPDF(x), fillColor:'#f8fafc', margin:[4, 2, 2, 2] }]) }, layout:{ hLineWidth:() => 2, hLineColor:() => '#ffffff', vLineWidth:() => 0 }, margin:[0, 2, 0, 10] }); break;
       case 'legenda': ns.push(legendaPDF(b.it, W)); break;
@@ -4710,7 +4750,7 @@ function montarRelatorio(F, emis){
     if (k === 'rede') { H(k); const L = escolasLista().filter(e => dreOk(e.dre)), tp = {}; L.forEach(e => { const g = grupoTipo(e.tipo); tp[g] = (tp[g] || 0) + 1; });
       B.push({ t:'kpis', it:[['Unidades escolares', fmtN(L.length), F.dre || dres.length + ' DREs', '#16a34a'], ['Municípios', new Set(L.map(e => e.municipio)).size, '', '#0891b2'], ['Rurais', L.filter(e => e.localidade === 'RURAL').length, pct(L.filter(e => e.localidade === 'RURAL').length, L.length) + '% da rede', '#65a30d'], ['Indígenas e quilombolas', (tp['Indígena'] || 0) + (tp.Quilombola || 0), '', '#c2410c']] });
       B.push({ t:'tab', pq:true, cab:['DRE', 'Escolas', 'Municípios', 'Rurais', 'Cívico-mil.', 'Campo', 'Indígena', 'Integral'], dir:[1, 2, 3, 4, 5, 6, 7], lin:dres.filter(dreOk).map(d => { const l = L.filter(e => e.dre === d), c = g => l.filter(e => grupoTipo(e.tipo) === g).length; return [nomeDRE(d), l.length, new Set(l.map(e => e.municipio)).size, l.filter(e => e.localidade === 'RURAL').length, c('Cívico-militar'), c('Campo'), c('Indígena'), l.filter(e => /INTEGRAL/.test(e.tipo)).length]; }) });
-      B.push({ t:'h3', x:'Escolas por tipo' }, { t:'barras', it:Object.entries(tp).sort((a, b) => b[1] - a[1]).map(([g, c]) => [g, c, c, CORES_TIPO[g] || '#94a3b8']) }); }
+      B.push({ t:'h3', x:'Escolas por tipo' }, { t:'barras', it:Object.entries(tp).sort((a, b) => b[1] - a[1]).map(([g, c]) => [g, c, c, CORES_TIPO[g] || '#94a3b8', FORMAS_TIPO[g] || 'circulo']) }, { t:'nota', x:'O ícone ao lado de cada tipo é a forma usada para essas unidades nos mapas do relatório e no Mapa de MT.' }); }
     if (k === 'distancias') { H(k); const L = E.lista.filter(o => dreOk(o.e.dre)), med = L.reduce((t, o) => t + o.km, 0) / Math.max(1, L.length);
       B.push({ t:'kpis', it:[['Distância média', fmtKm(med), 'em linha reta até a sede da DRE'], ['Por estrada (estimada)', '~' + fmtKm(med * FATOR_ESTRADA), '~' + fmtHoras(med) + ' de viagem', '#0e7490'], ['A mais de 100 km', L.filter(o => o.km > 100).length, pct(L.filter(o => o.km > 100).length, L.length) + '% das escolas', '#f97316'], ['Mais perto de outra DRE', L.filter(o => o.prox && o.km - o.prox.km >= 40 && o.prox.km < o.km * .7).length, 'ao menos 40 km mais perto', '#7c3aed']] });
       B.push({ t:'barras', it:FAIXAS_DIST.map(f => [f[1], L.filter(o => faixaDist(o.km) === f).length, null, f[2]]) });
@@ -4765,6 +4805,7 @@ function montarRelatorio(F, emis){
       B.push({ t:'h3', x:'Fontes dos dados' }, { t:'lista', it:[['• Estrutura, setores, chefias, metas e reuniões: planilha do GABOrg (Google Planilhas), na situação de ' + emis.quando + '.', 0], ['• Unidades escolares: base geolocalizada da SEDUC-MT (' + fmtN(escolasLista().length) + ' escolas).', 0], ['• Limites municipais: IBGE (malha municipal simplificada).', 0], ['• Valores de cargos: Tabela de valores do módulo Financeiro.', 0]] });
       B.push({ t:'h3', x:'Métodos' }, { t:'lista', it:[['• Índice de maturidade (0 a 100) = 40% cadastro completo + 30% setores validados + 20% chefias com responsável + 10% setores fora de risco.', 0], ['• Setor em risco: impacto alto ou crítico e, além disso, sem validação, sem responsável ou com mais pontos negativos que positivos.', 0], [`• Distâncias: linha reta entre a escola e a sede da DRE (ponto central das escolas urbanas da cidade-sede); estrada e tempo estimados como ${String(FATOR_ESTRADA).replace('.', ',')} × linha reta a ${VEL_MEDIA} km/h.`, 0], ['• Amplitude de controle: número de unidades diretamente subordinadas a cada chefia.', 0]] });
       B.push({ t:'h3', x:'Legenda dos tipos de unidade' }, { t:'legenda', it:Object.keys(TIPOS).filter(t => t !== 'Outro').map(t => [corTipo(t), t]) });
+      B.push({ t:'h3', x:'Ícones dos tipos de unidade escolar (mapas)' }, { t:'legenda', it:Object.keys(FORMAS_TIPO).filter(k => k !== 'Outro').map(k => [CORES_TIPO[k], `${k} – ${NOMES_FORMA[FORMAS_TIPO[k]]}`, FORMAS_TIPO[k]]) });
       B.push({ t:'h3', x:'Legenda de impacto e validação' }, { t:'legenda', it:IMPACTO.map(([n, c]) => [c, 'Impacto: ' + n]).concat(Object.entries(STATUS_VAL).map(([n, c]) => [c, 'Validação: ' + n])) });
       B.push({ t:'h3', x:'Autenticidade' }, { t:'p', x:`Este documento tem o código ${emis.codigo}. Para conferir se é autêntico, abra o GABOrg › Relatórios e minutas › Verificar código.` }); }
   });
@@ -5307,7 +5348,7 @@ function tvMapaMT(dresSel){
   const W = 1000, s = W / (x1 - x0), Hh = (y1 - y0) * s, P = (lo, la) => [((lo * kx - x0) * s).toFixed(1), ((-la - y0) * s).toFixed(1)];
   const path = g => (g.type === 'Polygon' ? [g.coordinates] : g.coordinates).map(pl => pl.map(r => 'M' + r.map(([lo, la]) => P(lo, la).join(',')).join('L') + 'Z').join('')).join('');
   const mun = fc.features.map(f => { const o = porMun.get(chaveMun(f.properties.nome)), d = o ? Object.entries(o).sort((a, b) => b[1] - a[1])[0][0] : ''; return `<path d="${path(f.geometry)}" fill="${d ? corDRE(dres, d) : '#334155'}" fill-opacity="${d && (!dresSel || dresSel === d) ? .42 : .06}" stroke="#0b1220" stroke-width="1"><title>${esc(f.properties.nome)}${d ? ' · ' + esc(nomeDRE(d)) : ''}</title></path>`; }).join('');
-  const esc_ = X.lista.filter(o => !dresSel || o.e.dre === dresSel).map(o => { const [x, y] = P(o.e.longitude, o.e.latitude); return `<circle cx="${x}" cy="${y}" r="3.4" fill="${corDRE(dres, o.e.dre)}" stroke="#0b1220" stroke-width=".8"/>`; }).join('');
+  const esc_ = X.lista.filter(o => !dresSel || o.e.dre === dresSel).map(o => { const [x, y] = P(o.e.longitude, o.e.latitude); return simbolo(formaTipo(o.e.tipo), x, y, 4.2, corDRE(dres, o.e.dre)); }).join('');
   const sedes = dres.map(d => { const [x, y] = P(X.sedes.get(d)[1], X.sedes.get(d)[0]), n = X.lista.filter(o => o.e.dre === d).length; return `<g class="tv-sede" onclick="tvDetalhe('dre',${arg(d)})" style="cursor:pointer"><circle cx="${x}" cy="${y}" r="13" fill="${corDRE(dres, d)}" stroke="#fff" stroke-width="2.5"/><text x="${x}" y="${(+y + 4).toFixed(1)}" text-anchor="middle" font-size="11" font-weight="800" fill="#fff">${n}</text><text x="${(+x + 17).toFixed(1)}" y="${(+y + 4).toFixed(1)}" font-size="13" font-weight="700" fill="#e2e8f0" stroke="#0b1220" stroke-width="3" paint-order="stroke">${esc(nomeDRE(d))}</text></g>`; }).join('');
   return `<svg viewBox="-10 -10 ${W + 140} ${(Hh + 20).toFixed(0)}" preserveAspectRatio="xMidYMid meet" class="tv-svgmt">${mun}${esc_}${sedes}</svg>`;
 }
