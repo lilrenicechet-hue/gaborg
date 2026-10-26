@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.24.1';
+const VERSAO = '1.24.2';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -4397,7 +4397,7 @@ function docHTML(blocos, o){
   o = o || {};
   const h = blocos.map(b => {
     switch (b.t) {
-      case 'capa': return `<div class="d-capa"><div class="d-capa-sup"><b>${esc(SISTEMA_NOME)}</b><span>${esc(SISTEMA_ORG)}</span></div><h1>${esc(b.titulo)}</h1>${b.sub ? `<p class="d-sub">${esc(b.sub)}</p>` : ''}<div class="d-capa-selo">${seloSVG(b.codigo, b.data, 150)}</div>
+      case 'capa': return `<div class="d-capa"><div class="d-capa-sup">${o.minuta ? `<b>${esc(SISTEMA_NOME)}</b>` : ""}<span>${esc(SISTEMA_ORG)}</span></div><h1>${esc(b.titulo)}</h1>${b.sub ? `<p class="d-sub">${esc(b.sub)}</p>` : ''}<div class="d-capa-selo">${seloSVG(b.codigo, b.data, 150)}</div>
         <table class="d-capa-tab">${(b.linhas || []).map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join('')}</table></div>`;
       case 'h1': return `<h1 class="d-h1">${esc(b.x)}</h1>`;
       case 'h2': return `<h2 class="d-h2">${esc(b.x)}</h2>`;
@@ -4417,7 +4417,7 @@ function docHTML(blocos, o){
       case 'selo': return `<div class="d-aut"><div>${seloSVG(b.codigo, b.data, 110)}</div><div><b>Autenticação</b><p>Documento gerado pelo ${esc(SISTEMA_NOME)} em ${esc(b.quando)}${b.por ? ' por ' + esc(b.por) : ''}.</p><p>Código de verificação: <b>${esc(b.codigo)}</b></p><p class="pq">Para conferir, abra o GABOrg › Relatórios e minutas › Verificar código.</p></div></div>`;
     } return '';
   }).join('');
-  return `<div class="d-doc ${o.minuta ? 'minuta' : ''}">${o.minuta ? '<div class="d-marca">MINUTA</div>' : ''}${o.cabecalho ? `<div class="d-cab"><span>${esc(SISTEMA_NOME)}</span><span>${esc(o.cabecalho)}</span></div>` : ''}${h}</div>`;
+  return `<div class="d-doc ${o.minuta ? 'minuta' : ''}">${o.minuta ? '<div class="d-marca">MINUTA</div>' : ''}${o.cabecalho ? (o.minuta ? `<div class="d-cab"><span>${esc(SISTEMA_NOME)}</span><span>${esc(o.cabecalho)}</span></div>` : `<div class="d-cab az"><span class="d-cab-l">${logoPDF(26)}<b>GAB<i>Org</i><small>Organização Institucional · SEDUC-MT</small></b></span><span class="d-cab-r">${esc(o.cabecalho)}</span></div>`) : ''}${h}</div>`;
 }
 const ESTILO_REL = `.d-fig{margin:12px 0 18px;page-break-inside:avoid;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px}.d-fig figcaption{font-weight:bold;color:#1e3a8a;font-size:10.5pt;margin-bottom:6px}.d-fig-img svg{width:100%;height:auto;max-height:620px;display:block}.d-fig.pais .d-fig-img svg{max-height:720px}
 .d-leg{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:8.5pt;color:#334155;margin-top:6px}.d-leg b{width:100%;font-size:8.5pt}.d-leg span{display:inline-flex;gap:5px;align-items:center}.d-leg i{width:10px;height:10px;border-radius:2px;border:1px solid #94a3b8;display:inline-block}.d-fonte{font-size:7.5pt;color:#64748b;font-style:italic;margin:2px 0 0!important}
@@ -4425,6 +4425,8 @@ const ESTILO_REL = `.d-fig{margin:12px 0 18px;page-break-inside:avoid;border:1px
 .d-doc.minuta{font-family:'Times New Roman',Times,serif;font-size:12pt}
 .d-marca{position:absolute;top:240px;left:0;right:0;text-align:center;font-size:110px;font-weight:bold;color:rgba(30,58,138,.06);transform:rotate(-30deg);pointer-events:none;letter-spacing:.1em}
 .d-cab{display:flex;justify-content:space-between;font-size:8.5pt;color:#64748b;border-bottom:1px solid #cbd5e1;padding-bottom:4px;margin-bottom:14px}
+.d-cab.az{align-items:center;background:#1e40af;background:linear-gradient(90deg,#0f2557,#1e40af,#0e7490);color:#dbeafe;padding:9px 14px;border-radius:7px;border-bottom:3px solid #22d3ee;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.d-cab-l{display:flex;align-items:center;gap:9px}.d-cab-l svg{flex:none}.d-cab-l b{color:#fff;font-size:13pt;font-weight:900;letter-spacing:-.02em;line-height:1}.d-cab-l b i{font-style:normal;color:#7dd3fc}.d-cab-l small{display:block;font-size:7pt;font-weight:400;color:#bfdbfe;letter-spacing:0;margin-top:2px}.d-cab-r{text-align:right;color:#fff;font-weight:600}
 .d-capa{text-align:center;padding:30px 0 10px;page-break-after:always}.d-capa-sup b{display:block;font-size:13pt;color:#1e3a8a}.d-capa-sup span{font-size:9.5pt;color:#475569}
 .d-capa h1{font-size:22pt;margin:60px 0 8px;color:#0f172a}.d-sub{font-size:12pt;color:#475569;text-align:center}.d-capa-selo{margin:40px 0}
 .d-capa-tab{margin:0 auto;border-collapse:collapse;min-width:60%;font-size:10pt}.d-capa-tab th{text-align:left;color:#475569;font-weight:normal;padding:5px 12px;border-bottom:1px solid #e2e8f0}.d-capa-tab td{text-align:left;font-weight:bold;padding:5px 12px;border-bottom:1px solid #e2e8f0}
@@ -4440,6 +4442,9 @@ const ESTILO_REL = `.d-fig{margin:12px 0 18px;page-break-inside:avoid;border:1px
 .d-nota{font-size:8.5pt;color:#64748b}.d-quebra{page-break-after:always;height:1px}
 .d-ass{text-align:center!important;margin-top:40px}
 .d-aut{display:flex;gap:16px;align-items:center;border:1px solid #cbd5e1;border-radius:8px;padding:12px;margin-top:24px;page-break-inside:avoid}.d-aut p{margin:2px 0;font-size:9.5pt}.d-aut .pq{color:#64748b;font-size:8.5pt}`;
+/* ícone do sistema para o PDF (quadrado em degradê com o organograma) */
+function logoPDF(t){ return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 34 34" width="${t}" height="${t}"><defs><linearGradient id="lgP" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3b82f6"/><stop offset="1" stop-color="#0e7490"/></linearGradient></defs><rect width="34" height="34" rx="9" fill="url(#lgP)"/><rect x="0.6" y="0.6" width="32.8" height="32.8" rx="8.5" fill="none" stroke="#ffffff" stroke-opacity=".35" stroke-width="1"/>
+  <g fill="#ffffff"><rect x="13" y="7" width="8" height="6" rx="1.4"/><rect x="6" y="21" width="7" height="6" rx="1.4"/><rect x="13.5" y="21" width="7" height="6" rx="1.4"/><rect x="21" y="21" width="7" height="6" rx="1.4"/></g><path d="M17 13v4M9.5 21v-4h15v4M17 17v4" fill="none" stroke="#ffffff" stroke-width="1.6"/></svg>`; }
 /* PDF com pdfmake (texto real, cabeçalho, rodapé e páginas numeradas) */
 async function carregarPdfMake(){
   if (window.pdfMake && pdfMake.vfs) return;
@@ -4458,7 +4463,7 @@ function docPDF(blocos, o){
     if (b.t === 'fig' && b.pagina && !primeiro) pend = true;
     let cabFig = null; if (b.t === 'fig' && !o.minuta && ultH1 >= 0 && ultH1 === conteudo.length - 2) { cabFig = conteudo.splice(ultH1); if (cabFig[0].pageBreak) pend = true; delete cabFig[0].pageBreak; delete cabFig[0].pageOrientation; delete cabFig[0].headlineLevel; cabFig[1].canvas[0].x2 = W; }
     switch (b.t) {
-      case 'capa': ns.push({ stack:[{ text:SISTEMA_NOME, style:'capaSup' }, { text:SISTEMA_ORG, style:'capaOrg' }, { text:b.titulo, style:'capaTit' }, b.sub ? { text:b.sub, style:'capaSub' } : '', { svg:seloSVG(b.codigo, b.data, 150), width:150, alignment:'center', margin:[0, 30, 0, 30] },
+      case 'capa': ns.push({ stack:[o.minuta ? { text:SISTEMA_NOME, style:'capaSup' } : '', { text:SISTEMA_ORG, style:'capaOrg', margin:[0, o.minuta ? 0 : 24, 0, 0] }, { text:b.titulo, style:'capaTit' }, b.sub ? { text:b.sub, style:'capaSub' } : '', { svg:seloSVG(b.codigo, b.data, 150), width:150, alignment:'center', margin:[0, 30, 0, 30] },
         { table:{ widths:[150, '*'], body:(b.linhas || []).map(([k, v]) => [{ text:k, color:'#475569' }, { text:String(v), bold:true }]) }, layout:{ hLineWidth:(i) => i ? .5 : 0, vLineWidth:() => 0, hLineColor:() => '#e2e8f0' }, margin:[40, 0, 40, 0] }] }); break;
       case 'sumario': ns.push({ toc:{ title:{ text:'Sumário', style:'h1' }, numberStyle:{ bold:true } } }); break;
       case 'h1': ns.push({ text:b.x, style:o.minuta ? 'mh1' : 'h1', tocItem:!o.minuta, headlineLevel:1 }); if (!o.minuta) ns.push({ canvas:[{ type:'line', x1:0, y1:0, x2:W, y2:0, lineWidth:1.2, lineColor:'#1e3a8a' }], margin:[0, 0, 0, 6] }); break;
@@ -4491,10 +4496,17 @@ function docPDF(blocos, o){
     pend = (b.t === 'capa') || (b.t === 'fig' && ((quer === 'landscape' && base === 'portrait') || b.pagina)); orient = quer; primeiro = false;
     conteudo.push(...ns);
   });
-  const cab = (p) => p === 1 && blocos[0] && blocos[0].t === 'capa' ? null : { columns:[{ text:SISTEMA_NOME, color:'#64748b', fontSize:7.5 }, { text:`${o.titulo} · ${o.quando}`, alignment:'right', color:'#64748b', fontSize:7.5 }], margin:[mg[0], 26, mg[2], 0] };
+  const capa1 = p => p === 1 && blocos[0] && blocos[0].t === 'capa';
+  const cab = (p, n, pg) => { if (o.minuta) return { columns:[{ text:SISTEMA_NOME, color:'#64748b', fontSize:7.5 }, { text:`${o.titulo} · ${o.quando}`, alignment:'right', color:'#64748b', fontSize:7.5 }], margin:[mg[0], 26, mg[2], 0] };
+    const L = pg.width, hB = capa1(p) ? 62 : 40, ic = capa1(p) ? 32 : 22, yi = (hB - ic) / 2;
+    return [{ canvas:[{ type:'rect', x:0, y:0, w:L, h:hB, linearGradient:['#0f2557', '#1e40af', '#0e7490'] }, { type:'rect', x:0, y:hB, w:L, h:2.5, linearGradient:['#3b82f6', '#22d3ee', '#7dd3fc'] }], absolutePosition:{ x:0, y:0 } },
+      { svg:logoPDF(ic), width:ic, height:ic, absolutePosition:{ x:mg[0], y:yi } },
+      { stack:[{ text:[{ text:'GAB', color:'#ffffff' }, { text:'Org', color:'#7dd3fc' }], bold:true, fontSize:capa1(p) ? 17 : 12.5, lineHeight:1 }, { text:capa1(p) ? 'Organização Institucional · ' + SISTEMA_ORG : 'Organização Institucional · SEDUC-MT', fontSize:capa1(p) ? 8 : 6.8, color:'#bfdbfe', lineHeight:1, margin:[0, 2, 0, 0] }], absolutePosition:{ x:mg[0] + ic + 9, y:capa1(p) ? 15 : 9.5 } },
+      capa1(p) ? '' : { stack:[{ text:o.titulo, bold:true, fontSize:8.5, color:'#ffffff', alignment:'right', lineHeight:1 }, { text:`Emitido em ${o.quando} · ${o.codigo}`, fontSize:6.8, color:'#bfdbfe', alignment:'right', lineHeight:1, margin:[0, 2.5, 0, 0] }], margin:[L / 2, 11, mg[2], 0] }]; };
   return { pageSize:'A4', pageOrientation:base, pageMargins:mg, info:{ title:o.titulo, author:SISTEMA_NOME, subject:o.codigo, creator:'GABOrg' },
     watermark:o.minuta ? { text:'MINUTA', color:'#1e3a8a', opacity:.06, bold:true } : undefined,
-    header:cab, footer:(p, n) => ({ columns:[{ text:`Código ${o.codigo} · emitido em ${o.quando}`, color:'#64748b', fontSize:7.5 }, { text:`Página ${p} de ${n}`, alignment:'right', color:'#64748b', fontSize:7.5 }], margin:[mg[0], 18, mg[2], 0] }),
+    header:cab, footer:(p, n, pg) => o.minuta ? { columns:[{ text:`Código ${o.codigo} · emitido em ${o.quando}`, color:'#64748b', fontSize:7.5 }, { text:`Página ${p} de ${n}`, alignment:'right', color:'#64748b', fontSize:7.5 }], margin:[mg[0], 18, mg[2], 0] }
+      : { stack:[{ canvas:[{ type:'rect', x:0, y:0, w:pg.width - mg[0] - mg[2], h:1.2, linearGradient:['#1e40af', '#0e7490', '#7dd3fc'] }] }, { columns:[{ text:[{ text:'GAB', bold:true, color:'#1e3a8a' }, { text:'Org', bold:true, color:'#0e7490' }, { text:`  ·  Código de verificação ${o.codigo}  ·  ${o.quando}`, color:'#64748b' }], fontSize:7.5 }, { text:[{ text:'Página ', color:'#64748b' }, { text:String(p), bold:true, color:'#1e3a8a' }, { text:` de ${n}`, color:'#64748b' }], alignment:'right', fontSize:7.5, width:80 }], margin:[0, 5, 0, 0] }], margin:[mg[0], 14, mg[2], 0] },
     content:conteudo, pageBreakBefore:(n) => !!n.headlineLevel && !n.pageBreak && n.startPosition && n.startPosition.verticalRatio > (n.headlineLevel === 1 ? .8 : .88),
     styles:{ h1:{ fontSize:14, bold:true, color:'#1e3a8a', margin:[0, 14, 0, 3] }, h2:{ fontSize:11.5, bold:true, margin:[0, 10, 0, 4] }, h3:{ fontSize:10, bold:true, color:'#334155', margin:[0, 8, 0, 3] }, mh1:{ fontSize:13, bold:true, alignment:'center', margin:[0, 6, 0, 6] }, mh2:{ fontSize:12, bold:true, alignment:'center', margin:[0, 12, 0, 6] }, mh3:{ fontSize:12, bold:true, alignment:'center', margin:[0, 8, 0, 4] },
       capaSup:{ fontSize:13, bold:true, color:'#1e3a8a', alignment:'center', margin:[0, 30, 0, 2] }, capaOrg:{ fontSize:9.5, color:'#475569', alignment:'center' }, capaTit:{ fontSize:22, bold:true, alignment:'center', margin:[0, 70, 0, 8] }, capaSub:{ fontSize:12, color:'#475569', alignment:'center' } },
