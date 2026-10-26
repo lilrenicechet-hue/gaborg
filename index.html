@@ -1055,8 +1055,8 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background
 <body>
 <!-- Vigia de inicialização: se o arquivo.js não carregar ou falhar, mostra o motivo em vez de uma tela vazia -->
 <script>
-window.GABORG_VERSAO_HTML = '1.24.2'; window.GABORG_ERROS = [];
-window.GABORG_NOVIDADES = "Relatórios em PDF com cabeçalho na cor do sistema: faixa azul com o ícone e o título do GABOrg, e rodapé com o código e a numeração das páginas.";
+window.GABORG_VERSAO_HTML = '1.25.0'; window.GABORG_ERROS = [];
+window.GABORG_NOVIDADES = "Nova capa em todos os documentos (relatórios, minuta de portaria e minuta de decreto), no estilo da página inicial: dia, data, hora, usuário, código, selo e os filtros utilizados.";
 window.addEventListener('error', function (e) {
   var alvo = e.target || {};
   if (alvo.tagName === 'SCRIPT') window.GABORG_ERROS.push('Não foi possível baixar o arquivo ' + (alvo.getAttribute('src') || '') + '.');
@@ -1417,6 +1417,6 @@ window.addEventListener('load', function () { setTimeout(function () { window.GA
 
 <div id="toast"><i class="fa-solid fa-check"></i><span></span></div>
 
-<script src="arquivo.js?v=1.24.2" onerror="window.GABORG_ERROS.push('O arquivo arquivo.js não foi encontrado no servidor (erro 404).');GABORG_DIAGNOSTICO()"></script>
+<script src="arquivo.js?v=1.25.0" onerror="window.GABORG_ERROS.push('O arquivo arquivo.js não foi encontrado no servidor (erro 404).');GABORG_DIAGNOSTICO()"></script>
 </body>
 </html>

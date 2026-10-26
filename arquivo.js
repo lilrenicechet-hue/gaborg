@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.24.2';
+const VERSAO = '1.25.0';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -3880,8 +3880,8 @@ function exportarMinuta(modo){
   const o = dadosMinutaForm(), p = o.cenario && DB.propostas.find(x => x.id === o.cenario);
   if (modo === 'copiar') { const t = document.createElement('div'); t.innerHTML = gerarMinuta(o); navigator.clipboard.writeText(t.innerText).then(() => toast('Texto copiado.'), () => toast('Não foi possível copiar.', 'aviso')); return; }
   const codigo = gerarCodigo('DEC'), d = new Date(), emis = { codigo, data:d.toLocaleDateString('pt-BR'), quando:d.toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }), por:cfg.usuario || cfg.login || '' };
-  const html = gerarMinuta(o) + `<style>${ESTILO_REL}</style>` + docHTML([Object.assign({ t:'selo' }, emis)]);
   const titulo = 'Minuta de decreto' + (p ? ' – ' + p.nome : ' – estrutura vigente'), nome = 'minuta-decreto-' + codigo;
+  const html = `<style>${ESTILO_REL}</style>` + docHTML([blocoCapa('Minuta de decreto', titulo, SISTEMA_ORG, emis, filtrosDec(o))]) + gerarMinuta(o) + docHTML([Object.assign({ t:'selo' }, emis)]);
   if (modo === 'word') baixarWord(nome, titulo, html); else imprimirDoc(titulo, html);
   registrarEmissao({ c:codigo, tipo:'Minuta de decreto', titulo, formato:modo === 'word' ? 'word' : 'print', det:p ? p.nome : 'Estrutura vigente' });
   toast('Documento emitido: ' + codigo);
@@ -4397,8 +4397,7 @@ function docHTML(blocos, o){
   o = o || {};
   const h = blocos.map(b => {
     switch (b.t) {
-      case 'capa': return `<div class="d-capa"><div class="d-capa-sup">${o.minuta ? `<b>${esc(SISTEMA_NOME)}</b>` : ""}<span>${esc(SISTEMA_ORG)}</span></div><h1>${esc(b.titulo)}</h1>${b.sub ? `<p class="d-sub">${esc(b.sub)}</p>` : ''}<div class="d-capa-selo">${seloSVG(b.codigo, b.data, 150)}</div>
-        <table class="d-capa-tab">${(b.linhas || []).map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join('')}</table></div>`;
+      case 'capa': return b.tipoNome ? capaHTML(b) : `<div class="d-capa"><div class="d-capa-sup"><span>${esc(SISTEMA_ORG)}</span></div><h1>${esc(b.titulo)}</h1>${b.sub ? `<p class="d-sub">${esc(b.sub)}</p>` : ''}<div class="d-capa-selo">${seloSVG(b.codigo, b.data, 150)}</div><table class="d-capa-tab">${(b.linhas || []).map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join('')}</table></div>`;
       case 'h1': return `<h1 class="d-h1">${esc(b.x)}</h1>`;
       case 'h2': return `<h2 class="d-h2">${esc(b.x)}</h2>`;
       case 'h3': return `<h3 class="d-h3">${esc(b.x)}</h3>`;
@@ -4416,8 +4415,9 @@ function docHTML(blocos, o){
       case 'ass': return `<p class="d-ass">______________________________________<br><b>${esc(b.x)}</b>${b.sub ? '<br>' + esc(b.sub) : ''}</p>`;
       case 'selo': return `<div class="d-aut"><div>${seloSVG(b.codigo, b.data, 110)}</div><div><b>Autenticação</b><p>Documento gerado pelo ${esc(SISTEMA_NOME)} em ${esc(b.quando)}${b.por ? ' por ' + esc(b.por) : ''}.</p><p>Código de verificação: <b>${esc(b.codigo)}</b></p><p class="pq">Para conferir, abra o GABOrg › Relatórios e minutas › Verificar código.</p></div></div>`;
     } return '';
-  }).join('');
-  return `<div class="d-doc ${o.minuta ? 'minuta' : ''}">${o.minuta ? '<div class="d-marca">MINUTA</div>' : ''}${o.cabecalho ? (o.minuta ? `<div class="d-cab"><span>${esc(SISTEMA_NOME)}</span><span>${esc(o.cabecalho)}</span></div>` : `<div class="d-cab az"><span class="d-cab-l">${logoPDF(26)}<b>GAB<i>Org</i><small>Organização Institucional · SEDUC-MT</small></b></span><span class="d-cab-r">${esc(o.cabecalho)}</span></div>`) : ''}${h}</div>`;
+  });
+  const capaPrim = blocos[0] && blocos[0].t === 'capa' && blocos[0].tipoNome ? h[0] : '', hr = (capaPrim ? h.slice(1) : h).join('');
+  return `<div class="d-doc ${o.minuta ? 'minuta' : ''}">${capaPrim}${o.minuta ? '<div class="d-marca">MINUTA</div>' : ''}${o.cabecalho ? (o.minuta ? `<div class="d-cab"><span>${esc(SISTEMA_NOME)}</span><span>${esc(o.cabecalho)}</span></div>` : `<div class="d-cab az"><span class="d-cab-l">${logoPDF(26)}<b>GAB<i>Org</i><small>Organização Institucional · SEDUC-MT</small></b></span><span class="d-cab-r">${esc(o.cabecalho)}</span></div>`) : ''}${hr}</div>`;
 }
 const ESTILO_REL = `.d-fig{margin:12px 0 18px;page-break-inside:avoid;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px}.d-fig figcaption{font-weight:bold;color:#1e3a8a;font-size:10.5pt;margin-bottom:6px}.d-fig-img svg{width:100%;height:auto;max-height:620px;display:block}.d-fig.pais .d-fig-img svg{max-height:720px}
 .d-leg{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:8.5pt;color:#334155;margin-top:6px}.d-leg b{width:100%;font-size:8.5pt}.d-leg span{display:inline-flex;gap:5px;align-items:center}.d-leg i{width:10px;height:10px;border-radius:2px;border:1px solid #94a3b8;display:inline-block}.d-fonte{font-size:7.5pt;color:#64748b;font-style:italic;margin:2px 0 0!important}
@@ -4429,6 +4429,16 @@ const ESTILO_REL = `.d-fig{margin:12px 0 18px;page-break-inside:avoid;border:1px
 .d-cab-l{display:flex;align-items:center;gap:9px}.d-cab-l svg{flex:none}.d-cab-l b{color:#fff;font-size:13pt;font-weight:900;letter-spacing:-.02em;line-height:1}.d-cab-l b i{font-style:normal;color:#7dd3fc}.d-cab-l small{display:block;font-size:7pt;font-weight:400;color:#bfdbfe;letter-spacing:0;margin-top:2px}.d-cab-r{text-align:right;color:#fff;font-weight:600}
 .d-capa{text-align:center;padding:30px 0 10px;page-break-after:always}.d-capa-sup b{display:block;font-size:13pt;color:#1e3a8a}.d-capa-sup span{font-size:9.5pt;color:#475569}
 .d-capa h1{font-size:22pt;margin:60px 0 8px;color:#0f172a}.d-sub{font-size:12pt;color:#475569;text-align:center}.d-capa-selo{margin:40px 0}
+.d-capa.nova{position:relative;text-align:center;color:#fff;padding:26px 30px 18px;border-radius:14px;background:#0b1222;background:radial-gradient(600px 380px at 18% 0%,#1d4ed8 0%,transparent 62%),radial-gradient(520px 380px at 100% 100%,#0e7490 0%,transparent 58%),#0b1222;-webkit-print-color-adjust:exact;print-color-adjust:exact;page-break-after:always;break-after:page}
+.dc-topo b{display:block;font-size:9.5pt;letter-spacing:.14em}.dc-topo span{font-size:9pt;color:#bfdbfe}
+.dc-hero{margin:22px 0 18px}.dc-hero>svg{display:block;margin:0 auto 10px}.dc-marca{font-size:44pt;font-weight:900;letter-spacing:-.04em;line-height:1}.dc-marca i{font-style:normal;color:#7dd3fc}.dc-slogan{font-size:10pt;font-weight:700;letter-spacing:.32em;color:#bfdbfe;margin-top:6px}
+.dc-nums{display:flex;justify-content:center;gap:26px;margin:14px 0 18px}.dc-nums span{display:flex;flex-direction:column;font-size:6.8pt;color:#93c5fd;letter-spacing:.08em;text-transform:uppercase}.dc-nums b{font-size:17pt;color:#fff;letter-spacing:0;text-transform:none}
+.dc-pill{display:inline-block;padding:4px 16px;border-radius:99px;background:rgba(30,64,175,.55);border:1px solid #60a5fa;font-size:7.5pt;font-weight:700;letter-spacing:.16em;color:#dbeafe}
+.d-capa.nova h1{font-size:21pt;color:#fff;margin:10px 0 4px;line-height:1.15}.dc-sub{color:#93c5fd!important;font-size:9.5pt;text-align:center!important;margin:0}
+.dc-card{background:#fff;color:#0f172a;border-radius:14px;border-top:5px solid #22d3ee;padding:18px 20px 12px;text-align:left;box-shadow:0 10px 30px -10px rgba(0,0,0,.5)}
+.dc-id{display:flex;gap:18px;align-items:center}.dc-selo{flex:none}.dc-info{flex:1;display:grid;grid-template-columns:1fr 1fr;gap:10px 16px}.dc-info .lg{grid-column:1/-1}.dc-info small,.dc-fil small{display:block;font-size:6.5pt;color:#64748b;letter-spacing:.06em;text-transform:uppercase}.dc-info b{font-size:11pt;color:#0f2557}.dc-info .lg b{font-size:12.5pt}
+.dc-fil{border-top:1px solid #e2e8f0;margin-top:14px;padding-top:10px}.dc-fil h4{margin:0 0 8px;font-size:7.5pt;letter-spacing:.12em;text-transform:uppercase;color:#1e3a8a}.dc-fil>div{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px}.dc-fil p{margin:0!important;padding-left:8px;border-left:3px solid var(--c);text-align:left!important}.dc-fil b{font-size:8.5pt}
+.dc-aut{font-size:7pt;color:#64748b;text-align:center!important;margin:10px 0 0!important}.dc-aut b{color:#1e3a8a}.dc-pe{font-size:7.5pt;color:#93c5fd;margin-top:14px}
 .d-capa-tab{margin:0 auto;border-collapse:collapse;min-width:60%;font-size:10pt}.d-capa-tab th{text-align:left;color:#475569;font-weight:normal;padding:5px 12px;border-bottom:1px solid #e2e8f0}.d-capa-tab td{text-align:left;font-weight:bold;padding:5px 12px;border-bottom:1px solid #e2e8f0}
 .d-h1{font-size:15pt;color:#1e3a8a;border-bottom:2px solid #1e3a8a;padding-bottom:4px;margin:22px 0 10px}.minuta .d-h1{border:0;color:#000;text-align:center;font-size:13pt}
 .d-h2{font-size:12pt;color:#0f172a;margin:16px 0 6px}.minuta .d-h2{text-align:center;text-transform:uppercase}
@@ -4442,6 +4452,95 @@ const ESTILO_REL = `.d-fig{margin:12px 0 18px;page-break-inside:avoid;border:1px
 .d-nota{font-size:8.5pt;color:#64748b}.d-quebra{page-break-after:always;height:1px}
 .d-ass{text-align:center!important;margin-top:40px}
 .d-aut{display:flex;gap:16px;align-items:center;border:1px solid #cbd5e1;border-radius:8px;padding:12px;margin-top:24px;page-break-inside:avoid}.d-aut p{margin:2px 0;font-size:9.5pt}.d-aut .pq{color:#64748b;font-size:8.5pt}`;
+/* ===================== CAPA DOS DOCUMENTOS (igual à página inicial) ===================== */
+function numerosCapa(){
+  try { const X = distanciasMT(), mun = new Set(X.lista.map(e => chaveMun(e.e.municipio || ''))).size;
+    return [[fmtN(X.lista.length), 'escolas'], [fmtN(X.dres.length), 'DREs'], [fmtN(mun), 'municípios'], [fmtN(setoresOficiais().filter(s => s.status !== 'Extinto').length), 'setores']]; }
+  catch (e) { return [['631', 'escolas'], ['13', 'DREs'], ['142', 'municípios']]; }
+}
+function blocoCapa(tipoNome, titulo, sub, emis, filtros){
+  const d = new Date(), dia = d.toLocaleDateString('pt-BR', { weekday:'long' });
+  return { t:'capa', tipoNome, titulo, sub:sub || SISTEMA_ORG, codigo:emis.codigo, data:emis.data, quando:emis.quando, dia:dia.charAt(0).toUpperCase() + dia.slice(1),
+    hora:d.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' }), por:emis.por || '—', filtros:(filtros || []).filter(f => f && f[1] !== undefined && f[1] !== ''), nums:numerosCapa() };
+}
+function filtrosRel(F, sec, T){
+  const FG = Object.assign({ cor:'tipo', vinculos:false, ligacoes:false, nomes:false, mapaTam:'pagina' }, F.fig || {}), sn = v => v ? 'Sim' : 'Não', P = DB.propostas || [];
+  const temMapa = sec.some(k => /^mapa/.test(k)), temOrg = sec.some(k => /^org|ficha/.test(k));
+  return [['Abrangência', relNomeArea(F.area)], ['DRE', F.dre ? nomeDRE(F.dre) : 'Todas as DREs'], F.setor ? ['Setor (ficha)', nomeSetor(F.setor)] : null,
+    ['Propostas', F.props === '*' ? 'Todas (' + P.length + ')' : (F.props || []).map(id => (P.find(p => p.id === id) || {}).nome).filter(Boolean).join(', ') || 'Nenhuma'],
+    ['Seções', `${sec.length} de ${Object.keys(T).length}`], temOrg ? ['Cores do organograma', MODOS_COR_ORG[FG.cor] || FG.cor] : null, temOrg ? ['Vínculos entre setores', sn(FG.vinculos)] : null,
+    temMapa ? ['Tamanho dos mapas', { pagina:'Página inteira', ampliado:'Página inteira + 4 detalhes', compacto:'Compacto' }[FG.mapaTam] || FG.mapaTam] : null, temMapa ? ['Ligações escola–DRE', sn(FG.ligacoes)] : null, temMapa ? ['Nomes dos municípios', sn(FG.nomes)] : null,
+    ['Orientação', F.orient === 'paisagem' ? 'Paisagem' : 'Retrato'], ['Sumário', sn(F.sumario !== false)], F.obs ? ['Observação', F.obs] : null].filter(Boolean);
+}
+function filtrosPort(o){
+  const p = o.cenario && (DB.propostas || []).find(x => x.id === o.cenario), an = [o.comp && 'competências', o.cargos && 'quadro de chefias', o.titulares && 'titulares', o.alteracoes && 'alterações', o.implantacao && 'cronograma'].filter(Boolean);
+  return [['Estrutura de base', p ? p.nome : 'Estrutura vigente'], ['Abrangência', relNomeArea(o.area)], ['Número / ano', `${o.numero || '[número]'} / ${o.ano || '—'}`], ['Data do ato', o.data ? fmtDia(o.data) : '—'],
+    ['Decreto citado', o.decreto || '—'], ['Assinatura', o.signatario || 'Secretário(a) de Estado de Educação'], ['Conteúdo incluído', an.join(', ') || 'somente a estrutura']];
+}
+function filtrosDec(o){ const p = o.cenario && (DB.propostas || []).find(x => x.id === o.cenario);
+  return [['Estrutura de base', p ? p.nome : 'Estrutura vigente'], ['Número', o.numero || '[número]'], ['Data', o.data ? fmtDia(o.data) : '—'], ['Ato alterado', o.ato || '—'], ['Competências', o.comp ? 'Incluídas' : 'Não'], ['Cargos', o.cargos ? 'Incluídos' : 'Não']]; }
+const cortaTxt = (t, n) => { t = String(t ?? ''); return t.length > n ? t.slice(0, n - 1) + '…' : t; };
+/* fundo da capa (SVG da página inteira) */
+function fundoCapaSVG(PW, PH, G){
+  const art = (x, y, k, op) => `<g transform="translate(${x},${y}) scale(${k})" opacity="${op}"><g fill="none" stroke="#93c5fd" stroke-width="1.6"><path d="M300 120V170H120V230M300 170H480V230M300 170V230M120 290V340H60V390M120 340H180V390M300 290V340M480 290V340H420V390M480 340H540V390"/></g><g fill="#bfdbfe"><rect x="250" y="88" width="100" height="32" rx="7"/><rect x="70" y="230" width="100" height="60" rx="7" opacity=".7"/><rect x="250" y="230" width="100" height="60" rx="7" opacity=".7"/><rect x="430" y="230" width="100" height="60" rx="7" opacity=".7"/><rect x="30" y="390" width="60" height="34" rx="6" opacity=".45"/><rect x="150" y="390" width="60" height="34" rx="6" opacity=".45"/><rect x="270" y="340" width="60" height="34" rx="6" opacity=".45"/><rect x="390" y="390" width="60" height="34" rx="6" opacity=".45"/><rect x="510" y="390" width="60" height="34" rx="6" opacity=".45"/></g></g>`;
+  const { cx, card:k, pill } = G;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${PW} ${PH}" width="${PW}" height="${PH}"><defs>
+    <radialGradient id="cg1" cx="0.18" cy="0" r="0.8"><stop offset="0" stop-color="#1d4ed8" stop-opacity=".95"/><stop offset=".6" stop-color="#1d4ed8" stop-opacity="0"/></radialGradient>
+    <radialGradient id="cg2" cx="1" cy="1" r="0.7"><stop offset="0" stop-color="#0e7490" stop-opacity=".9"/><stop offset=".55" stop-color="#0e7490" stop-opacity="0"/></radialGradient>
+    <linearGradient id="cg3" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#3b82f6"/><stop offset=".5" stop-color="#22d3ee"/><stop offset="1" stop-color="#7dd3fc"/></linearGradient></defs>
+    <rect width="${PW}" height="${PH}" fill="#0b1222"/><rect width="${PW}" height="${PH}" fill="url(#cg1)"/><rect width="${PW}" height="${PH}" fill="url(#cg2)"/>
+    ${art(G.artX, G.artY, G.artK, .13)}${art(G.art2X, G.art2Y, G.art2K, .07)}
+    <circle cx="${cx}" cy="${G.icY + G.ic / 2}" r="${G.ic * .95}" fill="#3b82f6" fill-opacity=".14"/>
+    <rect x="${cx - pill / 2}" y="${G.pillY}" width="${pill}" height="20" rx="10" fill="#1e40af" fill-opacity=".55" stroke="#60a5fa" stroke-width=".8"/>
+    <rect x="${k.x}" y="${k.y + 7}" width="${k.w}" height="${k.h}" rx="16" fill="#020617" fill-opacity=".35"/>
+    <rect x="${k.x}" y="${k.y}" width="${k.w}" height="${k.h}" rx="14" fill="#ffffff"/>
+    <rect x="${k.x}" y="${k.y}" width="${k.w}" height="12" rx="6" fill="url(#cg3)"/><rect x="${k.x}" y="${k.y + 5}" width="${k.w}" height="9" fill="#ffffff"/>
+    <rect x="${k.x + 18}" y="${k.y + k.sep}" width="${k.w - 36}" height=".8" fill="#e2e8f0"/>
+    <rect x="${G.fx}" y="${PH - 46}" width="${G.fw}" height=".6" fill="#93c5fd" fill-opacity=".35"/></svg>`;
+}
+function capaPDF(b, PW, PH){
+  const land = PW > PH, A = (x, y, w, c) => ({ absolutePosition:{ x, y }, table:{ widths:[w], body:[[c]] }, layout:{ hLineWidth:() => 0, vLineWidth:() => 0, paddingLeft:() => 0, paddingRight:() => 0, paddingTop:() => 0, paddingBottom:() => 0 } });
+  const hx = land ? 30 : 40, hw = land ? 400 : PW - 80, cx = hx + hw / 2;
+  const G = land ? { ic:52, icY:84, brY:142, br:44, slY:196, nmY:222, pillY:292, tiY:320, tiMax:3, card:{ x:452, y:34, w:PW - 486, h:PH - 68 }, artX:-40, artY:300, artK:.75, art2X:560, art2Y:-60, art2K:.5 }
+                 : { ic:60, icY:80, brY:148, br:50, slY:208, nmY:236, pillY:304, tiY:332, tiMax:2, card:{ x:36, y:430, w:PW - 72, h:PH - 430 - 62 }, artX:330, artY:-40, artK:.55, art2X:-90, art2Y:560, art2K:.5 };
+  const k = G.card, tipo = String(b.tipoNome || 'Documento').toUpperCase(); G.cx = cx; G.pill = Math.max(110, tipo.length * 6.4 + 34); G.fx = hx; G.fw = hw;
+  k.sep = land ? 182 : 146;
+  let tf = 21, cpl = hw / (tf * .53), ln = Math.ceil(String(b.titulo).length / cpl); if (ln > G.tiMax) { tf = 16.5; cpl = hw / (tf * .53); ln = Math.min(G.tiMax + 1, Math.ceil(String(b.titulo).length / cpl)); }
+  const N = [];
+  N.push(A(hx, 34, hw, { stack:[{ text:'SECRETARIA DE ESTADO DE EDUCAÇÃO', bold:true, fontSize:9.5, color:'#ffffff', characterSpacing:1.3 }, { text:'Gabinete do Secretário', fontSize:9, color:'#bfdbfe', margin:[0, 2, 0, 0] }], alignment:'center' }));
+  N.push({ svg:logoPDF(G.ic), width:G.ic, height:G.ic, absolutePosition:{ x:cx - G.ic / 2, y:G.icY } });
+  N.push(A(hx, G.brY, hw, { text:[{ text:'GAB', color:'#ffffff' }, { text:'Org', color:'#7dd3fc' }], bold:true, fontSize:G.br, alignment:'center', characterSpacing:-1, lineHeight:1 }));
+  N.push(A(hx, G.slY, hw, { text:'ORGANIZAÇÃO INSTITUCIONAL', bold:true, fontSize:10, color:'#bfdbfe', characterSpacing:3.2, alignment:'center' }));
+  const nums = b.nums || [], nw = 78; N.push(A(cx - nums.length * nw / 2, G.nmY, nums.length * nw, { columns:nums.map(([v, r]) => ({ width:nw, stack:[{ text:v, bold:true, fontSize:17, color:'#ffffff', alignment:'center', lineHeight:1 }, { text:r.toUpperCase(), fontSize:6.5, color:'#93c5fd', characterSpacing:.8, alignment:'center', margin:[0, 3, 0, 0] }] })), columnGap:0 }));
+  N.push(A(cx - G.pill / 2, G.pillY + 6, G.pill, { text:tipo, bold:true, fontSize:7.5, color:'#dbeafe', characterSpacing:1.5, alignment:'center', lineHeight:1 }));
+  N.push(A(hx, G.tiY, hw, { stack:[{ text:b.titulo, bold:true, fontSize:tf, color:'#ffffff', alignment:'center', lineHeight:1.12 }, { text:b.sub || '', fontSize:9.5, color:'#93c5fd', alignment:'center', margin:[0, 6, 0, 0] }] }));
+  // cartão
+  const cel = (r, v, f) => ({ stack:[{ text:r.toUpperCase(), fontSize:6.3, color:'#64748b', characterSpacing:.6 }, { text:String(v), bold:true, fontSize:f || 10.5, color:'#0f2557', margin:[0, 2, 0, 0] }] });
+  const sel = land ? 100 : 116, ix = k.x + 22 + sel + 18, iw = k.x + k.w - 20 - ix;
+  N.push({ svg:seloSVG(b.codigo, b.data, sel), width:sel, height:sel, absolutePosition:{ x:k.x + 20, y:k.y + 26 } });
+  if (land) { [['Dia', b.dia], ['Data', b.data], ['Hora', b.hora], ['Emitido por', b.por]].forEach(([r, v], i) => N.push(A(ix, k.y + 24 + i * 28, iw, cel(r, cortaTxt(v, 34), 10)))); N.push(A(k.x + 20, k.y + 142, k.w - 40, { columns:[cel('Código de verificação', b.codigo, 12), cel('Tipo de documento', b.tipoNome, 10)] })); }
+  else { const cw = iw / 2; [[['Dia', b.dia], ['Data', b.data]], [['Hora', b.hora], ['Emitido por', cortaTxt(b.por, 30)]]].forEach((l, i) => N.push(A(ix, k.y + 26 + i * 38, iw, { columns:l.map(([r, v]) => Object.assign(cel(r, v), { width:cw })) }))); N.push(A(ix, k.y + 26 + 76, iw, cel('Código de verificação', b.codigo, 12.5))); }
+  const fy = k.y + k.sep + 12, F = b.filtros || [], rh = land ? 25 : 21, maxR = Math.floor((k.y + k.h - 28 - (fy + 18)) / rh), col = F.length > maxR * 2 && !land ? 3 : 2, fwc = (k.w - 40 - 14 * (col - 1)) / col, cap = maxR * col;
+  N.push(A(k.x + 20, fy, k.w - 40, { columns:[{ text:'FILTROS E OPÇÕES UTILIZADOS', bold:true, fontSize:7.5, color:'#1e3a8a', characterSpacing:1 }, { text:`${F.length} item(ns)`, fontSize:7, color:'#94a3b8', alignment:'right' }] }));
+  const L = F.length > cap ? F.slice(0, cap - 1).concat([['…', `e mais ${F.length - cap + 1} opção(ões)`]]) : F;
+  L.forEach(([r, v], i) => { const c = i % col, l = Math.floor(i / col); N.push(A(k.x + 20 + c * (fwc + 14), fy + 18 + l * rh, fwc, { columns:[{ canvas:[{ type:'rect', x:0, y:1, w:3, h:rh - 6, r:1.5, color:['#3b82f6', '#0e7490', '#7c3aed', '#16a34a', '#d97706', '#db2777'][i % 6] }], width:9 }, { stack:[{ text:String(r).toUpperCase(), fontSize:6, color:'#64748b', characterSpacing:.5 }, { text:cortaTxt(v, Math.floor(fwc / 4.4)), bold:true, fontSize:8.2, color:'#0f172a', margin:[0, 1, 0, 0] }] }] })); });
+  N.push(A(k.x + 20, k.y + k.h - 22, k.w - 40, { text:[{ text:'Autenticidade: ', bold:true, color:'#1e3a8a' }, { text:'confira o código no GABOrg › Relatórios e minutas › Verificar código.', color:'#64748b' }], fontSize:7, alignment:'center' }));
+  const pe = { stack:[{ text:'Governo de Mato Grosso · Secretaria de Estado de Educação', fontSize:7.5, color:'#93c5fd', alignment:'center' }, { text:'Documento gerado pelo GABOrg · ' + b.codigo, fontSize:6.5, color:'#64748b', alignment:'center', margin:[0, 2, 0, 0] }], margin:[hx, 12, PW - hx - hw, 0] };
+  return { bg:fundoCapaSVG(PW, PH, G), nodes:N, pe };
+}
+/* capa em HTML (prévia, impressão e Word) */
+function capaHTML(b){
+  const F = b.filtros || [], nums = b.nums || [];
+  return `<div class="d-capa nova"><div class="dc-topo"><b>SECRETARIA DE ESTADO DE EDUCAÇÃO</b><span>Gabinete do Secretário</span></div>
+    <div class="dc-hero">${logoPDF(58)}<div class="dc-marca">GAB<i>Org</i></div><div class="dc-slogan">ORGANIZAÇÃO INSTITUCIONAL</div>
+    <div class="dc-nums">${nums.map(([v, r]) => `<span><b>${esc(v)}</b>${esc(r)}</span>`).join('')}</div>
+    <span class="dc-pill">${esc(String(b.tipoNome || 'Documento').toUpperCase())}</span><h1>${esc(b.titulo)}</h1><p class="dc-sub">${esc(b.sub || '')}</p></div>
+    <div class="dc-card"><div class="dc-id"><div class="dc-selo">${seloSVG(b.codigo, b.data, 116)}</div><div class="dc-info">
+      <div><small>Dia</small><b>${esc(b.dia || '')}</b></div><div><small>Data</small><b>${esc(b.data || '')}</b></div><div><small>Hora</small><b>${esc(b.hora || '')}</b></div><div><small>Emitido por</small><b>${esc(b.por || '—')}</b></div><div class="lg"><small>Código de verificação</small><b>${esc(b.codigo)}</b></div></div></div>
+      ${F.length ? `<div class="dc-fil"><h4>Filtros e opções utilizados</h4><div>${F.map(([r, v], i) => `<p style="--c:${['#3b82f6', '#0e7490', '#7c3aed', '#16a34a', '#d97706', '#db2777'][i % 6]}"><small>${esc(r)}</small><b>${esc(v)}</b></p>`).join('')}</div></div>` : ''}
+      <p class="dc-aut"><b>Autenticidade:</b> confira o código no GABOrg › Relatórios e minutas › Verificar código.</p></div>
+    <div class="dc-pe">Governo de Mato Grosso · Secretaria de Estado de Educação</div></div>`;
+}
 /* ícone do sistema para o PDF (quadrado em degradê com o organograma) */
 function logoPDF(t){ return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 34 34" width="${t}" height="${t}"><defs><linearGradient id="lgP" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3b82f6"/><stop offset="1" stop-color="#0e7490"/></linearGradient></defs><rect width="34" height="34" rx="9" fill="url(#lgP)"/><rect x="0.6" y="0.6" width="32.8" height="32.8" rx="8.5" fill="none" stroke="#ffffff" stroke-opacity=".35" stroke-width="1"/>
   <g fill="#ffffff"><rect x="13" y="7" width="8" height="6" rx="1.4"/><rect x="6" y="21" width="7" height="6" rx="1.4"/><rect x="13.5" y="21" width="7" height="6" rx="1.4"/><rect x="21" y="21" width="7" height="6" rx="1.4"/></g><path d="M17 13v4M9.5 21v-4h15v4M17 17v4" fill="none" stroke="#ffffff" stroke-width="1.6"/></svg>`; }
@@ -4455,7 +4554,7 @@ function docPDF(blocos, o){
   const lc = '#cbd5e1', layoutTab = { hLineWidth:() => .5, vLineWidth:() => .5, hLineColor:() => lc, vLineColor:() => lc, paddingLeft:() => 4, paddingRight:() => 4, paddingTop:() => 2, paddingBottom:() => 2 };
   const base = o.paisagem ? 'landscape' : 'portrait', mg = o.minuta ? [85, 60, 57, 55] : [50, 58, 50, 50];
   const larg = or => (or === 'landscape' ? 842 : 595) - mg[0] - mg[2], alt = or => (or === 'landscape' ? 595 : 842) - mg[1] - mg[3];
-  let orient = base, pend = false, primeiro = true, ultH1 = -1; const conteudo = [];
+  let orient = base, pend = false, primeiro = true, ultH1 = -1, capaBg = '', capaPe = null; const conteudo = [];
   const legendaPDF = (it, W, nc) => { const cols = nc || (W > 600 ? 3 : 2), lin = []; for (let i = 0; i < it.length; i += cols) lin.push(it.slice(i, i + cols)); return { table:{ widths:Array(cols).fill('*'), body:lin.map(l => l.concat(Array(cols - l.length).fill(null)).map(x => x ? { columns:[{ canvas:[{ type:'rect', x:0, y:1, w:9, h:9, r:2, color:x[0], lineColor:'#94a3b8', lineWidth:.5 }], width:13 }, { text:x[1], fontSize:7.5 }] } : '')) }, layout:'noBorders', margin:[0, 4, 0, 2] }; };
   blocos.forEach(b => {
     const quer = b.t === 'fig' && b.paisagem && base === 'portrait' ? 'landscape' : base, ns = [], W = larg(quer);
@@ -4463,7 +4562,7 @@ function docPDF(blocos, o){
     if (b.t === 'fig' && b.pagina && !primeiro) pend = true;
     let cabFig = null; if (b.t === 'fig' && !o.minuta && ultH1 >= 0 && ultH1 === conteudo.length - 2) { cabFig = conteudo.splice(ultH1); if (cabFig[0].pageBreak) pend = true; delete cabFig[0].pageBreak; delete cabFig[0].pageOrientation; delete cabFig[0].headlineLevel; cabFig[1].canvas[0].x2 = W; }
     switch (b.t) {
-      case 'capa': ns.push({ stack:[o.minuta ? { text:SISTEMA_NOME, style:'capaSup' } : '', { text:SISTEMA_ORG, style:'capaOrg', margin:[0, o.minuta ? 0 : 24, 0, 0] }, { text:b.titulo, style:'capaTit' }, b.sub ? { text:b.sub, style:'capaSub' } : '', { svg:seloSVG(b.codigo, b.data, 150), width:150, alignment:'center', margin:[0, 30, 0, 30] },
+      case 'capa': if (b.tipoNome) { const pw = base === 'landscape' ? 842 : 595, ph = base === 'landscape' ? 595 : 842, C = capaPDF(b, pw, ph); capaBg = C.bg; capaPe = C.pe; ns.push(...C.nodes); break; } ns.push({ stack:[o.minuta ? { text:SISTEMA_NOME, style:'capaSup' } : '', { text:SISTEMA_ORG, style:'capaOrg', margin:[0, o.minuta ? 0 : 24, 0, 0] }, { text:b.titulo, style:'capaTit' }, b.sub ? { text:b.sub, style:'capaSub' } : '', { svg:seloSVG(b.codigo, b.data, 150), width:150, alignment:'center', margin:[0, 30, 0, 30] },
         { table:{ widths:[150, '*'], body:(b.linhas || []).map(([k, v]) => [{ text:k, color:'#475569' }, { text:String(v), bold:true }]) }, layout:{ hLineWidth:(i) => i ? .5 : 0, vLineWidth:() => 0, hLineColor:() => '#e2e8f0' }, margin:[40, 0, 40, 0] }] }); break;
       case 'sumario': ns.push({ toc:{ title:{ text:'Sumário', style:'h1' }, numberStyle:{ bold:true } } }); break;
       case 'h1': ns.push({ text:b.x, style:o.minuta ? 'mh1' : 'h1', tocItem:!o.minuta, headlineLevel:1 }); if (!o.minuta) ns.push({ canvas:[{ type:'line', x1:0, y1:0, x2:W, y2:0, lineWidth:1.2, lineColor:'#1e3a8a' }], margin:[0, 0, 0, 6] }); break;
@@ -4496,16 +4595,17 @@ function docPDF(blocos, o){
     pend = (b.t === 'capa') || (b.t === 'fig' && ((quer === 'landscape' && base === 'portrait') || b.pagina)); orient = quer; primeiro = false;
     conteudo.push(...ns);
   });
-  const capa1 = p => p === 1 && blocos[0] && blocos[0].t === 'capa';
-  const cab = (p, n, pg) => { if (o.minuta) return { columns:[{ text:SISTEMA_NOME, color:'#64748b', fontSize:7.5 }, { text:`${o.titulo} · ${o.quando}`, alignment:'right', color:'#64748b', fontSize:7.5 }], margin:[mg[0], 26, mg[2], 0] };
+  const capa1 = p => p === 1 && blocos[0] && blocos[0].t === 'capa', capaNova = p => capa1(p) && !!blocos[0].tipoNome;
+  const cab = (p, n, pg) => { if (capaNova(p)) return null; if (o.minuta) return { columns:[{ text:SISTEMA_NOME, color:'#64748b', fontSize:7.5 }, { text:`${o.titulo} · ${o.quando}`, alignment:'right', color:'#64748b', fontSize:7.5 }], margin:[mg[0], 26, mg[2], 0] };
     const L = pg.width, hB = capa1(p) ? 62 : 40, ic = capa1(p) ? 32 : 22, yi = (hB - ic) / 2;
     return [{ canvas:[{ type:'rect', x:0, y:0, w:L, h:hB, linearGradient:['#0f2557', '#1e40af', '#0e7490'] }, { type:'rect', x:0, y:hB, w:L, h:2.5, linearGradient:['#3b82f6', '#22d3ee', '#7dd3fc'] }], absolutePosition:{ x:0, y:0 } },
       { svg:logoPDF(ic), width:ic, height:ic, absolutePosition:{ x:mg[0], y:yi } },
       { stack:[{ text:[{ text:'GAB', color:'#ffffff' }, { text:'Org', color:'#7dd3fc' }], bold:true, fontSize:capa1(p) ? 17 : 12.5, lineHeight:1 }, { text:capa1(p) ? 'Organização Institucional · ' + SISTEMA_ORG : 'Organização Institucional · SEDUC-MT', fontSize:capa1(p) ? 8 : 6.8, color:'#bfdbfe', lineHeight:1, margin:[0, 2, 0, 0] }], absolutePosition:{ x:mg[0] + ic + 9, y:capa1(p) ? 15 : 9.5 } },
       capa1(p) ? '' : { stack:[{ text:o.titulo, bold:true, fontSize:8.5, color:'#ffffff', alignment:'right', lineHeight:1 }, { text:`Emitido em ${o.quando} · ${o.codigo}`, fontSize:6.8, color:'#bfdbfe', alignment:'right', lineHeight:1, margin:[0, 2.5, 0, 0] }], margin:[L / 2, 11, mg[2], 0] }]; };
   return { pageSize:'A4', pageOrientation:base, pageMargins:mg, info:{ title:o.titulo, author:SISTEMA_NOME, subject:o.codigo, creator:'GABOrg' },
-    watermark:o.minuta ? { text:'MINUTA', color:'#1e3a8a', opacity:.06, bold:true } : undefined,
-    header:cab, footer:(p, n, pg) => o.minuta ? { columns:[{ text:`Código ${o.codigo} · emitido em ${o.quando}`, color:'#64748b', fontSize:7.5 }, { text:`Página ${p} de ${n}`, alignment:'right', color:'#64748b', fontSize:7.5 }], margin:[mg[0], 18, mg[2], 0] }
+    watermark:o.minuta && !capaNova(1) ? { text:'MINUTA', color:'#1e3a8a', opacity:.06, bold:true } : undefined,
+    background:(p, pg) => capaNova(p) && capaBg ? { svg:capaBg, width:pg.width, height:pg.height, absolutePosition:{ x:0, y:0 } } : o.minuta && capaNova(1) ? { svg:`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${pg.width} ${pg.height}" width="${pg.width}" height="${pg.height}"><text x="${pg.width / 2}" y="${pg.height / 2}" transform="rotate(-52 ${pg.width / 2} ${pg.height / 2})" text-anchor="middle" font-family="Helvetica" font-weight="bold" font-size="${pg.width / 4.6}" fill="#1e3a8a" fill-opacity=".06">MINUTA</text></svg>`, width:pg.width, height:pg.height, absolutePosition:{ x:0, y:0 } } : null,
+    header:cab, footer:(p, n, pg) => capaNova(p) ? capaPe : o.minuta ? { columns:[{ text:`Código ${o.codigo} · emitido em ${o.quando}`, color:'#64748b', fontSize:7.5 }, { text:`Página ${p} de ${n}`, alignment:'right', color:'#64748b', fontSize:7.5 }], margin:[mg[0], 18, mg[2], 0] }
       : { stack:[{ canvas:[{ type:'rect', x:0, y:0, w:pg.width - mg[0] - mg[2], h:1.2, linearGradient:['#1e40af', '#0e7490', '#7dd3fc'] }] }, { columns:[{ text:[{ text:'GAB', bold:true, color:'#1e3a8a' }, { text:'Org', bold:true, color:'#0e7490' }, { text:`  ·  Código de verificação ${o.codigo}  ·  ${o.quando}`, color:'#64748b' }], fontSize:7.5 }, { text:[{ text:'Página ', color:'#64748b' }, { text:String(p), bold:true, color:'#1e3a8a' }, { text:` de ${n}`, color:'#64748b' }], alignment:'right', fontSize:7.5, width:80 }], margin:[0, 5, 0, 0] }], margin:[mg[0], 14, mg[2], 0] },
     content:conteudo, pageBreakBefore:(n) => !!n.headlineLevel && !n.pageBreak && n.startPosition && n.startPosition.verticalRatio > (n.headlineLevel === 1 ? .8 : .88),
     styles:{ h1:{ fontSize:14, bold:true, color:'#1e3a8a', margin:[0, 14, 0, 3] }, h2:{ fontSize:11.5, bold:true, margin:[0, 10, 0, 4] }, h3:{ fontSize:10, bold:true, color:'#334155', margin:[0, 8, 0, 3] }, mh1:{ fontSize:13, bold:true, alignment:'center', margin:[0, 6, 0, 6] }, mh2:{ fontSize:12, bold:true, alignment:'center', margin:[0, 12, 0, 6] }, mh3:{ fontSize:12, bold:true, alignment:'center', margin:[0, 8, 0, 4] },
@@ -4513,9 +4613,10 @@ function docPDF(blocos, o){
     defaultStyle:{ font:'Roboto', fontSize:o.minuta ? 12 : 9.5, lineHeight:o.minuta ? 1.25 : 1.15 } };
 }
 /* emitir: gera o código, registra e entrega no formato pedido */
-async function emitirDoc({ tipo, titulo, montar, minuta, formato, nomeArq, detalhe, paisagem, cfgRel }){
+async function emitirDoc({ tipo, titulo, montar, minuta, formato, nomeArq, detalhe, paisagem, cfgRel, filtros }){
   const codigo = gerarCodigo(tipo), d = new Date(), data = d.toLocaleDateString('pt-BR'), quando = d.toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
-  const blocos = montar({ codigo, data, quando, por:cfg.usuario || cfg.login || '' }), o = { codigo, data, quando, titulo, minuta, paisagem };
+  const emis = { codigo, data, quando, por:cfg.usuario || cfg.login || '' }, blocos = montar(emis), o = { codigo, data, quando, titulo, minuta, paisagem };
+  if (!blocos.length || blocos[0].t !== 'capa' || !blocos[0].tipoNome) { if (blocos[0] && blocos[0].t === 'capa') blocos.shift(); blocos.unshift(blocoCapa({ REL:'Relatório', POR:'Minuta de portaria', DEC:'Minuta de decreto' }[tipo] || 'Documento', titulo, SISTEMA_ORG, emis, filtros)); }
   const nome = (nomeArq || 'gaborg') + '-' + codigo;
   if (formato === 'pdf') {
     toast('Gerando o PDF...');
@@ -4558,9 +4659,8 @@ function montarRelatorio(F, emis){
   let nfig = 0; const FIG = (titulo, r, nota) => ({ t:'fig', num:++nfig, titulo, svg:r.svg, w:r.w, h:r.h, leg:r.leg, nota, fonte:'Fonte: GABOrg, dados de ' + emis.quando + (emis.codigo ? ' · ' + emis.codigo : ''), paisagem:r.w > r.h * 1.15, mapa:!!r.mapa, mini:r.mini || '', pagina:!!r.mapa && FG.mapaTam !== 'compacto' });
   const DET = (titulo, o, nota) => { if (FG.mapaTam !== 'ampliado') return; const ref = nfig; Object.keys(QUADRANTES_MT).forEach(q => { const r = mapaSVG(Object.assign({}, o, { recorte:q })); r.leg = []; r.mini = miniQuadranteMT(q); B.push(FIG(`${titulo} – detalhe ${QUADRANTES_MT[q]}`, r, `Ampliação do quadrante ${QUADRANTES_MT[q].toLowerCase()} da Figura ${ref}, com o nome dos municípios. Cores e símbolos conforme a legenda da Figura ${ref}.${nota ? ' ' + nota : ''}`)); }); };
   const E = distanciasMT(), dres = E.dres, dreOk = d => !F.dre || d === F.dre, P = (DB.propostas || []).filter(p => F.props === '*' || (F.props || []).includes(p.id));
-  if (F.capa !== false) B.push({ t:'capa', titulo:F.titulo || 'Relatório', sub:SISTEMA_ORG, codigo:emis.codigo, data:emis.data, linhas:[['Código de verificação', emis.codigo], ['Emitido em', emis.quando], ['Emitido por', emis.por || '—'], ['Abrangência', relNomeArea(F.area) + (F.dre ? ' · ' + F.dre : '')], ['Seções', sec.length + ' de ' + Object.keys(T).length]].concat(F.obs ? [['Observação', F.obs]] : []) });
+  B.push(blocoCapa('Relatório', F.titulo || 'Relatório', SISTEMA_ORG, emis, filtrosRel(F, sec, T)));
   if (F.sumario !== false) B.push({ t:'sumario', it:sec.map(k => T[k]) });
-  if (F.capa === false) B.unshift({ t:'p', x:[[F.titulo || 'Relatório', true], ` · emitido em ${emis.quando} · código ${emis.codigo}`] });
   let n = 0; const H = k => B.push({ t:'h1', x:`${++n}. ${T[k]}` });
   const ser = D.base.reduce((t, s) => t + num(s.servidores), 0), cad = D.base.length ? Math.round(D.base.reduce((t, s) => t + cadSetor(s), 0) / D.base.length * 100) : 0;
   sec.forEach(k => {
@@ -4799,7 +4899,7 @@ function rmRelatorio(){
     ${passo(5, 'Capa e formato', `<label><span class="rot">Título</span><input id="rl-tit" class="campo" value="${esc(c.titulo)}" oninput="lerRel()"></label>
       <label><span class="rot">Observação na capa <small>opcional</small></span><input id="rl-obs" class="campo" value="${esc(c.obs)}" oninput="lerRel()" placeholder="ex.: preparado para a reunião de 30/10"></label>
       <div class="rm-seg"><button class="${c.orient !== 'paisagem' ? 'on' : ''}" onclick="relCfg.orient='retrato';salvarRelCfg();renderRelatorios()"><i class="fa-solid fa-file"></i>Retrato</button><button class="${c.orient === 'paisagem' ? 'on' : ''}" onclick="relCfg.orient='paisagem';salvarRelCfg();renderRelatorios()"><i class="fa-solid fa-file fa-rotate-90"></i>Paisagem</button></div>
-      <label class="lg-lembrar"><input type="checkbox" id="rl-capa" ${c.capa ? 'checked' : ''} onchange="lerRel()">Capa com selo, código, data e hora</label>
+
       <label class="lg-lembrar"><input type="checkbox" id="rl-sum" ${c.sumario ? 'checked' : ''} onchange="lerRel()">Sumário com o número das páginas</label>
       <p class="s" style="margin:4px 0 0;font-size:11.5px;color:var(--mut)">Em retrato, os organogramas e mapas largos saem em páginas deitadas.</p>`)}
     <div class="rm-emit rm-emit-fixo"><button class="btn btn-p" onclick="emitirRelatorio('pdf')"><i class="fa-solid fa-file-pdf"></i>Baixar PDF</button><button class="btn btn-s" onclick="emitirRelatorio('print')"><i class="fa-solid fa-print"></i>Imprimir</button><button class="btn btn-s" onclick="emitirRelatorio('word')"><i class="fa-solid fa-file-word"></i>Word</button></div></div>
@@ -4807,7 +4907,7 @@ function rmRelatorio(){
 }
 function lerRel(){
   const v = id => { const e = $(id); return e ? e.value : ''; }, ck = id => { const e = $(id); return e ? e.checked : false; };
-  relCfg.titulo = v('#rl-tit'); relCfg.obs = v('#rl-obs'); relCfg.area = v('#rl-area'); relCfg.dre = v('#rl-dre'); relCfg.setor = v('#rl-setor'); relCfg.capa = ck('#rl-capa'); relCfg.sumario = ck('#rl-sum');
+  relCfg.titulo = v('#rl-tit'); relCfg.obs = v('#rl-obs'); relCfg.area = v('#rl-area'); relCfg.dre = v('#rl-dre'); relCfg.setor = v('#rl-setor'); relCfg.sumario = ck('#rl-sum');
   relCfg.fig = { cor:v('#rl-cor') || 'tipo', vinculos:ck('#rl-vin'), ligacoes:ck('#rl-lig'), nomes:ck('#rl-nom'), mapaTam:v('#rl-mtam') || 'pagina' };
   const marc = [...document.querySelectorAll('[data-rs]:checked')].map(x => x.dataset.rs), antes = relCfg.secoes.length;
   relCfg.secoes = relCfg.secoes.filter(k => marc.includes(k)).concat(marc.filter(k => !relCfg.secoes.includes(k)));
@@ -4868,7 +4968,7 @@ function lerPort(){
 function previaPort(){ const d = $('#pt-doc'); if (!d) return; try { d.innerHTML = docHTML(montarPortaria(portCfg, null), { minuta:true }); } catch (e) { d.innerHTML = `<p style="color:#dc2626">Erro ao montar: ${esc(e.message)}</p>`; console.error(e); } }
 function emitirPortaria(formato){
   lerPort(); const o = JSON.parse(JSON.stringify(portCfg)), p = o.cenario && DB.propostas.find(x => x.id === o.cenario);
-  return emitirDoc({ tipo:'POR', titulo:`Minuta de portaria${p ? ' – ' + p.nome : ' – estrutura vigente'}`, formato, minuta:true, nomeArq:'minuta-portaria', montar:e => montarPortaria(o, e), detalhe:(p ? p.nome : 'Estrutura vigente') + (o.area ? ' · ' + relNomeArea(o.area) : '') });
+  return emitirDoc({ tipo:'POR', titulo:`Minuta de portaria${p ? ' – ' + p.nome : ' – estrutura vigente'}`, formato, minuta:true, nomeArq:'minuta-portaria', filtros:filtrosPort(o), montar:e => montarPortaria(o, e), detalhe:(p ? p.nome : 'Estrutura vigente') + (o.area ? ' · ' + relNomeArea(o.area) : '') });
 }
 /* ---------- verificação ---------- */
 let rmCod = '';
