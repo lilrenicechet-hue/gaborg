@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.23.0';
+const VERSAO = '1.23.1';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -4715,26 +4715,26 @@ function iniciarFundoLogin(){
   let cv = $('#lg-fundo'); if (!cv) { cv = document.createElement('canvas'); cv.id = 'lg-fundo'; box.prepend(cv); }
   const ctx = cv.getContext('2d'), dpr = Math.min(2, window.devicePixelRatio || 1);
   const medir = () => { const r = box.getBoundingClientRect(); lgf.w = r.width; lgf.h = r.height; cv.width = r.width * dpr; cv.height = r.height * dpr; cv.style.width = r.width + 'px'; cv.style.height = r.height + 'px'; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const n = Math.round(Math.min(90, Math.max(28, r.width * r.height / 14000))); lgf.nos = Array.from({ length:n }, () => ({ x:Math.random() * r.width, y:Math.random() * r.height, vx:(Math.random() - .5) * .35, vy:(Math.random() - .5) * .35, r:1 + Math.random() * 1.8 })); };
+    const n = Math.round(Math.min(45, Math.max(18, r.width * r.height / 26000))); lgf.nos = Array.from({ length:n }, () => ({ x:Math.random() * r.width, y:Math.random() * r.height, vx:(Math.random() - .5) * .12, vy:(Math.random() - .5) * .12, r:.8 + Math.random() * 1.2 })); };
   medir(); if (!box._lgOk) { box._lgOk = true; window.addEventListener('resize', () => { if (!$('#login').classList.contains('hidden')) medir(); });
-    box.addEventListener('pointermove', e => { const r = box.getBoundingClientRect(); lgf.mx = e.clientX - r.left; lgf.my = e.clientY - r.top; const hx = (lgf.mx / r.width - .5), hy = (lgf.my / r.height - .5); box.style.setProperty('--rx', (-hy * 10).toFixed(2) + 'deg'); box.style.setProperty('--ry', (hx * 14).toFixed(2) + 'deg'); box.style.setProperty('--mx', (lgf.mx / r.width * 100).toFixed(1) + '%'); box.style.setProperty('--my', (lgf.my / r.height * 100).toFixed(1) + '%'); });
+    if (false) box.addEventListener('pointermove', e => { const r = box.getBoundingClientRect(); lgf.mx = e.clientX - r.left; lgf.my = e.clientY - r.top; const hx = (lgf.mx / r.width - .5), hy = (lgf.my / r.height - .5); box.style.setProperty('--rx', (-hy * 10).toFixed(2) + 'deg'); box.style.setProperty('--ry', (hx * 14).toFixed(2) + 'deg'); box.style.setProperty('--mx', (lgf.mx / r.width * 100).toFixed(1) + '%'); box.style.setProperty('--my', (lgf.my / r.height * 100).toFixed(1) + '%'); });
     box.addEventListener('pointerleave', () => { lgf.mx = lgf.my = -1e4; box.style.setProperty('--rx', '0deg'); box.style.setProperty('--ry', '0deg'); }); }
   cancelAnimationFrame(lgf.raf);
   const desenhar = () => {
     ctx.clearRect(0, 0, lgf.w, lgf.h); const N = lgf.nos, D = 130;
-    N.forEach(p => { if (animAtiva()) { const dx = p.x - lgf.mx, dy = p.y - lgf.my, d2 = dx * dx + dy * dy; if (d2 < 22000) { const f = (22000 - d2) / 22000 * .6; p.vx += dx / Math.sqrt(d2 + 1) * f * .08; p.vy += dy / Math.sqrt(d2 + 1) * f * .08; }
-      p.vx *= .985; p.vy *= .985; if (Math.hypot(p.vx, p.vy) < .12) { p.vx += (Math.random() - .5) * .05; p.vy += (Math.random() - .5) * .05; } p.x += p.vx; p.y += p.vy;
+    N.forEach(p => { if (animAtiva()) { const dx = p.x - lgf.mx, dy = p.y - lgf.my, d2 = dx * dx + dy * dy; if (false) { const f = (22000 - d2) / 22000 * .6; p.vx += dx / Math.sqrt(d2 + 1) * f * .08; p.vy += dy / Math.sqrt(d2 + 1) * f * .08; }
+      p.vx *= .998; p.vy *= .998; if (Math.hypot(p.vx, p.vy) < .06) { p.vx += (Math.random() - .5) * .02; p.vy += (Math.random() - .5) * .02; } p.x += p.vx; p.y += p.vy;
       if (p.x < 0 || p.x > lgf.w) p.vx *= -1; if (p.y < 0 || p.y > lgf.h) p.vy *= -1; } });
-    for (let i = 0; i < N.length; i++) for (let j = i + 1; j < N.length; j++) { const a = N[i], b = N[j], d = Math.hypot(a.x - b.x, a.y - b.y); if (d < D) { ctx.strokeStyle = `rgba(125,211,252,${(1 - d / D) * .28})`; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); } }
-    N.forEach(p => { const dm = Math.hypot(p.x - lgf.mx, p.y - lgf.my); if (dm < 170) { ctx.strokeStyle = `rgba(96,165,250,${(1 - dm / 170) * .55})`; ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(lgf.mx, lgf.my); ctx.stroke(); }
-      ctx.fillStyle = 'rgba(191,219,254,.8)'; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 6.283); ctx.fill(); });
+    for (let i = 0; i < N.length; i++) for (let j = i + 1; j < N.length; j++) { const a = N[i], b = N[j], d = Math.hypot(a.x - b.x, a.y - b.y); if (d < D) { ctx.strokeStyle = `rgba(125,211,252,${(1 - d / D) * .14})`; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); } }
+    N.forEach(p => {
+      ctx.fillStyle = 'rgba(191,219,254,.45)'; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 6.283); ctx.fill(); });
     if (animAtiva() && !document.hidden && !$('#login').classList.contains('hidden')) lgf.raf = requestAnimationFrame(desenhar);
   };
   desenhar();
   // números e frases
   const nums = $('.lg-nums'); if (nums) { nums.querySelectorAll('b').forEach(b => { b.textContent = b.dataset.n; delete b.dataset.contado; }); setTimeout(() => contarNumeros(nums), 500); }
   clearInterval(lgf.tGiro); const g = $('#lg-giro');
-  if (g && animAtiva()) lgf.tGiro = setInterval(() => { if ($('#login').classList.contains('hidden')) return clearInterval(lgf.tGiro); lgf.giro = (lgf.giro + 1) % FRASES_LG.length; g.classList.remove('on'); setTimeout(() => { g.textContent = FRASES_LG[lgf.giro]; g.classList.add('on'); }, 260); }, 3400);
+  if (false) lgf.tGiro = setInterval(() => { if ($('#login').classList.contains('hidden')) return clearInterval(lgf.tGiro); lgf.giro = (lgf.giro + 1) % FRASES_LG.length; g.classList.remove('on'); setTimeout(() => { g.textContent = FRASES_LG[lgf.giro]; g.classList.add('on'); }, 260); }, 3400);
   const sd = $('#lg-saud'); if (sd) { const h = new Date().getHours(); sd.textContent = h < 12 ? 'Bom dia!' : h < 18 ? 'Boa tarde!' : 'Boa noite!'; }
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden) iniciarFundoLogin(); });
