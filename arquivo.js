@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.24.0';
+const VERSAO = '1.24.1';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -4337,35 +4337,40 @@ function mapaSVG(o){
   const doDre = o.dre ? X.lista.filter(e => e.e.dre === o.dre) : null;
   if (doDre && doDre.length) { doDre.forEach(e => inc(e.e.longitude, e.e.latitude)); const s = X.sedes.get(o.dre); inc(s[1], s[0]); const pd = Math.max(x1 - x0, y1 - y0) * .12 + .15; x0 -= pd; x1 += pd; y0 -= pd; y1 += pd; }
   else fc.features.forEach(f => anel(f.geometry).forEach(pl => pl[0].forEach(([lo, la]) => inc(lo, la))));
+  const det = !(doDre && doDre.length) && QUADRANTES_MT[o.recorte] ? o.recorte : '';
+  if (det) { const mx = (x0 + x1) / 2, my = (y0 + y1) / 2, ox = (x1 - x0) * .04, oy = (y1 - y0) * .04; if (det[0] === 'n') y1 = my + oy; else y0 = my - oy; if (det[1] === 'o') x1 = mx + ox; else x0 = mx - ox; }
   const W = 1000, s = W / (x1 - x0), Hh = (y1 - y0) * s, P = (lo, la) => [(lo * kx - x0) * s, (-la - y0) * s], f1 = v => v.toFixed(1);
   const path = g => anel(g).map(pl => pl.map(r => 'M' + r.map(([lo, la]) => P(lo, la).map(f1).join(',')).join('L') + 'Z').join('')).join('');
   const dreMun = f => { const q = porMun.get(chaveMun(f.properties.nome)); return q ? Object.entries(q).sort((a, b) => b[1] - a[1])[0][0] : ''; };
-  const cid = 'cl' + (++mapaSVG.n), zoom = !!(doDre && doDre.length), rp = zoom ? 4.2 : 2.6, sw = zoom ? 1 : .6;
+  const cid = 'cl' + (++mapaSVG.n), zoom = !!(doDre && doDre.length), rp = zoom ? 4.2 : det ? 3.6 : 2.6, sw = zoom ? 1 : det ? .9 : .6;
   const mun = fc.features.map((f, i) => { const d = dreMun(f); let fill = '#f1f5f9', op = 1;
     if (o.modo === 'mun') fill = viz[i]; else if (d) { fill = corDRE(dres, d); op = o.dre && d !== o.dre ? .06 : .22; }
     return `<path d="${path(f.geometry)}" fill="${fill}" fill-opacity="${op}" stroke="#64748b" stroke-width="${sw}" stroke-opacity=".55"/>`; }).join('');
   const lista = doDre || X.lista, sedes = X.sedes;
   const lig = (o.ligacoes || o.modo === 'dist') ? lista.map(e => { const a = P(e.e.longitude, e.e.latitude), b = P(sedes.get(e.e.dre)[1], sedes.get(e.e.dre)[0]); return `<path d="M${f1(a[0])},${f1(a[1])}L${f1(b[0])},${f1(b[1])}" stroke="${o.modo === 'dist' ? faixaDist(e.km)[2] : corDRE(dres, e.e.dre)}" stroke-width="${zoom ? .9 : .5}" stroke-opacity=".55"/>`; }).join('') : '';
   const pts = lista.map(e => { const [x, y] = P(e.e.longitude, e.e.latitude), c = o.modo === 'dist' ? faixaDist(e.km)[2] : o.modo === 'mun' ? '#0f172a' : corDRE(dres, e.e.dre); return `<circle cx="${f1(x)}" cy="${f1(y)}" r="${rp}" fill="${c}" stroke="#ffffff" stroke-width=".7"/>`; }).join('');
-  const sd = dres.filter(d => !o.dre || d === o.dre).map(d => { const [x, y] = P(sedes.get(d)[1], sedes.get(d)[0]), n = X.lista.filter(e => e.e.dre === d).length, c = corDRE(dres, d);
-    return `<circle cx="${f1(x)}" cy="${f1(y)}" r="${zoom ? 14 : 10}" fill="${c}" stroke="#ffffff" stroke-width="2"/><text x="${f1(x)}" y="${f1(y + 3.2)}" text-anchor="middle" font-family="${FIG_FONTE}" font-size="${zoom ? 10 : 8.5}" font-weight="bold" fill="#ffffff">${n}</text>${halo(f1(x + (zoom ? 18 : 13)), f1(y + 4), esc(nomeDRE(d)), `font-family="${FIG_FONTE}" font-size="${zoom ? 13 : 10.5}" font-weight="bold" fill="#0f172a"`)}`; }).join('');
+  const sd = dres.filter(d => !o.dre || d === o.dre).filter(d => { const [x, y] = P(sedes.get(d)[1], sedes.get(d)[0]); return x >= 0 && x <= W && y >= 0 && y <= Hh; }).map(d => { const [x, y] = P(sedes.get(d)[1], sedes.get(d)[0]), n = X.lista.filter(e => e.e.dre === d).length, c = corDRE(dres, d);
+    return `<circle cx="${f1(x)}" cy="${f1(y)}" r="${zoom ? 14 : det ? 12 : 10}" fill="${c}" stroke="#ffffff" stroke-width="2"/><text x="${f1(x)}" y="${f1(y + 3.2)}" text-anchor="middle" font-family="${FIG_FONTE}" font-size="${zoom ? 10 : 8.5}" font-weight="bold" fill="#ffffff">${n}</text>${halo(f1(x + (zoom ? 18 : 13)), f1(y + 4), esc(nomeDRE(d)), `font-family="${FIG_FONTE}" font-size="${zoom ? 13 : det ? 12 : 10.5}" font-weight="bold" fill="#0f172a"`)}`; }).join('');
   let nomes = '';
-  if (o.nomes || zoom) { const vist = new Set(); fc.features.forEach(f => { const d = dreMun(f); if (o.dre && d !== o.dre) return; const k = chaveMun(f.properties.nome); if (vist.has(k)) return; vist.add(k); let a = 1e9, b = -1e9, c = 1e9, e2 = -1e9; anel(f.geometry).forEach(pl => pl[0].forEach(([lo, la]) => { const [x, y] = P(lo, la); a = Math.min(a, x); b = Math.max(b, x); c = Math.min(c, y); e2 = Math.max(e2, y); }));
-    if (b < 0 || a > W || e2 < 0 || c > Hh) return; nomes += halo(f1((a + b) / 2), f1((c + e2) / 2), esc(f.properties.nome), `text-anchor="middle" font-family="${FIG_FONTE}" font-size="${zoom ? 9 : 6}" fill="#334155"`); }); }
+  if (o.nomes || zoom || det) { const vist = new Set(); fc.features.forEach(f => { const d = dreMun(f); if (o.dre && d !== o.dre) return; const k = chaveMun(f.properties.nome); if (vist.has(k)) return; vist.add(k); let a = 1e9, b = -1e9, c = 1e9, e2 = -1e9; anel(f.geometry).forEach(pl => pl[0].forEach(([lo, la]) => { const [x, y] = P(lo, la); a = Math.min(a, x); b = Math.max(b, x); c = Math.min(c, y); e2 = Math.max(e2, y); }));
+    const mx2 = (a + b) / 2, my2 = (c + e2) / 2; if (mx2 < 0 || mx2 > W || my2 < 0 || my2 > Hh) return; nomes += halo(f1(mx2), f1(my2), esc(f.properties.nome), `text-anchor="middle" font-family="${FIG_FONTE}" font-size="${zoom ? 9 : det ? 8.5 : 6}" fill="#334155"`); }); }
   // escala e norte
-  const kmPorUnid = 111.32 / s / 1, alvoKm = zoom ? 50 : 200, lw = alvoKm / kmPorUnid, ey = Hh + 26;
-  const extra = `<g font-family="${FIG_FONTE}" font-size="10" fill="#334155"><path d="M10 ${f1(ey)}h${f1(lw)}" stroke="#334155" stroke-width="2"/><path d="M10 ${f1(ey - 4)}v8M${f1(10 + lw)} ${f1(ey - 4)}v8M${f1(10 + lw / 2)} ${f1(ey - 3)}v6" stroke="#334155" stroke-width="1.2"/><text x="10" y="${f1(ey + 14)}">0</text><text x="${f1(10 + lw)}" y="${f1(ey + 14)}" text-anchor="middle">${alvoKm} km</text>
-    <g transform="translate(${W - 20},18)"><path d="M0 -14L7 8L0 3L-7 8Z" fill="#0f172a"/><text y="20" text-anchor="middle" font-weight="bold">N</text></g></g>`;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-10 -10 ${W + 20} ${f1(Hh + 60)}" width="${W + 20}" height="${f1(Hh + 70)}"><rect x="-10" y="-10" width="${W + 20}" height="${f1(Hh + 70)}" fill="#ffffff"/><defs><clipPath id="${cid}"><rect x="0" y="0" width="${W}" height="${f1(Hh)}"/></clipPath></defs><g clip-path="url(#${cid})">${mun}<g fill="none">${lig}</g>${pts}${nomes}</g>${sd}${extra}</svg>`;
+  const kmPorUnid = 111.32 / s / 1, alvoKm = zoom ? 50 : det ? 100 : 200, lw = alvoKm / kmPorUnid, ey = Hh - 22;
+  const extra = `<g font-family="${FIG_FONTE}" font-size="10" fill="#334155"><rect x="2" y="${f1(ey - 14)}" width="${f1(lw + 30)}" height="34" rx="4" fill="#ffffff" fill-opacity=".85"/><path d="M10 ${f1(ey)}h${f1(lw)}" stroke="#334155" stroke-width="2"/><path d="M10 ${f1(ey - 4)}v8M${f1(10 + lw)} ${f1(ey - 4)}v8M${f1(10 + lw / 2)} ${f1(ey - 3)}v6" stroke="#334155" stroke-width="1.2"/><text x="10" y="${f1(ey + 14)}">0</text><text x="${f1(10 + lw)}" y="${f1(ey + 14)}" text-anchor="middle">${alvoKm} km</text>
+    <g transform="translate(${W - 20},20)"><circle r="17" cy="2" fill="#ffffff" fill-opacity=".85"/><path d="M0 -14L7 8L0 3L-7 8Z" fill="#0f172a"/><text y="20" text-anchor="middle" font-weight="bold">N</text></g></g>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-10 -10 ${W + 20} ${f1(Hh + 20)}" width="${W + 20}" height="${f1(Hh + 20)}"><rect x="-10" y="-10" width="${W + 20}" height="${f1(Hh + 20)}" fill="#ffffff"/>${det ? `<rect x="0" y="0" width="${W}" height="${f1(Hh)}" fill="none" stroke="#94a3b8" stroke-width="1"/>` : ''}<defs><clipPath id="${cid}"><rect x="0" y="0" width="${W}" height="${f1(Hh)}"/></clipPath></defs><g clip-path="url(#${cid})">${mun}<g fill="none">${lig}</g>${pts}${nomes}</g>${sd}${extra}</svg>`;
   let leg;
   if (o.modo === 'dist') leg = FAIXAS_DIST.map(f => [f[2], `${f[1]} (${lista.filter(e => faixaDist(e.km) === f).length})`]);
   else if (o.modo === 'mun') leg = [['#fde68a', 'Cada cor separa municípios vizinhos'], ['#0f172a', 'Unidade escolar']];
   else leg = dres.filter(d => !o.dre || d === o.dre).map(d => [corDRE(dres, d), `${nomeDRE(d)} (${X.lista.filter(e => e.e.dre === d).length})`]);
   leg.push(['#ffffff', 'Círculo grande: sede da DRE, com o número de escolas']);
   if (lig) leg.push(['#94a3b8', 'Linha: ligação da escola com a sede da sua DRE']);
-  return { svg, w:W + 20, h:Hh + 70, leg };
+  return { svg, w:W + 20, h:Hh + 20, leg, mapa:true };
 }
 mapaSVG.n = 0;
+const QUADRANTES_MT = { no:'Noroeste', ne:'Nordeste', so:'Sudoeste', se:'Sudeste' };
+/* miniatura de MT com o quadrante destacado (localização do detalhe) */
+function miniQuadranteMT(q){ return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 58" width="60" height="58"><rect x="1" y="1" width="58" height="56" rx="4" fill="#f8fafc" stroke="#cbd5e1"/>${Object.keys(QUADRANTES_MT).map(k => `<rect x="${k[1] === 'o' ? 5 : 31}" y="${k[0] === 'n' ? 5 : 30}" width="24" height="23" rx="2" fill="${k === q ? '#1e3a8a' : '#e2e8f0'}"/>`).join('')}</svg>`; }
 
 /* ===================== DOCUMENTOS: MODELO ÚNICO → PRÉVIA, PDF, WORD E IMPRESSÃO ===================== */
 const SISTEMA_NOME = 'GABOrg · Organização Institucional', SISTEMA_ORG = 'Secretaria de Estado de Educação de Mato Grosso – SEDUC-MT';
@@ -4446,10 +4451,11 @@ function docPDF(blocos, o){
   const base = o.paisagem ? 'landscape' : 'portrait', mg = o.minuta ? [85, 60, 57, 55] : [50, 58, 50, 50];
   const larg = or => (or === 'landscape' ? 842 : 595) - mg[0] - mg[2], alt = or => (or === 'landscape' ? 595 : 842) - mg[1] - mg[3];
   let orient = base, pend = false, primeiro = true, ultH1 = -1; const conteudo = [];
-  const legendaPDF = (it, W) => { const cols = W > 600 ? 3 : 2, lin = []; for (let i = 0; i < it.length; i += cols) lin.push(it.slice(i, i + cols)); return { table:{ widths:Array(cols).fill('*'), body:lin.map(l => l.concat(Array(cols - l.length).fill(null)).map(x => x ? { columns:[{ canvas:[{ type:'rect', x:0, y:1, w:9, h:9, r:2, color:x[0], lineColor:'#94a3b8', lineWidth:.5 }], width:13 }, { text:x[1], fontSize:7.5 }] } : '')) }, layout:'noBorders', margin:[0, 4, 0, 2] }; };
+  const legendaPDF = (it, W, nc) => { const cols = nc || (W > 600 ? 3 : 2), lin = []; for (let i = 0; i < it.length; i += cols) lin.push(it.slice(i, i + cols)); return { table:{ widths:Array(cols).fill('*'), body:lin.map(l => l.concat(Array(cols - l.length).fill(null)).map(x => x ? { columns:[{ canvas:[{ type:'rect', x:0, y:1, w:9, h:9, r:2, color:x[0], lineColor:'#94a3b8', lineWidth:.5 }], width:13 }, { text:x[1], fontSize:7.5 }] } : '')) }, layout:'noBorders', margin:[0, 4, 0, 2] }; };
   blocos.forEach(b => {
     const quer = b.t === 'fig' && b.paisagem && base === 'portrait' ? 'landscape' : base, ns = [], W = larg(quer);
     if (quer !== orient && !primeiro) pend = true;
+    if (b.t === 'fig' && b.pagina && !primeiro) pend = true;
     let cabFig = null; if (b.t === 'fig' && !o.minuta && ultH1 >= 0 && ultH1 === conteudo.length - 2) { cabFig = conteudo.splice(ultH1); if (cabFig[0].pageBreak) pend = true; delete cabFig[0].pageBreak; delete cabFig[0].pageOrientation; delete cabFig[0].headlineLevel; cabFig[1].canvas[0].x2 = W; }
     switch (b.t) {
       case 'capa': ns.push({ stack:[{ text:SISTEMA_NOME, style:'capaSup' }, { text:SISTEMA_ORG, style:'capaOrg' }, { text:b.titulo, style:'capaTit' }, b.sub ? { text:b.sub, style:'capaSub' } : '', { svg:seloSVG(b.codigo, b.data, 150), width:150, alignment:'center', margin:[0, 30, 0, 30] },
@@ -4470,9 +4476,11 @@ function docPDF(blocos, o){
       case 'legenda': ns.push(legendaPDF(b.it, W)); break;
       case 'nota': ns.push({ text:runsPDF(b.x), fontSize:7.5, color:'#64748b', margin:[0, 2, 0, 8] }); break;
       case 'quebra': pend = true; break;
-      case 'fig': { const hMax = (alt(quer) - 100 - Math.ceil((b.leg || []).length / (W > 600 ? 3 : 2)) * 15 - (b.nota ? 12 * Math.ceil(b.nota.length / (W / 4.2)) : 0) - (cabFig ? 52 : 0)) * .97, esc_ = Math.min(W / b.w, hMax / b.h, 1.6);
-        ns.push({ stack:(cabFig || []).concat([{ text:`Figura ${b.num} – ${b.titulo}`, bold:true, fontSize:10, color:'#1e3a8a', margin:[0, 0, 0, 4] }, { svg:b.svg, width:b.w * esc_, height:b.h * esc_, alignment:'center' },
-          b.leg && b.leg.length ? { stack:[{ text:'Legenda', bold:true, fontSize:8, margin:[0, 6, 0, 0] }, legendaPDF(b.leg, W)] } : '', b.nota ? { text:b.nota, fontSize:7.5, color:'#475569', margin:[0, 3, 0, 0] } : '', { text:b.fonte || '', fontSize:7, color:'#64748b', italics:true, margin:[0, 2, 0, 8] }]), unbreakable:true });
+      case 'fig': { const sang = b.pagina ? Math.min(mg[0], mg[2]) - 18 : 0, WF = W + 2 * sang, lc_ = b.mapa && W > 450 ? 3 : W > 600 ? 3 : 2, nl = b.nota ? Math.ceil(b.nota.length / (W / 4.3)) : 0;
+        const hMax = alt(quer) - 17 - 30 - nl * 10 - (b.leg && b.leg.length ? 18 + Math.ceil(b.leg.length / lc_) * 14.5 : 0) - (cabFig ? 50 : 0) - 10, esc_ = Math.min(WF / b.w, hMax / b.h, 1.6);
+        const iw = b.w * esc_, img = { svg:b.svg, width:iw, height:b.h * esc_, margin:[(W - iw) / 2, 0, 0, 0] };
+        ns.push({ stack:(cabFig || []).concat([b.mini ? { columns:[{ text:`Figura ${b.num} – ${b.titulo}`, bold:true, fontSize:10, color:'#1e3a8a', width:'*' }, { svg:b.mini, width:30, height:29 }], columnGap:8, margin:[0, 0, 0, 4] } : { text:`Figura ${b.num} – ${b.titulo}`, bold:true, fontSize:10, color:'#1e3a8a', margin:[0, 0, 0, 4] }, img,
+          b.leg && b.leg.length ? { stack:[{ text:'Legenda', bold:true, fontSize:8, margin:[0, 6, 0, 0] }, legendaPDF(b.leg, W, lc_)] } : '', b.nota ? { text:b.nota, fontSize:7.5, color:'#475569', margin:[0, 3, 0, 0] } : '', { text:b.fonte || '', fontSize:7, color:'#64748b', italics:true, margin:[0, 2, 0, 8] }]), unbreakable:true });
         if (quer === 'landscape' && base === 'portrait') pend = true; break; }
       case 'ass': ns.push({ stack:[{ text:'______________________________________', alignment:'center', margin:[0, 30, 0, 0] }, { text:b.x, bold:true, alignment:'center' }, b.sub ? { text:b.sub, alignment:'center' } : ''], unbreakable:true }); break;
       case 'selo': ns.push({ table:{ widths:[100, '*'], body:[[{ svg:seloSVG(b.codigo, b.data, 96), width:96 }, { stack:[{ text:'Autenticação', bold:true, margin:[0, 6, 0, 4] }, { text:`Documento gerado pelo ${SISTEMA_NOME} em ${b.quando}${b.por ? ' por ' + b.por : ''}.`, fontSize:9 }, { text:[{ text:'Código de verificação: ', fontSize:9 }, { text:b.codigo, bold:true, fontSize:10 }], margin:[0, 4, 0, 4] }, { text:'Para conferir, abra o GABOrg › Relatórios e minutas › Verificar código.', fontSize:8, color:'#64748b' }] }]] }, layout:{ hLineWidth:() => .6, vLineWidth:() => .6, hLineColor:() => lc, vLineColor:() => lc, paddingLeft:() => 8, paddingTop:() => 6, paddingBottom:() => 6 }, margin:[0, 18, 0, 0], unbreakable:true }); break;
@@ -4480,7 +4488,7 @@ function docPDF(blocos, o){
     if (!ns.length) return;
     ultH1 = b.t === 'h1' ? conteudo.length : -1;
     if ((pend || quer !== orient) && !primeiro) { ns[0] = Object.assign(ns[0].stack || ns[0].table || ns[0].text !== undefined || ns[0].toc || ns[0].canvas || ns[0].columns ? ns[0] : { stack:[ns[0]] }, { pageBreak:'before', pageOrientation:quer }); }
-    pend = (b.t === 'capa') || (b.t === 'fig' && quer === 'landscape' && base === 'portrait'); orient = quer; primeiro = false;
+    pend = (b.t === 'capa') || (b.t === 'fig' && ((quer === 'landscape' && base === 'portrait') || b.pagina)); orient = quer; primeiro = false;
     conteudo.push(...ns);
   });
   const cab = (p) => p === 1 && blocos[0] && blocos[0].t === 'capa' ? null : { columns:[{ text:SISTEMA_NOME, color:'#64748b', fontSize:7.5 }, { text:`${o.titulo} · ${o.quando}`, alignment:'right', color:'#64748b', fontSize:7.5 }], margin:[mg[0], 26, mg[2], 0] };
@@ -4534,8 +4542,9 @@ let relCfg = Object.assign({ titulo:'Relatório da estrutura organizacional', ob
 const relNomeArea = a => a ? nomeCurto(porId.get(a)) : 'Toda a Secretaria';
 function relTitulos(){ const m = {}; REL_SECOES.forEach(g => g[1].forEach(([k, n]) => m[k] = n)); return m; }
 function montarRelatorio(F, emis){
-  const T = relTitulos(), D = dadosInd(F.area), B = [], sec = F.secoes.filter(k => T[k]), FG = Object.assign({ cor:'tipo', vinculos:false, ligacoes:false, nomes:false }, F.fig || {});
-  let nfig = 0; const FIG = (titulo, r, nota) => ({ t:'fig', num:++nfig, titulo, svg:r.svg, w:r.w, h:r.h, leg:r.leg, nota, fonte:'Fonte: GABOrg, dados de ' + emis.quando + (emis.codigo ? ' · ' + emis.codigo : ''), paisagem:r.w > r.h * 1.15 });
+  const T = relTitulos(), D = dadosInd(F.area), B = [], sec = F.secoes.filter(k => T[k]), FG = Object.assign({ cor:'tipo', vinculos:false, ligacoes:false, nomes:false, mapaTam:'pagina' }, F.fig || {});
+  let nfig = 0; const FIG = (titulo, r, nota) => ({ t:'fig', num:++nfig, titulo, svg:r.svg, w:r.w, h:r.h, leg:r.leg, nota, fonte:'Fonte: GABOrg, dados de ' + emis.quando + (emis.codigo ? ' · ' + emis.codigo : ''), paisagem:r.w > r.h * 1.15, mapa:!!r.mapa, mini:r.mini || '', pagina:!!r.mapa && FG.mapaTam !== 'compacto' });
+  const DET = (titulo, o, nota) => { if (FG.mapaTam !== 'ampliado') return; const ref = nfig; Object.keys(QUADRANTES_MT).forEach(q => { const r = mapaSVG(Object.assign({}, o, { recorte:q })); r.leg = []; r.mini = miniQuadranteMT(q); B.push(FIG(`${titulo} – detalhe ${QUADRANTES_MT[q]}`, r, `Ampliação do quadrante ${QUADRANTES_MT[q].toLowerCase()} da Figura ${ref}, com o nome dos municípios. Cores e símbolos conforme a legenda da Figura ${ref}.${nota ? ' ' + nota : ''}`)); }); };
   const E = distanciasMT(), dres = E.dres, dreOk = d => !F.dre || d === F.dre, P = (DB.propostas || []).filter(p => F.props === '*' || (F.props || []).includes(p.id));
   if (F.capa !== false) B.push({ t:'capa', titulo:F.titulo || 'Relatório', sub:SISTEMA_ORG, codigo:emis.codigo, data:emis.data, linhas:[['Código de verificação', emis.codigo], ['Emitido em', emis.quando], ['Emitido por', emis.por || '—'], ['Abrangência', relNomeArea(F.area) + (F.dre ? ' · ' + F.dre : '')], ['Seções', sec.length + ' de ' + Object.keys(T).length]].concat(F.obs ? [['Observação', F.obs]] : []) });
   if (F.sumario !== false) B.push({ t:'sumario', it:sec.map(k => T[k]) });
@@ -4621,9 +4630,9 @@ function montarRelatorio(F, emis){
         const mud = L.filter(s => (s._marcas || []).some(m => ['novo', 'extinto', 'movido', 'renomeado'].includes(m))), afet = [...new Set(mud.map(s => areaL(s.id)).filter(Boolean))];
         B.push({ t:'h2', x:p.nome }, { t:'p', x:`${mud.length} unidade(s) alterada(s) em ${afet.length} área(s).` });
         afet.forEach(a => { const r = orgSVG(L, { raiz:a, modo:FG.cor, marcas:true }); B.push(FIG(`${p.nome}: ${(mp.get(a) || {}).nome || ''}`, r, 'Bordas coloridas indicam as alterações da proposta em relação à estrutura vigente.')); }); }); }
-    if (k === 'mapaMT') { H(k); const r = mapaSVG({ modo:'dre', ligacoes:FG.ligacoes, nomes:FG.nomes }); B.push(FIG('Unidades escolares estaduais por Diretoria Regional de Educação', r, `${E.lista.length} unidades escolares, ${dres.length} DREs. Municípios coloridos pela DRE que atende a maior parte das suas escolas.`)); }
-    if (k === 'mapaDist') { H(k); const r = mapaSVG({ modo:'dist', nomes:FG.nomes }); B.push(FIG('Distância das escolas até a sede da sua DRE', r, 'Cor da escola e da linha pela distância em linha reta até a sede da DRE a que é subordinada.')); }
-    if (k === 'mapaMun') { H(k); const r = mapaSVG({ modo:'mun', nomes:true }); B.push(FIG('Divisão municipal de Mato Grosso e unidades escolares', r, 'Limites municipais (IBGE, malha simplificada) com o nome de cada município.')); }
+    if (k === 'mapaMT') { H(k); const r = mapaSVG({ modo:'dre', ligacoes:FG.ligacoes, nomes:FG.nomes }); B.push(FIG('Unidades escolares estaduais por Diretoria Regional de Educação', r, `${E.lista.length} unidades escolares, ${dres.length} DREs. Municípios coloridos pela DRE que atende a maior parte das suas escolas.`)); DET('Escolas por DRE', { modo:'dre', ligacoes:FG.ligacoes }); }
+    if (k === 'mapaDist') { H(k); const r = mapaSVG({ modo:'dist', nomes:FG.nomes }); B.push(FIG('Distância das escolas até a sede da sua DRE', r, 'Cor da escola e da linha pela distância em linha reta até a sede da DRE a que é subordinada.')); DET('Distâncias até a DRE', { modo:'dist' }); }
+    if (k === 'mapaMun') { H(k); const r = mapaSVG({ modo:'mun', nomes:true }); B.push(FIG('Divisão municipal de Mato Grosso e unidades escolares', r, 'Limites municipais (IBGE, malha simplificada) com o nome de cada município.')); DET('Divisão municipal', { modo:'mun' }); }
     if (k === 'mapaDRE') { H(k); if (!F.dre) B.push({ t:'p', x:'Escolha uma DRE nos filtros para gerar o mapa aproximado.' });
       else { const r = mapaSVG({ modo:'dre', dre:F.dre, ligacoes:true, nomes:true }); B.push(FIG(`${F.dre}: escolas, municípios e ligações com a sede`, r, `${E.lista.filter(o => o.e.dre === F.dre).length} unidades escolares.`)); } }
     if (k === 'ficha') { H(k); const s = F.setor && porId.get(F.setor);
@@ -4754,7 +4763,7 @@ function renderRelatorios(){
 /* ---------- relatório ---------- */
 /* ---------- relatório: interface ---------- */
 function salvarRelCfg(){ store.set('gaborg_rel', relCfg); }
-function relPadrao(){ relCfg = Object.assign({ titulo:'Relatório da estrutura organizacional', obs:'', area:'', dre:'', setor:'', props:'*', secoes:REL_MODELOS.executivo[2].slice(), orient:'retrato', capa:true, sumario:true }, relCfg); relCfg.fig = Object.assign({ cor:'tipo', vinculos:false, ligacoes:false, nomes:false }, relCfg.fig || {}); const T = relTitulos(); if (!Array.isArray(relCfg.secoes)) relCfg.secoes = REL_MODELOS.executivo[2].slice(); relCfg.secoes = relCfg.secoes.filter(k => T[k]); }
+function relPadrao(){ relCfg = Object.assign({ titulo:'Relatório da estrutura organizacional', obs:'', area:'', dre:'', setor:'', props:'*', secoes:REL_MODELOS.executivo[2].slice(), orient:'retrato', capa:true, sumario:true }, relCfg); relCfg.fig = Object.assign({ cor:'tipo', vinculos:false, ligacoes:false, nomes:false, mapaTam:'pagina' }, relCfg.fig || {}); const T = relTitulos(); if (!Array.isArray(relCfg.secoes)) relCfg.secoes = REL_MODELOS.executivo[2].slice(); relCfg.secoes = relCfg.secoes.filter(k => T[k]); }
 relPadrao();
 function rmRelatorio(){
   relPadrao(); const c = relCfg, P = DB.propostas || [], sel = new Set(c.secoes), dres = distanciasMT().dres, T = relTitulos(), M = param('modelosRel', []);
@@ -4773,7 +4782,8 @@ function rmRelatorio(){
     ${passo(4, 'Figuras e mapas', `<label><span class="rot">Cores do organograma</span><select id="rl-cor" class="campo" onchange="lerRel()">${Object.entries(MODOS_COR_ORG).map(([k, n]) => `<option value="${k}" ${k === c.fig.cor ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
       <label class="lg-lembrar"><input type="checkbox" id="rl-vin" ${c.fig.vinculos ? 'checked' : ''} onchange="lerRel()">Traçar os vínculos entre setores no organograma</label>
       <label class="lg-lembrar"><input type="checkbox" id="rl-lig" ${c.fig.ligacoes ? 'checked' : ''} onchange="lerRel()">Traçar a ligação de cada escola com a sua DRE no mapa</label>
-      <label class="lg-lembrar"><input type="checkbox" id="rl-nom" ${c.fig.nomes ? 'checked' : ''} onchange="lerRel()">Mostrar o nome dos municípios no mapa</label>`)}
+      <label class="lg-lembrar"><input type="checkbox" id="rl-nom" ${c.fig.nomes ? 'checked' : ''} onchange="lerRel()">Mostrar o nome dos municípios no mapa</label>
+      <label><span class="rot">Tamanho dos mapas</span><select id="rl-mtam" class="campo" onchange="lerRel()">${[['pagina', 'Página inteira (mapa grande, de borda a borda)'], ['ampliado', 'Página inteira + 4 detalhes ampliados (NO, NE, SO, SE)'], ['compacto', 'Compacto (mapa dentro do texto)']].map(([k, n]) => `<option value="${k}" ${k === c.fig.mapaTam ? 'selected' : ''}>${n}</option>`).join('')}</select></label>`)}
     ${passo(5, 'Capa e formato', `<label><span class="rot">Título</span><input id="rl-tit" class="campo" value="${esc(c.titulo)}" oninput="lerRel()"></label>
       <label><span class="rot">Observação na capa <small>opcional</small></span><input id="rl-obs" class="campo" value="${esc(c.obs)}" oninput="lerRel()" placeholder="ex.: preparado para a reunião de 30/10"></label>
       <div class="rm-seg"><button class="${c.orient !== 'paisagem' ? 'on' : ''}" onclick="relCfg.orient='retrato';salvarRelCfg();renderRelatorios()"><i class="fa-solid fa-file"></i>Retrato</button><button class="${c.orient === 'paisagem' ? 'on' : ''}" onclick="relCfg.orient='paisagem';salvarRelCfg();renderRelatorios()"><i class="fa-solid fa-file fa-rotate-90"></i>Paisagem</button></div>
@@ -4786,7 +4796,7 @@ function rmRelatorio(){
 function lerRel(){
   const v = id => { const e = $(id); return e ? e.value : ''; }, ck = id => { const e = $(id); return e ? e.checked : false; };
   relCfg.titulo = v('#rl-tit'); relCfg.obs = v('#rl-obs'); relCfg.area = v('#rl-area'); relCfg.dre = v('#rl-dre'); relCfg.setor = v('#rl-setor'); relCfg.capa = ck('#rl-capa'); relCfg.sumario = ck('#rl-sum');
-  relCfg.fig = { cor:v('#rl-cor') || 'tipo', vinculos:ck('#rl-vin'), ligacoes:ck('#rl-lig'), nomes:ck('#rl-nom') };
+  relCfg.fig = { cor:v('#rl-cor') || 'tipo', vinculos:ck('#rl-vin'), ligacoes:ck('#rl-lig'), nomes:ck('#rl-nom'), mapaTam:v('#rl-mtam') || 'pagina' };
   const marc = [...document.querySelectorAll('[data-rs]:checked')].map(x => x.dataset.rs), antes = relCfg.secoes.length;
   relCfg.secoes = relCfg.secoes.filter(k => marc.includes(k)).concat(marc.filter(k => !relCfg.secoes.includes(k)));
   const t = $('#rl-ptodas'); relCfg.props = !t || t.checked ? '*' : [...document.querySelectorAll('[data-rp]:checked')].map(x => x.dataset.rp);

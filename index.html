@@ -1055,8 +1055,8 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background
 <body>
 <!-- Vigia de inicialização: se o arquivo.js não carregar ou falhar, mostra o motivo em vez de uma tela vazia -->
 <script>
-window.GABORG_VERSAO_HTML = '1.24.0'; window.GABORG_ERROS = [];
-window.GABORG_NOVIDADES = "Relatórios aprimorados: organogramas e mapas de MT como figuras no PDF, com legenda e fonte; fichas de DRE e de setor; sumário com páginas; modelos salvos; ordem das seções; data, hora e código em todas as páginas.";
+window.GABORG_VERSAO_HTML = '1.24.1'; window.GABORG_ERROS = [];
+window.GABORG_NOVIDADES = "Mapas maiores nos relatórios: cada mapa ocupa uma página inteira, de borda a borda, e há a opção de 4 detalhes ampliados (Noroeste, Nordeste, Sudoeste e Sudeste) com o nome dos municípios.";
 window.addEventListener('error', function (e) {
   var alvo = e.target || {};
   if (alvo.tagName === 'SCRIPT') window.GABORG_ERROS.push('Não foi possível baixar o arquivo ' + (alvo.getAttribute('src') || '') + '.');
@@ -1417,6 +1417,6 @@ window.addEventListener('load', function () { setTimeout(function () { window.GA
 
 <div id="toast"><i class="fa-solid fa-check"></i><span></span></div>
 
-<script src="arquivo.js?v=1.24.0" onerror="window.GABORG_ERROS.push('O arquivo arquivo.js não foi encontrado no servidor (erro 404).');GABORG_DIAGNOSTICO()"></script>
+<script src="arquivo.js?v=1.24.1" onerror="window.GABORG_ERROS.push('O arquivo arquivo.js não foi encontrado no servidor (erro 404).');GABORG_DIAGNOSTICO()"></script>
 </body>
 </html>
