@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.22.1';
+const VERSAO = '1.23.0';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -1255,6 +1255,7 @@ function trocarVista(v){
   document.querySelectorAll('.nav-b').forEach(b => b.classList.toggle('on', b.dataset.vista === v));
   document.querySelectorAll('.vista').forEach(s => s.classList.toggle('fora', s.id !== 'v-' + v));
   atualizarVistaAtual();
+  if (typeof animarEntrada === 'function') animarEntrada($('#v-' + v));
 }
 function atualizarVistaAtual(){
   if (vistaAtual === 'mapa') desenharMapa();
@@ -1602,7 +1603,7 @@ function renderValidacoes(){
 
 /* Configurações */
 function renderConfig(){
-  $('#c-corpo').innerHTML = `
+  $('#c-corpo').innerHTML = cartaoAparencia() + `
     <div class="cartao bl"><h3><i class="fa-solid fa-cloud"></i>Conexão com a planilha</h3>
       <p class="s">Situação: <b>${online() ? 'conectado ao Apps Script' : 'desconectado'}</b>${online() && fila.length ? ` · ${fila.length} alteração(ões) aguardando envio` : ''}${ultimoErro ? ` · <span style="color:var(--perigo)">${esc(ultimoErro)}</span>` : ''}</p>
       <p class="s">Conectado como <b>${esc(cfg.usuario)}</b> (${esc(cfg.login)}) · perfil <b>${esc(cfg.perfil || '—')}</b>${sessao.lembrado() ? ' · sessão mantida neste computador' : ''}</p>
@@ -1703,8 +1704,9 @@ function verSenha(b){ const i = b.parentNode.querySelector('input'); const v = i
 function mostrarLogin(msg){
   $('#app').classList.add('hidden'); $('#login').classList.remove('hidden');
   $('#lg-login').value = cfg.login || ''; $('#lg-url').value = cfg.url || URL_PADRAO; $('#lg-senha').value = '';
-  const a = $('#lg-aviso'); if (msg) { a.textContent = msg; a.classList.remove('hidden'); } else a.classList.add('hidden');
+  const a = $('#lg-aviso'); if (msg) { a.textContent = msg; a.classList.remove('hidden'); setTimeout(() => typeof tremerLogin === 'function' && tremerLogin(), 300); } else a.classList.add('hidden');
   setTimeout(() => (cfg.login ? $('#lg-senha') : $('#lg-login')).focus(), 50);
+  setTimeout(() => typeof iniciarFundoLogin === 'function' && iniciarFundoLogin(), 30);
 }
 let encerrando = false;
 function sessaoEncerrada(msg){
@@ -1727,7 +1729,7 @@ async function carregarNuvem(){
 $('#f-login').addEventListener('submit', async e => {
   e.preventDefault();
   const login = $('#lg-login').value.trim(), senha = $('#lg-senha').value, lembrar = $('#lg-lembrar').checked, url = $('#lg-url').value.trim() || cfg.url;
-  const aviso = m => { const a = $('#lg-aviso'); a.textContent = m; a.classList.remove('hidden'); };
+  const aviso = m => { const a = $('#lg-aviso'); a.textContent = m; a.classList.remove('hidden'); tremerLogin(); };
   if (!login || !senha) return aviso('Informe usuário e senha.');
   if (!/^https:\/\/script\.google(usercontent)?\.com\//.test(url)) { $('#lg-adv').open = true; return aviso('Informe o endereço do Apps Script.'); }
   const b = $('#lg-btn'); b.disabled = true; b.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>Entrando...';
@@ -1756,6 +1758,7 @@ function abrirApp(){
   indexar(); migrarEscolas();
   if (!store.get('gaborg_abertos', null)) { abertos = new Set(raizes().map(r => r.id)); salvarAbertos(); }
   $('#login').classList.add('hidden'); $('#app').classList.remove('hidden');
+  if (typeof animAtiva === 'function' && animAtiva()) { const ap = $('#app'); ap.classList.add('chegando'); setTimeout(() => { ap.classList.remove('chegando'); animarEntrada($('#v-' + vistaAtual)); }, 750); }
   preencherUsuario(); statusSync();
   { const hv = location.hash.slice(1); if (['mapa','lista','painel','validacoes','config'].includes(hv)) vistaAtual = hv; }
   trocarVista(vistaAtual === 'usuarios' && !ehAdmin() ? 'mapa' : (vistaAtual || 'mapa'));
@@ -4632,6 +4635,117 @@ function rmVerificar(){
       <div class="tab-wrap"><table class="tab"><thead><tr><th>Código</th><th>Tipo</th><th>Título</th><th>Formato</th><th>Emitido em</th><th>Por</th></tr></thead><tbody>${L.slice(0, 200).map(x => `<tr onclick="rmCod=${arg(x.c)};renderRelatorios()"><td><code>${esc(x.c)}</code></td><td>${esc(x.tipo)}</td><td style="white-space:normal">${esc(x.titulo)}${x.det ? `<small style="display:block;color:var(--mut)">${esc(x.det)}</small>` : ''}</td><td>${esc(String(x.formato || '').toUpperCase())}</td><td>${fmtData(x.em)}</td><td>${esc(x.por || '')}</td></tr>`).join('') || '<tr><td colspan="6" class="vazio">Nenhum documento emitido ainda.</td></tr>'}</tbody></table></div></div>`;
 }
 
+/* ===================== ANIMAÇÕES E INTERATIVIDADE ===================== */
+let animOn = store.get('gaborg_anim', true);
+const animAtiva = () => animOn && !(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+function aplicarAnim(){ document.body.classList.toggle('sem-anim', !animAtiva()); }
+function alternarAnim(v){ animOn = v; store.set('gaborg_anim', v); aplicarAnim(); if (v) iniciarFundoLogin(); toast(v ? 'Animações ligadas.' : 'Animações desligadas.'); }
+aplicarAnim();
+/* números que sobem do zero (KPIs) */
+const RE_NUM = /^(\D*?)(\d{1,3}(?:\.\d{3})+(?:,\d+)?|\d+(?:,\d+)?)(\D*)$/;
+function contarNumeros(root){
+  if (!animAtiva() || !root) return;
+  root.querySelectorAll('.kpi .v, .ap-k b, .mt-kpi b, .rg-card .nums b, .ind-nota .anel b, .lg-nums b, .tv-kpi .v').forEach(el => {
+    if (el.childElementCount || el.dataset.contado) return; const m = el.textContent.trim().match(RE_NUM); if (!m) return;
+    const dec = (m[2].split(',')[1] || '').length, alvo = Number(m[2].replace(/\./g, '').replace(',', '.')); if (!isFinite(alvo) || alvo === 0) return;
+    const fmt = v => m[1] + v.toLocaleString('pt-BR', { minimumFractionDigits:dec, maximumFractionDigits:dec }) + m[3], t0 = performance.now(), dur = Math.min(1100, 500 + Math.log10(alvo + 1) * 160);
+    el.dataset.contado = '1';
+    const passo = t => { const p = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - p, 3); el.textContent = fmt(dec ? alvo * e : Math.round(alvo * e)); if (p < 1) requestAnimationFrame(passo); else el.textContent = fmt(alvo); };
+    requestAnimationFrame(passo);
+  });
+}
+/* entrada de uma seção: cartões, KPIs e linhas aparecem em sequência */
+const SEL_ENTRA = '.kpi, .cartao.bl, .cartao.vazio, .rg-card, .ru-item, .ru-it, .rs-obj, .mt-grp, .tab-wrap, .ind-abas, .filtros, .ind-filtro, .g-subabas, .re-pares .par, .rm-folha, .re-folha';
+function animarEntrada(sec){
+  if (!sec || !animAtiva()) return;
+  sec.classList.remove('vista-entra'); void sec.offsetWidth; sec.classList.add('vista-entra');
+  const grupos = new Map();
+  sec.querySelectorAll(SEL_ENTRA).forEach(el => { const p = el.parentElement, n = grupos.get(p) || 0; grupos.set(p, n + 1); el.style.setProperty('--i', Math.min(n, 12)); });
+  sec.querySelectorAll('.tab tbody tr').forEach((tr, i) => { if (i < 24) tr.style.setProperty('--i', i); });
+  contarNumeros(sec);
+  clearTimeout(sec._tEntra); sec._tEntra = setTimeout(() => sec.classList.remove('vista-entra'), 1300);
+}
+/* efeito de toque nos botões */
+document.addEventListener('pointerdown', e => {
+  if (!animAtiva() || e.button !== 0) return;
+  const b = e.target.closest && e.target.closest('.btn, .nav-b, .ind-abas > button, .g-subabas button, .mt-caixa button, .tv-rot, .mt-chip, .lg-form .btn'); if (!b || b.disabled) return;
+  const r = b.getBoundingClientRect(), d = Math.max(r.width, r.height) * 2.2, box = document.createElement('span'), o = document.createElement('span');
+  box.className = 'rp-box'; o.className = 'rp'; o.style.cssText = `width:${d}px;height:${d}px;left:${e.clientX - r.left - d / 2}px;top:${e.clientY - r.top - d / 2}px`;
+  box.appendChild(o); if (getComputedStyle(b).position === 'static') b.style.position = 'relative'; b.appendChild(box); setTimeout(() => box.remove(), 650);
+}, true);
+/* ---------- busca rápida (Ctrl + K) ---------- */
+const pal = { i:0, itens:[] };
+function abrirPaleta(){
+  if ($('#paleta') || $('#app').classList.contains('hidden')) return;
+  const el = document.createElement('div'); el.id = 'paleta'; el.className = 'paleta';
+  el.innerHTML = `<div class="pal-cx" role="dialog" aria-label="Busca rápida"><div class="pal-in"><i class="fa-solid fa-magnifying-glass"></i><input id="pal-q" placeholder="Ir para uma seção, setor, escola, proposta ou ação..." autocomplete="off"><kbd>Esc</kbd></div><div class="pal-l" id="pal-l"></div><div class="pal-pe"><span><kbd>↑</kbd><kbd>↓</kbd> navegar</span><span><kbd>Enter</kbd> abrir</span><span><kbd>Ctrl</kbd>+<kbd>K</kbd> abre de qualquer lugar</span></div></div>`;
+  el.addEventListener('pointerdown', e => { if (e.target === el) fecharPaleta(); });
+  document.body.appendChild(el); const q = $('#pal-q'); q.addEventListener('input', () => { pal.i = 0; listarPaleta(q.value); }); q.focus(); listarPaleta('');
+}
+function fecharPaleta(){ const el = $('#paleta'); if (el) el.remove(); }
+function listarPaleta(txt){
+  const q = norm(txt), r = [];
+  document.querySelectorAll('.lado .nav-b[data-vista]').forEach(b => r.push({ g:'Seções', ic:b.querySelector('i').className, t:b.title || b.textContent.trim(), a:() => trocarVista(b.dataset.vista) }));
+  [['fa-solid fa-tv', 'Abrir o Modo TV', () => abrirModoTV()], ['fa-solid fa-file-pdf', 'Gerar um relatório em PDF', () => { trocarVista('relatorios'); abaRm('relatorio'); }], ['fa-solid fa-file-contract', 'Minuta de portaria', () => { trocarVista('relatorios'); abaRm('portaria'); }], ['fa-solid fa-shield-halved', 'Verificar o código de um documento', () => { trocarVista('relatorios'); abaRm('verificar'); }], ['fa-solid fa-people-group', 'Nova reunião', () => { trocarVista('reunioes'); setTimeout(() => formReuniao(''), 100); }], ['fa-solid fa-circle-half-stroke', 'Alternar tema claro/escuro', () => alternarTema()], ['fa-solid fa-route', 'Mapa de MT por distância até a DRE', () => { trocarVista('escolas'); setTimeout(() => modoMT('distancia'), 400); }]]
+    .forEach(([ic, t, a]) => r.push({ g:'Ações', ic, t, a }));
+  let L = q ? r.filter(x => norm(x.t).includes(q)) : r;
+  if (q.length >= 2) {
+    DB.setores.filter(s => s.status !== 'Extinto' && norm(s.nome + ' ' + (s.sigla || '') + ' ' + (s.responsavel || '')).includes(q)).slice(0, 8).forEach(s => L.push({ g:'Setores', ic:'fa-solid ' + icTipo(s.tipo), t:s.nome, s:[s.sigla, s.responsavel].filter(Boolean).join(' · '), a:() => { trocarVista('mapa'); setTimeout(() => irPara(s.id), 80); } }));
+    (DB.propostas || []).filter(p => norm(p.nome).includes(q)).slice(0, 4).forEach(p => L.push({ g:'Propostas', ic:'fa-solid fa-lightbulb', t:p.nome, s:p.status, a:() => { trocarVista('propostas'); } }));
+    escolasLista().filter(e => norm(e.nome + ' ' + e.codigo + ' ' + e.municipio).includes(q)).slice(0, 6).forEach(e => L.push({ g:'Escolas', ic:'fa-solid fa-school', t:e.nome, s:e.municipio + ' · ' + nomeDRE(e.dre), a:() => verEscolaNoMapa(e.codigo) }));
+  }
+  pal.itens = L.slice(0, 40); pal.i = Math.min(pal.i, Math.max(0, pal.itens.length - 1));
+  let g = ''; $('#pal-l').innerHTML = pal.itens.map((x, i) => (x.g !== g ? `<div class="pal-g">${esc(g = x.g)}</div>` : '') + `<button class="pal-it ${i === pal.i ? 'on' : ''}" data-i="${i}" onmouseenter="pal.i=${i};marcarPaleta()" onclick="executarPaleta(${i})"><i class="${esc(x.ic)}"></i><span><b>${esc(x.t)}</b>${x.s ? `<small>${esc(x.s)}</small>` : ''}</span><i class="fa-solid fa-arrow-turn-down fa-rotate-90 ent"></i></button>`).join('') || '<div class="pal-vz">Nada encontrado.</div>';
+}
+function marcarPaleta(){ document.querySelectorAll('.pal-it').forEach(b => b.classList.toggle('on', Number(b.dataset.i) === pal.i)); const o = document.querySelector('.pal-it.on'); if (o) o.scrollIntoView({ block:'nearest' }); }
+function executarPaleta(i){ const x = pal.itens[i]; fecharPaleta(); if (x) x.a(); }
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); $('#paleta') ? fecharPaleta() : abrirPaleta(); return; }
+  if (!$('#paleta')) return;
+  if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); fecharPaleta(); }
+  else if (e.key === 'ArrowDown') { e.preventDefault(); pal.i = Math.min(pal.itens.length - 1, pal.i + 1); marcarPaleta(); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); pal.i = Math.max(0, pal.i - 1); marcarPaleta(); }
+  else if (e.key === 'Enter') { e.preventDefault(); executarPaleta(pal.i); }
+}, true);
+/* ---------- tela de entrada viva ---------- */
+const lgf = { raf:0, nos:[], mx:-1e4, my:-1e4, w:0, h:0, giro:0, tGiro:null };
+const FRASES_LG = ['Mapa interativo da estrutura da SEDUC-MT', `${ESCOLAS_BASE.length} escolas geolocalizadas em ${ESCOLAS_DRES.length} DREs`, 'Propostas com custo, metas e comparativo', 'Relatórios em PDF com código de verificação', 'Minutas de portaria e de decreto por proposta', 'Chefias, implantação, metas e reuniões'];
+function iniciarFundoLogin(){
+  const box = $('.lg-marca'); if (!box || $('#login').classList.contains('hidden')) return;
+  let cv = $('#lg-fundo'); if (!cv) { cv = document.createElement('canvas'); cv.id = 'lg-fundo'; box.prepend(cv); }
+  const ctx = cv.getContext('2d'), dpr = Math.min(2, window.devicePixelRatio || 1);
+  const medir = () => { const r = box.getBoundingClientRect(); lgf.w = r.width; lgf.h = r.height; cv.width = r.width * dpr; cv.height = r.height * dpr; cv.style.width = r.width + 'px'; cv.style.height = r.height + 'px'; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const n = Math.round(Math.min(90, Math.max(28, r.width * r.height / 14000))); lgf.nos = Array.from({ length:n }, () => ({ x:Math.random() * r.width, y:Math.random() * r.height, vx:(Math.random() - .5) * .35, vy:(Math.random() - .5) * .35, r:1 + Math.random() * 1.8 })); };
+  medir(); if (!box._lgOk) { box._lgOk = true; window.addEventListener('resize', () => { if (!$('#login').classList.contains('hidden')) medir(); });
+    box.addEventListener('pointermove', e => { const r = box.getBoundingClientRect(); lgf.mx = e.clientX - r.left; lgf.my = e.clientY - r.top; const hx = (lgf.mx / r.width - .5), hy = (lgf.my / r.height - .5); box.style.setProperty('--rx', (-hy * 10).toFixed(2) + 'deg'); box.style.setProperty('--ry', (hx * 14).toFixed(2) + 'deg'); box.style.setProperty('--mx', (lgf.mx / r.width * 100).toFixed(1) + '%'); box.style.setProperty('--my', (lgf.my / r.height * 100).toFixed(1) + '%'); });
+    box.addEventListener('pointerleave', () => { lgf.mx = lgf.my = -1e4; box.style.setProperty('--rx', '0deg'); box.style.setProperty('--ry', '0deg'); }); }
+  cancelAnimationFrame(lgf.raf);
+  const desenhar = () => {
+    ctx.clearRect(0, 0, lgf.w, lgf.h); const N = lgf.nos, D = 130;
+    N.forEach(p => { if (animAtiva()) { const dx = p.x - lgf.mx, dy = p.y - lgf.my, d2 = dx * dx + dy * dy; if (d2 < 22000) { const f = (22000 - d2) / 22000 * .6; p.vx += dx / Math.sqrt(d2 + 1) * f * .08; p.vy += dy / Math.sqrt(d2 + 1) * f * .08; }
+      p.vx *= .985; p.vy *= .985; if (Math.hypot(p.vx, p.vy) < .12) { p.vx += (Math.random() - .5) * .05; p.vy += (Math.random() - .5) * .05; } p.x += p.vx; p.y += p.vy;
+      if (p.x < 0 || p.x > lgf.w) p.vx *= -1; if (p.y < 0 || p.y > lgf.h) p.vy *= -1; } });
+    for (let i = 0; i < N.length; i++) for (let j = i + 1; j < N.length; j++) { const a = N[i], b = N[j], d = Math.hypot(a.x - b.x, a.y - b.y); if (d < D) { ctx.strokeStyle = `rgba(125,211,252,${(1 - d / D) * .28})`; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); } }
+    N.forEach(p => { const dm = Math.hypot(p.x - lgf.mx, p.y - lgf.my); if (dm < 170) { ctx.strokeStyle = `rgba(96,165,250,${(1 - dm / 170) * .55})`; ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(lgf.mx, lgf.my); ctx.stroke(); }
+      ctx.fillStyle = 'rgba(191,219,254,.8)'; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 6.283); ctx.fill(); });
+    if (animAtiva() && !document.hidden && !$('#login').classList.contains('hidden')) lgf.raf = requestAnimationFrame(desenhar);
+  };
+  desenhar();
+  // números e frases
+  const nums = $('.lg-nums'); if (nums) { nums.querySelectorAll('b').forEach(b => { b.textContent = b.dataset.n; delete b.dataset.contado; }); setTimeout(() => contarNumeros(nums), 500); }
+  clearInterval(lgf.tGiro); const g = $('#lg-giro');
+  if (g && animAtiva()) lgf.tGiro = setInterval(() => { if ($('#login').classList.contains('hidden')) return clearInterval(lgf.tGiro); lgf.giro = (lgf.giro + 1) % FRASES_LG.length; g.classList.remove('on'); setTimeout(() => { g.textContent = FRASES_LG[lgf.giro]; g.classList.add('on'); }, 260); }, 3400);
+  const sd = $('#lg-saud'); if (sd) { const h = new Date().getHours(); sd.textContent = h < 12 ? 'Bom dia!' : h < 18 ? 'Boa tarde!' : 'Boa noite!'; }
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) iniciarFundoLogin(); });
+function tremerLogin(){ const f = $('#f-login'); if (!f || !animAtiva()) return; f.classList.remove('treme'); void f.offsetWidth; f.classList.add('treme'); }
+function cartaoAparencia(){
+  return `<div class="cartao bl"><h3><i class="fa-solid fa-wand-magic-sparkles"></i>Aparência e interação</h3><p class="s">Preferências deste navegador.</p>
+    <label class="lg-lembrar"><input type="checkbox" ${animOn ? 'checked' : ''} onchange="alternarAnim(this.checked)">Animações da interface (entrada das telas, números que sobem, efeitos de toque)</label>
+    ${window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches ? '<p class="s" style="color:#b45309;margin-top:6px">O seu sistema operacional pede movimento reduzido; por isso as animações ficam desligadas.</p>' : ''}
+    <p class="s" style="margin-top:8px">Atalho: <kbd>Ctrl</kbd> + <kbd>K</kbd> abre a busca rápida para ir a qualquer seção, setor, escola ou ação.</p></div>`;
+}
+
 /* ===================== MENU LATERAL: RECOLHER E AJUSTAR LARGURA ===================== */
 let ladoCfg = Object.assign({ mini:false, w:236 }, store.get('gaborg_lado', {}));
 function aplicarLado(){
@@ -4965,6 +5079,7 @@ function menuUsuario(){
     <div class="cab"><span class="av">${esc(iniciais(cfg.usuario || cfg.login))}</span><div style="min-width:0"><b>${esc(cfg.usuario || cfg.login || 'Usuário')}</b><small>${esc(cfg.login || '')} · ${esc(cfg.perfil || '')}</small>${sync}</div></div>
     ${appInstalavel() ? '<button class="it" data-a="instalar"><i class="fa-solid fa-download"></i>Instalar o GABOrg como app</button>' : ''}
     <button class="it" data-a="atualizar"><i class="fa-solid fa-rotate"></i>${atu.nova ? `Atualizar para a versão ${esc(atu.nova)}` : 'Verificar atualização'}<small style="margin-left:auto;color:var(--mut2)">v${VERSAO}</small></button>
+    <button class="it" data-a="busca"><i class="fa-solid fa-magnifying-glass"></i>Busca rápida</button>
     <button class="it" data-a="tv"><i class="fa-solid fa-tv"></i>Modo TV (apresentação)</button>
     <button class="it" data-a="tema"><i class="fa-solid fa-circle-half-stroke"></i>${escuro ? 'Tema claro' : 'Tema escuro'}</button>
     <button class="it" data-a="senha"><i class="fa-solid fa-key"></i>Alterar minha senha</button>
@@ -4977,6 +5092,7 @@ function menuUsuario(){
     m.remove(); const a = b && b.dataset.a;
     if (a === 'instalar') instalarApp();
     if (a === 'atualizar') { if (atu.nova) atualizarApp(); else verificarAtualizacao(true); }
+    if (a === 'busca') setTimeout(abrirPaleta, 50);
     if (a === 'tv') abrirModoTV();
     if (a === 'tema') alternarTema();
     if (a === 'senha') modalTrocarSenha(false);
