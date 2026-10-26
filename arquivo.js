@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.23.1';
+const VERSAO = '1.24.0';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -4253,6 +4253,120 @@ function exportarAta(id, modo){
   if (modo === 'word') baixarWord('memoria-reuniao-' + String(r.data).slice(0, 10), 'Memória de reunião', h); else imprimirDoc('Memória de reunião', h);
 }
 
+/* ===================== FIGURAS VETORIAIS PARA RELATÓRIOS: ORGANOGRAMA E MAPAS ===================== */
+const FIG_FONTE = 'Helvetica, Arial, sans-serif';
+const MODOS_COR_ORG = { tipo:'Tipo de unidade', area:'Secretaria adjunta', impacto:'Impacto', validacao:'Situação da validação', chefia:'Situação da chefia' };
+function quebrarTexto(t, max, linhas){ const p = String(t || '').split(/\s+/), r = []; let l = ''; p.forEach(w => { if ((l + ' ' + w).trim().length > max) { if (l) r.push(l); l = w; } else l = (l + ' ' + w).trim(); }); if (l) r.push(l); if (r.length > linhas) { r.length = linhas; r[linhas - 1] = r[linhas - 1].replace(/.{0,2}$/, '') + '…'; } return r; }
+function corOrg(s, modo){
+  if (modo === 'area') return corArea(areaDe.get(s.id) || s.id);
+  if (modo === 'impacto') return (IMPACTO[num(s.impacto)] || IMPACTO[0])[1];
+  if (modo === 'validacao') return STATUS_VAL[statusVal(s.id)] || '#94a3b8';
+  if (modo === 'chefia') return CHEFIAS.includes(s.tipo) ? (SIT_CH[chefiaDe(s).situacao] || '#94a3b8') : '#cbd5e1';
+  return corTipo(s.tipo);
+}
+function legendaOrg(lista, modo){
+  const usados = new Map(); lista.forEach(s => { const c = corOrg(s, modo); let n;
+    if (modo === 'area') n = nomeCurto(porId.get(areaDe.get(s.id) || s.id)); else if (modo === 'impacto') n = (IMPACTO[num(s.impacto)] || IMPACTO[0])[0]; else if (modo === 'validacao') n = statusVal(s.id); else if (modo === 'chefia') n = CHEFIAS.includes(s.tipo) ? chefiaDe(s).situacao : 'Não é chefia'; else n = s.tipo;
+    const k = n; const o = usados.get(k) || { c, n:0 }; o.n++; usados.set(k, o); });
+  return [...usados.entries()].sort((a, b) => b[1].n - a[1].n).slice(0, 18).map(([n, o]) => [o.c, `${n} (${o.n})`]);
+}
+/* organograma: caixas e conectores; listas de folhas empilhadas; muitos filhos quebram em linhas */
+function orgSVG(lista, o){
+  o = Object.assign({ raiz:'', nivelMax:99, modo:'tipo', vinculos:false, marcas:false, maxLinha:6 }, o || {});
+  const ativos = lista.filter(s => s.status !== 'Extinto' || o.marcas), ids = new Set(ativos.map(s => s.id)), fil = new Map();
+  ativos.forEach(s => { const p = ids.has(s.paiId) ? s.paiId : ''; if (!fil.has(p)) fil.set(p, []); fil.get(p).push(s); });
+  fil.forEach(l => l.sort((a, b) => num(a.ordem) - num(b.ordem) || a.nome.localeCompare(b.nome, 'pt-BR')));
+  const BW = 156, BH = 52, GX = 14, GY = 30, PIL = 7, IND = 16, desc = id => { let n = 0; (fil.get(id) || []).forEach(k => { n += 1 + desc(k.id); }); return n; };
+  const raizes = o.raiz ? ativos.filter(s => s.id === o.raiz) : (fil.get('') || []);
+  const kidsDe = (n, d) => d >= o.nivelMax ? [] : (fil.get(n.id) || []);
+  function medir(n, d){
+    const k = kidsDe(n, d); n._k = k; n._d = d; n._oc = d >= o.nivelMax ? desc(n.id) : 0;
+    if (!k.length) { n._w = BW; n._h = BH; n._modo = 'folha'; return; }
+    k.forEach(c => medir(c, d + 1));
+    if (k.every(c => !c._k.length) && k.length >= 3) { n._modo = 'pilha'; n._nc = Math.ceil(k.length / 8); n._per = Math.ceil(k.length / n._nc); n._w = n._nc * (BW + IND) + (n._nc - 1) * GX; n._h = BH + GY * .6 + n._per * (BH + PIL); return; }
+    n._modo = 'linhas'; let itens = k;
+    const folhas = k.filter(c => !c._k.length); if (folhas.length >= 3) { const ramos = k.filter(c => c._k.length), cols = []; const porCol = Math.max(4, Math.ceil(folhas.length / Math.ceil(folhas.length / 8)));
+      for (let i = 0; i < folhas.length; i += porCol) { const g = folhas.slice(i, i + porCol); cols.push({ _virt:true, _k:g, _w:BW + IND, _h:g.length * (BH + PIL) - PIL, _modo:'grupo' }); } itens = cols.concat(ramos); }
+    n._rows = []; for (let i = 0; i < itens.length; i += o.maxLinha) n._rows.push(itens.slice(i, i + o.maxLinha));
+    n._w = Math.max(BW, ...n._rows.map(r => r.reduce((t, c) => t + c._w, 0) + GX * (r.length - 1)));
+    n._h = BH + n._rows.reduce((t, r) => t + GY + Math.max(...r.map(c => c._h)), 0);
+  }
+  const caixas = [], linhas = [];
+  function pos(n, x, y){
+    if (n._virt) { n._x = x; n._y = y; let yy = y; n._k.forEach((c, i) => { pos(c, x + IND, yy); linhas.push(`M${x + 7} ${i ? yy - PIL - BH / 2 : y - GY / 2}V${yy + BH / 2}H${x + IND}`); yy += BH + PIL; }); return; }
+    n._x = x + (n._modo === 'pilha' && n._nc === 1 ? 0 : (n._w - BW) / 2); n._y = y; caixas.push(n);
+    if (n._modo === 'pilha') { const yb = y + BH + GY * .3; if (n._nc > 1) { linhas.push(`M${n._x + BW / 2} ${y + BH}V${yb}`); linhas.push(`M${x + 7} ${yb}H${x + (n._nc - 1) * (BW + IND + GX) + 7}`); }
+      n._k.forEach((c, i) => { const col = Math.floor(i / n._per), lin = i % n._per, cx0 = x + col * (BW + IND + GX), yy = y + BH + GY * .6 + lin * (BH + PIL); pos(c, cx0 + IND, yy);
+        linhas.push(`M${cx0 + 7} ${lin ? yy - PIL - BH / 2 : (n._nc > 1 ? yb : y + BH)}V${yy + BH / 2}H${cx0 + IND}`); }); return; }
+    if (n._modo !== 'linhas') return;
+    const cx = n._x + BW / 2; let yy = y + BH;
+    n._rows.forEach((r, ri) => { const rw = r.reduce((t, c) => t + c._w, 0) + GX * (r.length - 1); let xx = x + (n._w - rw) / 2; const bus = yy + GY / 2;
+      const centros = r.map(c => { const cc = xx + c._w / 2; pos(c, xx, yy + GY); xx += c._w + GX; return c._virt ? c._x + 7 : c._modo === 'pilha' ? c._x + BW / 2 : cc; });
+      linhas.push(`M${cx} ${yy - (ri ? GY / 2 : 0)}V${bus}`); linhas.push(`M${Math.min(cx, ...centros)} ${bus}H${Math.max(cx, ...centros)}`); centros.forEach((c, j) => { if (!r[j]._virt) linhas.push(`M${c} ${bus}V${yy + GY}`); });
+      yy += GY + Math.max(...r.map(c => c._h)); });
+  }
+  let X = 0, H = 0; raizes.forEach(r => { medir(r, 0); pos(r, X, 0); X += r._w + GX * 2; H = Math.max(H, r._h); });
+  const W = Math.max(BW, X - GX * 2), M = 10;
+  const MARCA = { novo:['#16a34a', 'Criada'], extinto:['#dc2626', 'Extinta'], movido:['#2563eb', 'Movida'], renomeado:['#7c3aed', 'Renomeada'] };
+  const caixa = s => { const c = corOrg(s, o.modo), mk = o.marcas && (s._marcas || []).find(m => MARCA[m]), nome = quebrarTexto(s.nome, 30, s.sigla ? 2 : 3), ext = s.status === 'Extinto';
+    return `<g><rect x="${s._x}" y="${s._y}" width="${BW}" height="${BH}" rx="6" fill="${ext ? '#fef2f2' : '#ffffff'}" stroke="${mk ? MARCA[mk][0] : '#cbd5e1'}" stroke-width="${mk ? 2.4 : .8}" ${ext ? 'stroke-dasharray="4 3"' : ''}/><rect x="${s._x}" y="${s._y}" width="5" height="${BH}" rx="2" fill="${c}"/>
+      ${s.sigla ? `<text x="${s._x + 11}" y="${s._y + 13}" font-family="${FIG_FONTE}" font-size="8.5" font-weight="bold" fill="${c}">${esc(s.sigla.slice(0, 26))}</text>` : ''}
+      ${nome.map((l, i) => `<text x="${s._x + 11}" y="${s._y + (s.sigla ? 25 : 15) + i * 10.5}" font-family="${FIG_FONTE}" font-size="8.2" fill="#0f172a">${esc(l)}</text>`).join('')}
+      ${s._oc ? `<rect x="${s._x + BW - 30}" y="${s._y + BH - 13}" width="26" height="11" rx="5" fill="#e2e8f0"/><text x="${s._x + BW - 17}" y="${s._y + BH - 4.5}" font-family="${FIG_FONTE}" font-size="7" text-anchor="middle" fill="#334155">+${s._oc}</text>` : ''}
+      ${mk ? `<text x="${s._x + BW - 4}" y="${s._y + 10}" font-family="${FIG_FONTE}" font-size="7" font-weight="bold" text-anchor="end" fill="${MARCA[mk][0]}">${MARCA[mk][1].toUpperCase()}</text>` : ''}</g>`; };
+  let vin = '';
+  if (o.vinculos) { const mp = new Map(caixas.map(s => [s.id, s])); (DB.vinculos || []).forEach(v => { const a = mp.get(v.origemId), b = mp.get(v.destinoId); if (!a || !b) return; const x1 = a._x + BW / 2, y1 = a._y + BH / 2, x2 = b._x + BW / 2, y2 = b._y + BH / 2, cy = Math.min(y1, y2) - 40; vin += `<path d="M${x1} ${y1}Q${(x1 + x2) / 2} ${cy} ${x2} ${y2}" fill="none" stroke="#8b5cf6" stroke-width="1.2" stroke-dasharray="5 4" opacity=".75"/>`; }); }
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-M} ${-M} ${W + 2 * M} ${H + 2 * M}" width="${W + 2 * M}" height="${H + 2 * M}"><rect x="${-M}" y="${-M}" width="${W + 2 * M}" height="${H + 2 * M}" fill="#ffffff"/><g fill="none" stroke="#94a3b8" stroke-width="1">${linhas.map(d => `<path d="${d}"/>`).join('')}</g>${vin}${caixas.map(caixa).join('')}</svg>`;
+  const leg = legendaOrg(caixas, o.modo);
+  if (o.vinculos && vin) leg.push(['#8b5cf6', 'Vínculo entre setores (tracejado)']);
+  if (o.marcas) Object.values(MARCA).forEach(([c, n]) => leg.push([c, 'Borda: unidade ' + n.toLowerCase()]));
+  if (caixas.some(s => s._oc)) leg.push(['#e2e8f0', '+N: unidades subordinadas não desenhadas neste nível']);
+  return { svg, w:W + 2 * M, h:H + 2 * M, n:caixas.length, leg };
+}
+/* mapas de Mato Grosso (vetor, fundo claro) */
+let _vizMun = null;
+function coresVizinhosMT(){ if (_vizMun) return _vizMun; const obj = MALHA_MT.objects[Object.keys(MALHA_MT.objects)[0]], g = obj.geometries, viz = topojson.neighbors(g), PAL = ['#fde68a', '#a7f3d0', '#bfdbfe', '#fecaca', '#ddd6fe', '#fed7aa', '#a5f3fc', '#f5d0fe', '#d9f99d'], cor = [];
+  g.map((x, i) => i).sort((a, b) => viz[b].length - viz[a].length).forEach(i => { const us = new Set(viz[i].map(j => cor[j])); let c = (i * 7) % PAL.length, t = 0; while (us.has(c) && t++ < PAL.length) c = (c + 1) % PAL.length; cor[i] = c; });
+  return _vizMun = g.map((x, i) => PAL[cor[i] % PAL.length]); }
+const halo = (x, y, t, at) => `<text x="${x}" y="${y}" ${at} stroke="#ffffff" stroke-width="3" stroke-linejoin="round">${t}</text><text x="${x}" y="${y}" ${at}>${t}</text>`;
+function mapaSVG(o){
+  o = Object.assign({ modo:'dre', dre:'', ligacoes:false, nomes:false, titulo:'' }, o || {});
+  const obj = MALHA_MT.objects[Object.keys(MALHA_MT.objects)[0]], fc = topojson.feature(MALHA_MT, obj), X = distanciasMT(), dres = X.dres, porMun = dreDosMunicipios(), viz = o.modo === 'mun' ? coresVizinhosMT() : null;
+  const kx = Math.cos(-13 * Math.PI / 180), anel = g => g.type === 'Polygon' ? [g.coordinates] : g.coordinates;
+  let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; const inc = (lo, la) => { const x = lo * kx, y = -la; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; };
+  const doDre = o.dre ? X.lista.filter(e => e.e.dre === o.dre) : null;
+  if (doDre && doDre.length) { doDre.forEach(e => inc(e.e.longitude, e.e.latitude)); const s = X.sedes.get(o.dre); inc(s[1], s[0]); const pd = Math.max(x1 - x0, y1 - y0) * .12 + .15; x0 -= pd; x1 += pd; y0 -= pd; y1 += pd; }
+  else fc.features.forEach(f => anel(f.geometry).forEach(pl => pl[0].forEach(([lo, la]) => inc(lo, la))));
+  const W = 1000, s = W / (x1 - x0), Hh = (y1 - y0) * s, P = (lo, la) => [(lo * kx - x0) * s, (-la - y0) * s], f1 = v => v.toFixed(1);
+  const path = g => anel(g).map(pl => pl.map(r => 'M' + r.map(([lo, la]) => P(lo, la).map(f1).join(',')).join('L') + 'Z').join('')).join('');
+  const dreMun = f => { const q = porMun.get(chaveMun(f.properties.nome)); return q ? Object.entries(q).sort((a, b) => b[1] - a[1])[0][0] : ''; };
+  const cid = 'cl' + (++mapaSVG.n), zoom = !!(doDre && doDre.length), rp = zoom ? 4.2 : 2.6, sw = zoom ? 1 : .6;
+  const mun = fc.features.map((f, i) => { const d = dreMun(f); let fill = '#f1f5f9', op = 1;
+    if (o.modo === 'mun') fill = viz[i]; else if (d) { fill = corDRE(dres, d); op = o.dre && d !== o.dre ? .06 : .22; }
+    return `<path d="${path(f.geometry)}" fill="${fill}" fill-opacity="${op}" stroke="#64748b" stroke-width="${sw}" stroke-opacity=".55"/>`; }).join('');
+  const lista = doDre || X.lista, sedes = X.sedes;
+  const lig = (o.ligacoes || o.modo === 'dist') ? lista.map(e => { const a = P(e.e.longitude, e.e.latitude), b = P(sedes.get(e.e.dre)[1], sedes.get(e.e.dre)[0]); return `<path d="M${f1(a[0])},${f1(a[1])}L${f1(b[0])},${f1(b[1])}" stroke="${o.modo === 'dist' ? faixaDist(e.km)[2] : corDRE(dres, e.e.dre)}" stroke-width="${zoom ? .9 : .5}" stroke-opacity=".55"/>`; }).join('') : '';
+  const pts = lista.map(e => { const [x, y] = P(e.e.longitude, e.e.latitude), c = o.modo === 'dist' ? faixaDist(e.km)[2] : o.modo === 'mun' ? '#0f172a' : corDRE(dres, e.e.dre); return `<circle cx="${f1(x)}" cy="${f1(y)}" r="${rp}" fill="${c}" stroke="#ffffff" stroke-width=".7"/>`; }).join('');
+  const sd = dres.filter(d => !o.dre || d === o.dre).map(d => { const [x, y] = P(sedes.get(d)[1], sedes.get(d)[0]), n = X.lista.filter(e => e.e.dre === d).length, c = corDRE(dres, d);
+    return `<circle cx="${f1(x)}" cy="${f1(y)}" r="${zoom ? 14 : 10}" fill="${c}" stroke="#ffffff" stroke-width="2"/><text x="${f1(x)}" y="${f1(y + 3.2)}" text-anchor="middle" font-family="${FIG_FONTE}" font-size="${zoom ? 10 : 8.5}" font-weight="bold" fill="#ffffff">${n}</text>${halo(f1(x + (zoom ? 18 : 13)), f1(y + 4), esc(nomeDRE(d)), `font-family="${FIG_FONTE}" font-size="${zoom ? 13 : 10.5}" font-weight="bold" fill="#0f172a"`)}`; }).join('');
+  let nomes = '';
+  if (o.nomes || zoom) { const vist = new Set(); fc.features.forEach(f => { const d = dreMun(f); if (o.dre && d !== o.dre) return; const k = chaveMun(f.properties.nome); if (vist.has(k)) return; vist.add(k); let a = 1e9, b = -1e9, c = 1e9, e2 = -1e9; anel(f.geometry).forEach(pl => pl[0].forEach(([lo, la]) => { const [x, y] = P(lo, la); a = Math.min(a, x); b = Math.max(b, x); c = Math.min(c, y); e2 = Math.max(e2, y); }));
+    if (b < 0 || a > W || e2 < 0 || c > Hh) return; nomes += halo(f1((a + b) / 2), f1((c + e2) / 2), esc(f.properties.nome), `text-anchor="middle" font-family="${FIG_FONTE}" font-size="${zoom ? 9 : 6}" fill="#334155"`); }); }
+  // escala e norte
+  const kmPorUnid = 111.32 / s / 1, alvoKm = zoom ? 50 : 200, lw = alvoKm / kmPorUnid, ey = Hh + 26;
+  const extra = `<g font-family="${FIG_FONTE}" font-size="10" fill="#334155"><path d="M10 ${f1(ey)}h${f1(lw)}" stroke="#334155" stroke-width="2"/><path d="M10 ${f1(ey - 4)}v8M${f1(10 + lw)} ${f1(ey - 4)}v8M${f1(10 + lw / 2)} ${f1(ey - 3)}v6" stroke="#334155" stroke-width="1.2"/><text x="10" y="${f1(ey + 14)}">0</text><text x="${f1(10 + lw)}" y="${f1(ey + 14)}" text-anchor="middle">${alvoKm} km</text>
+    <g transform="translate(${W - 20},18)"><path d="M0 -14L7 8L0 3L-7 8Z" fill="#0f172a"/><text y="20" text-anchor="middle" font-weight="bold">N</text></g></g>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-10 -10 ${W + 20} ${f1(Hh + 60)}" width="${W + 20}" height="${f1(Hh + 70)}"><rect x="-10" y="-10" width="${W + 20}" height="${f1(Hh + 70)}" fill="#ffffff"/><defs><clipPath id="${cid}"><rect x="0" y="0" width="${W}" height="${f1(Hh)}"/></clipPath></defs><g clip-path="url(#${cid})">${mun}<g fill="none">${lig}</g>${pts}${nomes}</g>${sd}${extra}</svg>`;
+  let leg;
+  if (o.modo === 'dist') leg = FAIXAS_DIST.map(f => [f[2], `${f[1]} (${lista.filter(e => faixaDist(e.km) === f).length})`]);
+  else if (o.modo === 'mun') leg = [['#fde68a', 'Cada cor separa municípios vizinhos'], ['#0f172a', 'Unidade escolar']];
+  else leg = dres.filter(d => !o.dre || d === o.dre).map(d => [corDRE(dres, d), `${nomeDRE(d)} (${X.lista.filter(e => e.e.dre === d).length})`]);
+  leg.push(['#ffffff', 'Círculo grande: sede da DRE, com o número de escolas']);
+  if (lig) leg.push(['#94a3b8', 'Linha: ligação da escola com a sede da sua DRE']);
+  return { svg, w:W + 20, h:Hh + 70, leg };
+}
+mapaSVG.n = 0;
+
 /* ===================== DOCUMENTOS: MODELO ÚNICO → PRÉVIA, PDF, WORD E IMPRESSÃO ===================== */
 const SISTEMA_NOME = 'GABOrg · Organização Institucional', SISTEMA_ORG = 'Secretaria de Estado de Educação de Mato Grosso – SEDUC-MT';
 /* código de verificação: GAB-REL-20261025-K7Q2X (o último caractere confere os demais) */
@@ -4291,13 +4405,18 @@ function docHTML(blocos, o){
       case 'alertas': return `<div class="d-alertas">${b.it.map(([t, x]) => `<p class="d-al ${t}">${runsHTML(x)}</p>`).join('')}</div>`;
       case 'nota': return `<p class="d-nota">${runsHTML(b.x)}</p>`;
       case 'quebra': return '<div class="d-quebra"></div>';
+      case 'sumario': return `<h1 class="d-h1">Sumário</h1><div class="d-lista">${b.it.map((x, i) => `<p><b>${i + 1}.</b> ${esc(x)}</p>`).join('')}</div>`;
+      case 'legenda': return `<div class="d-leg">${b.it.map(([c, t]) => `<span><i style="background:${c}"></i>${esc(t)}</span>`).join('')}</div>`;
+      case 'fig': return `<figure class="d-fig ${b.paisagem ? 'pais' : ''}"><figcaption>Figura ${b.num} – ${esc(b.titulo)}</figcaption><div class="d-fig-img">${b.svg}</div>${b.leg && b.leg.length ? `<div class="d-leg"><b>Legenda</b>${b.leg.map(([c, t]) => `<span><i style="background:${c}"></i>${esc(t)}</span>`).join('')}</div>` : ''}${b.nota ? `<p class="d-nota">${esc(b.nota)}</p>` : ''}<p class="d-fonte">${esc(b.fonte || '')}</p></figure>`;
       case 'ass': return `<p class="d-ass">______________________________________<br><b>${esc(b.x)}</b>${b.sub ? '<br>' + esc(b.sub) : ''}</p>`;
       case 'selo': return `<div class="d-aut"><div>${seloSVG(b.codigo, b.data, 110)}</div><div><b>Autenticação</b><p>Documento gerado pelo ${esc(SISTEMA_NOME)} em ${esc(b.quando)}${b.por ? ' por ' + esc(b.por) : ''}.</p><p>Código de verificação: <b>${esc(b.codigo)}</b></p><p class="pq">Para conferir, abra o GABOrg › Relatórios e minutas › Verificar código.</p></div></div>`;
     } return '';
   }).join('');
   return `<div class="d-doc ${o.minuta ? 'minuta' : ''}">${o.minuta ? '<div class="d-marca">MINUTA</div>' : ''}${o.cabecalho ? `<div class="d-cab"><span>${esc(SISTEMA_NOME)}</span><span>${esc(o.cabecalho)}</span></div>` : ''}${h}</div>`;
 }
-const ESTILO_REL = `.d-doc{font-family:Helvetica,Arial,sans-serif;font-size:10.5pt;color:#0f172a;line-height:1.45;position:relative}
+const ESTILO_REL = `.d-fig{margin:12px 0 18px;page-break-inside:avoid;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px}.d-fig figcaption{font-weight:bold;color:#1e3a8a;font-size:10.5pt;margin-bottom:6px}.d-fig-img svg{width:100%;height:auto;max-height:620px;display:block}.d-fig.pais .d-fig-img svg{max-height:720px}
+.d-leg{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:8.5pt;color:#334155;margin-top:6px}.d-leg b{width:100%;font-size:8.5pt}.d-leg span{display:inline-flex;gap:5px;align-items:center}.d-leg i{width:10px;height:10px;border-radius:2px;border:1px solid #94a3b8;display:inline-block}.d-fonte{font-size:7.5pt;color:#64748b;font-style:italic;margin:2px 0 0!important}
+.d-doc{font-family:Helvetica,Arial,sans-serif;font-size:10.5pt;color:#0f172a;line-height:1.45;position:relative}
 .d-doc.minuta{font-family:'Times New Roman',Times,serif;font-size:12pt}
 .d-marca{position:absolute;top:240px;left:0;right:0;text-align:center;font-size:110px;font-weight:bold;color:rgba(30,58,138,.06);transform:rotate(-30deg);pointer-events:none;letter-spacing:.1em}
 .d-cab{display:flex;justify-content:space-between;font-size:8.5pt;color:#64748b;border-bottom:1px solid #cbd5e1;padding-bottom:4px;margin-bottom:14px}
@@ -4324,42 +4443,59 @@ async function carregarPdfMake(){
 }
 function docPDF(blocos, o){
   const lc = '#cbd5e1', layoutTab = { hLineWidth:() => .5, vLineWidth:() => .5, hLineColor:() => lc, vLineColor:() => lc, paddingLeft:() => 4, paddingRight:() => 4, paddingTop:() => 2, paddingBottom:() => 2 };
-  const W = o.minuta ? 451 : 483, conteudo = [];
+  const base = o.paisagem ? 'landscape' : 'portrait', mg = o.minuta ? [85, 60, 57, 55] : [50, 58, 50, 50];
+  const larg = or => (or === 'landscape' ? 842 : 595) - mg[0] - mg[2], alt = or => (or === 'landscape' ? 595 : 842) - mg[1] - mg[3];
+  let orient = base, pend = false, primeiro = true, ultH1 = -1; const conteudo = [];
+  const legendaPDF = (it, W) => { const cols = W > 600 ? 3 : 2, lin = []; for (let i = 0; i < it.length; i += cols) lin.push(it.slice(i, i + cols)); return { table:{ widths:Array(cols).fill('*'), body:lin.map(l => l.concat(Array(cols - l.length).fill(null)).map(x => x ? { columns:[{ canvas:[{ type:'rect', x:0, y:1, w:9, h:9, r:2, color:x[0], lineColor:'#94a3b8', lineWidth:.5 }], width:13 }, { text:x[1], fontSize:7.5 }] } : '')) }, layout:'noBorders', margin:[0, 4, 0, 2] }; };
   blocos.forEach(b => {
+    const quer = b.t === 'fig' && b.paisagem && base === 'portrait' ? 'landscape' : base, ns = [], W = larg(quer);
+    if (quer !== orient && !primeiro) pend = true;
+    let cabFig = null; if (b.t === 'fig' && !o.minuta && ultH1 >= 0 && ultH1 === conteudo.length - 2) { cabFig = conteudo.splice(ultH1); if (cabFig[0].pageBreak) pend = true; delete cabFig[0].pageBreak; delete cabFig[0].pageOrientation; delete cabFig[0].headlineLevel; cabFig[1].canvas[0].x2 = W; }
     switch (b.t) {
-      case 'capa': conteudo.push({ stack:[{ text:SISTEMA_NOME, style:'capaSup' }, { text:SISTEMA_ORG, style:'capaOrg' }, { text:b.titulo, style:'capaTit' }, b.sub ? { text:b.sub, style:'capaSub' } : '', { svg:seloSVG(b.codigo, b.data, 150), width:150, alignment:'center', margin:[0, 30, 0, 30] },
-        { table:{ widths:[150, '*'], body:(b.linhas || []).map(([k, v]) => [{ text:k, color:'#475569' }, { text:String(v), bold:true }]) }, layout:{ hLineWidth:(i) => i ? .5 : 0, vLineWidth:() => 0, hLineColor:() => '#e2e8f0' }, margin:[40, 0, 40, 0] }], pageBreak:'after' }); break;
-      case 'h1': conteudo.push({ text:b.x, style:o.minuta ? 'mh1' : 'h1' }); if (!o.minuta) conteudo.push({ canvas:[{ type:'line', x1:0, y1:0, x2:W, y2:0, lineWidth:1.2, lineColor:'#1e3a8a' }], margin:[0, 0, 0, 6] }); break;
-      case 'h2': conteudo.push({ text:b.x, style:o.minuta ? 'mh2' : 'h2' }); break;
-      case 'h3': conteudo.push({ text:b.x, style:o.minuta ? 'mh3' : 'h3' }); break;
-      case 'p': conteudo.push({ text:runsPDF(b.x), alignment:b.centro ? 'center' : 'justify', italics:!!b.ementa, margin:[b.ementa ? W * .45 : (b.recuo || 0) * 20, b.ementa ? 8 : 0, 0, b.ementa ? 10 : 5] }); break;
-      case 'kpis': { const lin = []; for (let i = 0; i < b.it.length; i += 4) lin.push(b.it.slice(i, i + 4)); lin.forEach(l => conteudo.push({ columns:l.map(([r, v, s, c]) => ({ stack:[{ canvas:[{ type:'line', x1:0, y1:0, x2:112, y2:0, lineWidth:2.5, lineColor:c || '#1e3a8a' }] }, { text:r, fontSize:7.5, color:'#64748b', margin:[0, 4, 0, 0] }, { text:String(v), fontSize:14, bold:true }, s ? { text:s, fontSize:7, color:'#64748b' } : ''] })).concat(Array(4 - l.length).fill({ text:'' })), columnGap:9, margin:[0, 2, 0, 8] })); break; }
+      case 'capa': ns.push({ stack:[{ text:SISTEMA_NOME, style:'capaSup' }, { text:SISTEMA_ORG, style:'capaOrg' }, { text:b.titulo, style:'capaTit' }, b.sub ? { text:b.sub, style:'capaSub' } : '', { svg:seloSVG(b.codigo, b.data, 150), width:150, alignment:'center', margin:[0, 30, 0, 30] },
+        { table:{ widths:[150, '*'], body:(b.linhas || []).map(([k, v]) => [{ text:k, color:'#475569' }, { text:String(v), bold:true }]) }, layout:{ hLineWidth:(i) => i ? .5 : 0, vLineWidth:() => 0, hLineColor:() => '#e2e8f0' }, margin:[40, 0, 40, 0] }] }); break;
+      case 'sumario': ns.push({ toc:{ title:{ text:'Sumário', style:'h1' }, numberStyle:{ bold:true } } }); break;
+      case 'h1': ns.push({ text:b.x, style:o.minuta ? 'mh1' : 'h1', tocItem:!o.minuta, headlineLevel:1 }); if (!o.minuta) ns.push({ canvas:[{ type:'line', x1:0, y1:0, x2:W, y2:0, lineWidth:1.2, lineColor:'#1e3a8a' }], margin:[0, 0, 0, 6] }); break;
+      case 'h2': ns.push({ text:b.x, style:o.minuta ? 'mh2' : 'h2', headlineLevel:2 }); break;
+      case 'h3': ns.push({ text:b.x, style:o.minuta ? 'mh3' : 'h3', headlineLevel:3 }); break;
+      case 'p': ns.push({ text:runsPDF(b.x), alignment:b.centro ? 'center' : 'justify', italics:!!b.ementa, margin:[b.ementa ? W * .45 : (b.recuo || 0) * 20, b.ementa ? 8 : 0, 0, b.ementa ? 10 : 5] }); break;
+      case 'kpis': { const cw = (W - 27) / 4; for (let i = 0; i < b.it.length; i += 4) { const l = b.it.slice(i, i + 4); ns.push({ columns:l.map(([r, v, s, c]) => ({ stack:[{ canvas:[{ type:'line', x1:0, y1:0, x2:cw, y2:0, lineWidth:2.5, lineColor:c || '#1e3a8a' }] }, { text:r, fontSize:7.5, color:'#64748b', margin:[0, 4, 0, 0] }, { text:String(v), fontSize:14, bold:true }, s ? { text:s, fontSize:7, color:'#64748b' } : ''] })).concat(Array(4 - l.length).fill({ text:'' })), columnGap:9, margin:[0, 2, 0, 8] }); } break; }
       case 'tab': { const dir = b.dir || [];
-        conteudo.push({ table:{ headerRows:1, widths:b.larg || b.cab.map(() => '*'), dontBreakRows:true, body:[b.cab.map((c, i) => ({ text:c, bold:true, fillColor:o.minuta ? '#eeeeee' : '#e2e8f0', alignment:dir.includes(i) ? 'right' : 'left' }))].concat(b.lin.length ? b.lin.map(l => l.map((c, i) => ({ text:String(celTxt(c) ?? ''), alignment:dir.includes(i) ? 'right' : 'left', fillColor:c && c.cor ? c.cor : undefined, bold:!!(c && c.b) }))) : [[{ text:'Sem registros.', colSpan:b.cab.length, alignment:'center', color:'#94a3b8' }].concat(Array(b.cab.length - 1).fill(''))]) },
+        ns.push({ table:{ headerRows:1, keepWithHeaderRows:1, widths:b.larg || b.cab.map(() => '*'), dontBreakRows:true, body:[b.cab.map((c, i) => ({ text:c, bold:true, fillColor:o.minuta ? '#eeeeee' : '#e2e8f0', alignment:dir.includes(i) ? 'right' : 'left' }))].concat(b.lin.length ? b.lin.map(l => l.map((c, i) => ({ text:String(celTxt(c) ?? ''), alignment:dir.includes(i) ? 'right' : 'left', fillColor:c && c.cor ? c.cor : undefined, bold:!!(c && c.b) }))) : [[{ text:'Sem registros.', colSpan:b.cab.length, alignment:'center', color:'#94a3b8' }].concat(Array(b.cab.length - 1).fill(''))]) },
           layout:o.minuta ? { hLineWidth:() => .5, vLineWidth:() => .5, paddingLeft:() => 4, paddingRight:() => 4 } : layoutTab, fontSize:b.pq ? 7.5 : 8.5, margin:[0, 3, 0, 10] }); break; }
-      case 'barras': { if (!b.it.length) { conteudo.push({ text:'Sem dados.', color:'#94a3b8', margin:[0, 2, 0, 8] }); break; } const mx = Math.max(1, ...b.it.map(x => x[1])), bw = W - 260;
-        conteudo.push({ table:{ widths:[160, bw, 80], body:b.it.map(([n, v, r, c]) => [{ text:n, fontSize:8.5 }, { canvas:[{ type:'rect', x:0, y:2, w:bw, h:7, r:3, color:'#f1f5f9' }, { type:'rect', x:0, y:2, w:Math.max(1, v / mx * bw), h:7, r:3, color:c || '#2563eb' }] }, { text:String(r ?? fmtN(v)), alignment:'right', bold:true, fontSize:8.5 }]) }, layout:'noBorders', margin:[0, 2, 0, 10] }); break; }
-      case 'lista': b.it.forEach(([x, n]) => conteudo.push({ text:runsPDF(x), margin:[(n || 0) * 16, 0, 0, 2], fontSize:o.minuta ? 12 : 9.5 })); break;
-      case 'alertas': if (!b.it.length) break; conteudo.push({ table:{ widths:[3, '*'], body:b.it.map(([t, x]) => [{ text:'', fillColor:{ alerta:'#dc2626', atencao:'#d97706', ok:'#16a34a' }[t] || '#2563eb' }, { text:runsPDF(x), fillColor:'#f8fafc', margin:[4, 2, 2, 2] }]) }, layout:{ hLineWidth:() => 2, hLineColor:() => '#ffffff', vLineWidth:() => 0 }, margin:[0, 2, 0, 10] }); break;
-      case 'nota': conteudo.push({ text:runsPDF(b.x), fontSize:7.5, color:'#64748b', margin:[0, 2, 0, 8] }); break;
-      case 'quebra': conteudo.push({ text:'', pageBreak:'after' }); break;
-      case 'ass': conteudo.push({ stack:[{ text:'______________________________________', alignment:'center', margin:[0, 30, 0, 0] }, { text:b.x, bold:true, alignment:'center' }, b.sub ? { text:b.sub, alignment:'center' } : ''], unbreakable:true }); break;
-      case 'selo': conteudo.push({ table:{ widths:[100, '*'], body:[[{ svg:seloSVG(b.codigo, b.data, 96), width:96 }, { stack:[{ text:'Autenticação', bold:true, margin:[0, 6, 0, 4] }, { text:`Documento gerado pelo ${SISTEMA_NOME} em ${b.quando}${b.por ? ' por ' + b.por : ''}.`, fontSize:9 }, { text:[{ text:'Código de verificação: ', fontSize:9 }, { text:b.codigo, bold:true, fontSize:10 }], margin:[0, 4, 0, 4] }, { text:'Para conferir, abra o GABOrg › Relatórios e minutas › Verificar código.', fontSize:8, color:'#64748b' }] }]] }, layout:{ hLineWidth:() => .6, vLineWidth:() => .6, hLineColor:() => lc, vLineColor:() => lc, paddingLeft:() => 8, paddingTop:() => 6, paddingBottom:() => 6 }, margin:[0, 18, 0, 0], unbreakable:true }); break;
+      case 'barras': { if (!b.it.length) { ns.push({ text:'Sem dados.', color:'#94a3b8', margin:[0, 2, 0, 8] }); break; } const mx = Math.max(1, ...b.it.map(x => x[1])), bw = W - 260;
+        ns.push({ table:{ widths:[160, bw, 80], body:b.it.map(([n, v, r, c]) => [{ text:n, fontSize:8.5 }, { canvas:[{ type:'rect', x:0, y:2, w:bw, h:7, r:3, color:'#f1f5f9' }, { type:'rect', x:0, y:2, w:Math.max(1, v / mx * bw), h:7, r:3, color:c || '#2563eb' }] }, { text:String(r ?? fmtN(v)), alignment:'right', bold:true, fontSize:8.5 }]) }, layout:'noBorders', margin:[0, 2, 0, 10] }); break; }
+      case 'lista': b.it.forEach(([x, n]) => ns.push({ text:runsPDF(x), margin:[(n || 0) * 16, 0, 0, 2], fontSize:o.minuta ? 12 : 9.5 })); break;
+      case 'alertas': if (!b.it.length) break; ns.push({ table:{ widths:[3, '*'], body:b.it.map(([t, x]) => [{ text:'', fillColor:{ alerta:'#dc2626', atencao:'#d97706', ok:'#16a34a' }[t] || '#2563eb' }, { text:runsPDF(x), fillColor:'#f8fafc', margin:[4, 2, 2, 2] }]) }, layout:{ hLineWidth:() => 2, hLineColor:() => '#ffffff', vLineWidth:() => 0 }, margin:[0, 2, 0, 10] }); break;
+      case 'legenda': ns.push(legendaPDF(b.it, W)); break;
+      case 'nota': ns.push({ text:runsPDF(b.x), fontSize:7.5, color:'#64748b', margin:[0, 2, 0, 8] }); break;
+      case 'quebra': pend = true; break;
+      case 'fig': { const hMax = (alt(quer) - 100 - Math.ceil((b.leg || []).length / (W > 600 ? 3 : 2)) * 15 - (b.nota ? 12 * Math.ceil(b.nota.length / (W / 4.2)) : 0) - (cabFig ? 52 : 0)) * .97, esc_ = Math.min(W / b.w, hMax / b.h, 1.6);
+        ns.push({ stack:(cabFig || []).concat([{ text:`Figura ${b.num} – ${b.titulo}`, bold:true, fontSize:10, color:'#1e3a8a', margin:[0, 0, 0, 4] }, { svg:b.svg, width:b.w * esc_, height:b.h * esc_, alignment:'center' },
+          b.leg && b.leg.length ? { stack:[{ text:'Legenda', bold:true, fontSize:8, margin:[0, 6, 0, 0] }, legendaPDF(b.leg, W)] } : '', b.nota ? { text:b.nota, fontSize:7.5, color:'#475569', margin:[0, 3, 0, 0] } : '', { text:b.fonte || '', fontSize:7, color:'#64748b', italics:true, margin:[0, 2, 0, 8] }]), unbreakable:true });
+        if (quer === 'landscape' && base === 'portrait') pend = true; break; }
+      case 'ass': ns.push({ stack:[{ text:'______________________________________', alignment:'center', margin:[0, 30, 0, 0] }, { text:b.x, bold:true, alignment:'center' }, b.sub ? { text:b.sub, alignment:'center' } : ''], unbreakable:true }); break;
+      case 'selo': ns.push({ table:{ widths:[100, '*'], body:[[{ svg:seloSVG(b.codigo, b.data, 96), width:96 }, { stack:[{ text:'Autenticação', bold:true, margin:[0, 6, 0, 4] }, { text:`Documento gerado pelo ${SISTEMA_NOME} em ${b.quando}${b.por ? ' por ' + b.por : ''}.`, fontSize:9 }, { text:[{ text:'Código de verificação: ', fontSize:9 }, { text:b.codigo, bold:true, fontSize:10 }], margin:[0, 4, 0, 4] }, { text:'Para conferir, abra o GABOrg › Relatórios e minutas › Verificar código.', fontSize:8, color:'#64748b' }] }]] }, layout:{ hLineWidth:() => .6, vLineWidth:() => .6, hLineColor:() => lc, vLineColor:() => lc, paddingLeft:() => 8, paddingTop:() => 6, paddingBottom:() => 6 }, margin:[0, 18, 0, 0], unbreakable:true }); break;
     }
+    if (!ns.length) return;
+    ultH1 = b.t === 'h1' ? conteudo.length : -1;
+    if ((pend || quer !== orient) && !primeiro) { ns[0] = Object.assign(ns[0].stack || ns[0].table || ns[0].text !== undefined || ns[0].toc || ns[0].canvas || ns[0].columns ? ns[0] : { stack:[ns[0]] }, { pageBreak:'before', pageOrientation:quer }); }
+    pend = (b.t === 'capa') || (b.t === 'fig' && quer === 'landscape' && base === 'portrait'); orient = quer; primeiro = false;
+    conteudo.push(...ns);
   });
-  return { pageSize:'A4', pageMargins:o.minuta ? [85, 60, 57, 55] : [56, 58, 56, 50], info:{ title:o.titulo, author:SISTEMA_NOME, subject:o.codigo, creator:'GABOrg' },
+  const cab = (p) => p === 1 && blocos[0] && blocos[0].t === 'capa' ? null : { columns:[{ text:SISTEMA_NOME, color:'#64748b', fontSize:7.5 }, { text:`${o.titulo} · ${o.quando}`, alignment:'right', color:'#64748b', fontSize:7.5 }], margin:[mg[0], 26, mg[2], 0] };
+  return { pageSize:'A4', pageOrientation:base, pageMargins:mg, info:{ title:o.titulo, author:SISTEMA_NOME, subject:o.codigo, creator:'GABOrg' },
     watermark:o.minuta ? { text:'MINUTA', color:'#1e3a8a', opacity:.06, bold:true } : undefined,
-    header:(p) => p === 1 && blocos[0] && blocos[0].t === 'capa' ? null : { columns:[{ text:SISTEMA_NOME, color:'#64748b', fontSize:7.5 }, { text:o.titulo, alignment:'right', color:'#64748b', fontSize:7.5 }], margin:[o.minuta ? 85 : 56, 26, o.minuta ? 57 : 56, 0] },
-    footer:(p, n) => ({ columns:[{ text:`Código ${o.codigo} · emitido em ${o.quando}`, color:'#64748b', fontSize:7.5 }, { text:`Página ${p} de ${n}`, alignment:'right', color:'#64748b', fontSize:7.5 }], margin:[o.minuta ? 85 : 56, 18, o.minuta ? 57 : 56, 0] }),
-    content:conteudo,
+    header:cab, footer:(p, n) => ({ columns:[{ text:`Código ${o.codigo} · emitido em ${o.quando}`, color:'#64748b', fontSize:7.5 }, { text:`Página ${p} de ${n}`, alignment:'right', color:'#64748b', fontSize:7.5 }], margin:[mg[0], 18, mg[2], 0] }),
+    content:conteudo, pageBreakBefore:(n) => !!n.headlineLevel && !n.pageBreak && n.startPosition && n.startPosition.verticalRatio > (n.headlineLevel === 1 ? .8 : .88),
     styles:{ h1:{ fontSize:14, bold:true, color:'#1e3a8a', margin:[0, 14, 0, 3] }, h2:{ fontSize:11.5, bold:true, margin:[0, 10, 0, 4] }, h3:{ fontSize:10, bold:true, color:'#334155', margin:[0, 8, 0, 3] }, mh1:{ fontSize:13, bold:true, alignment:'center', margin:[0, 6, 0, 6] }, mh2:{ fontSize:12, bold:true, alignment:'center', margin:[0, 12, 0, 6] }, mh3:{ fontSize:12, bold:true, alignment:'center', margin:[0, 8, 0, 4] },
       capaSup:{ fontSize:13, bold:true, color:'#1e3a8a', alignment:'center', margin:[0, 30, 0, 2] }, capaOrg:{ fontSize:9.5, color:'#475569', alignment:'center' }, capaTit:{ fontSize:22, bold:true, alignment:'center', margin:[0, 70, 0, 8] }, capaSub:{ fontSize:12, color:'#475569', alignment:'center' } },
     defaultStyle:{ font:'Roboto', fontSize:o.minuta ? 12 : 9.5, lineHeight:o.minuta ? 1.25 : 1.15 } };
 }
 /* emitir: gera o código, registra e entrega no formato pedido */
-async function emitirDoc({ tipo, titulo, montar, minuta, formato, nomeArq, detalhe }){
+async function emitirDoc({ tipo, titulo, montar, minuta, formato, nomeArq, detalhe, paisagem, cfgRel }){
   const codigo = gerarCodigo(tipo), d = new Date(), data = d.toLocaleDateString('pt-BR'), quando = d.toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
-  const blocos = montar({ codigo, data, quando, por:cfg.usuario || cfg.login || '' }), o = { codigo, data, quando, titulo, minuta };
+  const blocos = montar({ codigo, data, quando, por:cfg.usuario || cfg.login || '' }), o = { codigo, data, quando, titulo, minuta, paisagem };
   const nome = (nomeArq || 'gaborg') + '-' + codigo;
   if (formato === 'pdf') {
     toast('Gerando o PDF...');
@@ -4367,7 +4503,7 @@ async function emitirDoc({ tipo, titulo, montar, minuta, formato, nomeArq, detal
     await new Promise((ok, erro) => { try { pdfMake.createPdf(docPDF(blocos, o)).download(nome + '.pdf', ok); setTimeout(ok, 4000); } catch (e) { erro(e); } });
   } else if (formato === 'word') baixarWord(nome, titulo, `<style>${ESTILO_REL}</style>` + docHTML(blocos, { minuta, cabecalho:titulo + ' · ' + codigo }));
   else imprimirDoc(titulo, `<style>${ESTILO_REL}.d-capa{page-break-after:always}</style>` + docHTML(blocos, { minuta, cabecalho:titulo + ' · ' + codigo }));
-  registrarEmissao({ c:codigo, tipo:{ REL:'Relatório', POR:'Minuta de portaria', DEC:'Minuta de decreto' }[tipo] || tipo, titulo, formato, det:detalhe || '' });
+  registrarEmissao(Object.assign({ c:codigo, tipo:{ REL:'Relatório', POR:'Minuta de portaria', DEC:'Minuta de decreto' }[tipo] || tipo, titulo, formato, det:detalhe || '' }, cfgRel ? { cfg:cfgRel } : {}));
   toast('Documento emitido: ' + codigo);
   return codigo;
 }
@@ -4375,21 +4511,35 @@ async function emitirDoc({ tipo, titulo, montar, minuta, formato, nomeArq, detal
 /* ===================== RELATÓRIO COMPLETO: SEÇÕES SELECIONÁVEIS ===================== */
 const REL_SECOES = [
   ['Visão geral', [['resumo', 'Resumo executivo e índice de maturidade'], ['kpis', 'Indicadores-chave'], ['areas', 'Painel por secretaria adjunta']]],
-  ['Estrutura', [['estrutura', 'Estrutura hierárquica (organograma em lista)'], ['quadro', 'Quadro de setores'], ['governanca', 'Amplitude de controle e qualidade do cadastro'], ['competencias', 'Competências repetidas e lacunas']]],
+  ['Organogramas', [['orgGeral', 'Organograma geral (figura)'], ['orgAreas', 'Organograma de cada secretaria adjunta (figuras)'], ['orgProp', 'Organogramas das propostas com as alterações destacadas']]],
+  ['Mapas de Mato Grosso', [['mapaMT', 'Mapa das escolas e DREs'], ['mapaDist', 'Mapa das distâncias até as DREs'], ['mapaMun', 'Mapa da divisão municipal'], ['mapaDRE', 'Mapa aproximado da DRE escolhida']]],
+  ['Estrutura', [['estrutura', 'Estrutura hierárquica em lista'], ['quadro', 'Quadro de setores'], ['governanca', 'Amplitude de controle e qualidade do cadastro'], ['competencias', 'Competências repetidas e lacunas'], ['ficha', 'Ficha completa do setor escolhido']]],
   ['Pessoas e governança', [['chefias', 'Chefias e sucessão'], ['riscos', 'Riscos e prioridades'], ['validacoes', 'Validações entre setores']]],
   ['Financeiro e propostas', [['financeiro', 'Custos e cargos em comissão'], ['propostas', 'Propostas: alterações, custo e metas']]],
   ['Rede escolar', [['rede', 'Rede escolar por DRE'], ['distancias', 'Distâncias das escolas até as DREs'], ['regional', 'Gestão regional e sugestões'], ['escolas', 'Lista de unidades escolares']]],
-  ['Gestão', [['implantacao', 'Implantação: etapas e prazos'], ['metas', 'Pacto de resultados'], ['reunioes', 'Reuniões, decisões e encaminhamentos']]]
+  ['Gestão', [['implantacao', 'Implantação: etapas e prazos'], ['metas', 'Pacto de resultados'], ['reunioes', 'Reuniões, decisões e encaminhamentos']]],
+  ['Encerramento', [['notas', 'Notas metodológicas, fontes e legendas']]]
 ];
-const REL_MODELOS = { completo:['Completo', REL_SECOES.flatMap(g => g[1].map(x => x[0])).filter(k => k !== 'escolas')], executivo:['Executivo', ['resumo', 'kpis', 'areas', 'riscos', 'propostas', 'regional']], estrutura:['Estrutura e pessoas', ['kpis', 'estrutura', 'quadro', 'governanca', 'chefias', 'competencias']], rede:['Rede escolar', ['rede', 'distancias', 'regional', 'escolas']], financeiro:['Financeiro e propostas', ['kpis', 'financeiro', 'propostas', 'implantacao']] };
-let relCfg = Object.assign({ titulo:'Relatório da estrutura organizacional', obs:'', area:'', dre:'', props:'*', secoes:REL_MODELOS.executivo[1] }, store.get('gaborg_rel', {}));
+const REL_MODELOS = {
+  executivo:['fa-briefcase', 'Executivo', ['resumo', 'kpis', 'orgGeral', 'mapaMT', 'areas', 'riscos', 'propostas', 'regional', 'notas']],
+  completo:['fa-book', 'Completo', ['resumo', 'kpis', 'areas', 'orgGeral', 'orgAreas', 'mapaMT', 'mapaDist', 'estrutura', 'quadro', 'governanca', 'competencias', 'chefias', 'riscos', 'validacoes', 'financeiro', 'propostas', 'orgProp', 'rede', 'distancias', 'regional', 'implantacao', 'metas', 'reunioes', 'notas']],
+  organograma:['fa-sitemap', 'Organogramas', ['kpis', 'orgGeral', 'orgAreas', 'governanca', 'chefias', 'notas']],
+  mapas:['fa-map-location-dot', 'Mapas de MT', ['mapaMT', 'mapaDist', 'mapaMun', 'rede', 'notas']],
+  rede:['fa-school', 'Rede escolar', ['rede', 'mapaMT', 'distancias', 'mapaDist', 'regional', 'escolas', 'notas']],
+  financeiro:['fa-coins', 'Financeiro e propostas', ['kpis', 'financeiro', 'propostas', 'orgProp', 'implantacao', 'notas']],
+  fichaDre:['fa-building-flag', 'Ficha de uma DRE', ['mapaDRE', 'rede', 'distancias', 'regional', 'escolas'], 'dre'],
+  fichaSetor:['fa-id-card', 'Ficha de um setor', ['ficha', 'notas'], 'setor']
+};
+let relCfg = Object.assign({ titulo:'Relatório da estrutura organizacional', obs:'', area:'', dre:'', props:'*', secoes:REL_MODELOS.executivo[2].slice() }, store.get('gaborg_rel', {}));
 const relNomeArea = a => a ? nomeCurto(porId.get(a)) : 'Toda a Secretaria';
 function relTitulos(){ const m = {}; REL_SECOES.forEach(g => g[1].forEach(([k, n]) => m[k] = n)); return m; }
 function montarRelatorio(F, emis){
-  const T = relTitulos(), D = dadosInd(F.area), B = [], sec = F.secoes.filter(k => T[k]);
+  const T = relTitulos(), D = dadosInd(F.area), B = [], sec = F.secoes.filter(k => T[k]), FG = Object.assign({ cor:'tipo', vinculos:false, ligacoes:false, nomes:false }, F.fig || {});
+  let nfig = 0; const FIG = (titulo, r, nota) => ({ t:'fig', num:++nfig, titulo, svg:r.svg, w:r.w, h:r.h, leg:r.leg, nota, fonte:'Fonte: GABOrg, dados de ' + emis.quando + (emis.codigo ? ' · ' + emis.codigo : ''), paisagem:r.w > r.h * 1.15 });
   const E = distanciasMT(), dres = E.dres, dreOk = d => !F.dre || d === F.dre, P = (DB.propostas || []).filter(p => F.props === '*' || (F.props || []).includes(p.id));
-  B.push({ t:'capa', titulo:F.titulo || 'Relatório', sub:SISTEMA_ORG, codigo:emis.codigo, data:emis.data, linhas:[['Código de verificação', emis.codigo], ['Emitido em', emis.quando], ['Emitido por', emis.por || '—'], ['Abrangência', relNomeArea(F.area) + (F.dre ? ' · ' + F.dre : '')], ['Seções', sec.length + ' de ' + Object.keys(T).length]].concat(F.obs ? [['Observação', F.obs]] : []) });
-  B.push({ t:'h1', x:'Sumário' }, { t:'lista', it:sec.map((k, i) => [[[`${i + 1}. `, true], T[k]], 0]) });
+  if (F.capa !== false) B.push({ t:'capa', titulo:F.titulo || 'Relatório', sub:SISTEMA_ORG, codigo:emis.codigo, data:emis.data, linhas:[['Código de verificação', emis.codigo], ['Emitido em', emis.quando], ['Emitido por', emis.por || '—'], ['Abrangência', relNomeArea(F.area) + (F.dre ? ' · ' + F.dre : '')], ['Seções', sec.length + ' de ' + Object.keys(T).length]].concat(F.obs ? [['Observação', F.obs]] : []) });
+  if (F.sumario !== false) B.push({ t:'sumario', it:sec.map(k => T[k]) });
+  if (F.capa === false) B.unshift({ t:'p', x:[[F.titulo || 'Relatório', true], ` · emitido em ${emis.quando} · código ${emis.codigo}`] });
   let n = 0; const H = k => B.push({ t:'h1', x:`${++n}. ${T[k]}` });
   const ser = D.base.reduce((t, s) => t + num(s.servidores), 0), cad = D.base.length ? Math.round(D.base.reduce((t, s) => t + cadSetor(s), 0) / D.base.length * 100) : 0;
   sec.forEach(k => {
@@ -4414,7 +4564,11 @@ function montarRelatorio(F, emis){
       if (ref.length) { const lac = ref.map(t => ({ t, m:melhorSetorPara(t, C) })).filter(x => !x.m || x.m.sim < .3 || x.m.n < 2); B.push({ t:'h3', x:`Atribuições de referência sem setor responsável (${lac.length} de ${ref.length})` }, { t:'lista', it:lac.map(x => ['• ' + x.t, 0]) }); } }
     if (k === 'chefias') { H(k); const L = D.base.filter(s => CHEFIAS.includes(s.tipo)).map(s => ({ s, c:chefiaDe(s) })), cn = q => L.filter(x => x.c.situacao === q).length;
       B.push({ t:'kpis', it:[['Chefias', L.length, ''], ['Com titular', cn('Titular'), '', '#16a34a'], ['Interinas / em nomeação', cn('Interino') + cn('Em nomeação'), '', '#d97706'], ['Vagas', cn('Vago'), '', '#dc2626']] });
-      B.push({ t:'tab', pq:true, cab:['Unidade', 'Símbolo', 'Titular', 'Situação', 'Desde', 'Substituto', 'Atenção'], larg:['*', 40, 80, 50, 46, 70, 90], lin:L.sort((a, b) => (prof.get(a.s.id) || 0) - (prof.get(b.s.id) || 0)).map(x => [x.s.nome, simboloChefia(x.s.id) || '—', x.c.titular || '—', { x:x.c.situacao, cor:{ Vago:'#fee2e2', Interino:'#fef3c7', 'Em nomeação':'#dbeafe' }[x.c.situacao] }, fmtDia(x.c.desde), x.c.substituto || '—', alertasChefia(x.s, x.c).map(a => a[1]).filter(a => a !== 'sem registro').join('; ')]) }); }
+      const reg = x => !!(x.c.titular || x.c.substituto || x.c.desde || (x.c.situacao && x.c.situacao !== 'Não informado')), COM = L.filter(reg), SEM = L.filter(x => !reg(x));
+      if (SEM.length) { const g = new Map(); SEM.forEach(x => { const a = nomeCurto(porId.get(areaDe.get(x.s.id))) || '—'; if (!g.has(a)) g.set(a, []); g.get(a).push(x.s.sigla || nomeCurto(x.s)); });
+        B.push({ t:'h3', x:`Chefias ainda sem registro (${SEM.length})` }, { t:'tab', pq:true, cab:['Área', 'Qtde', 'Unidades'], larg:[110, 30, '*'], dir:[1], lin:[...g].sort((a, b) => b[1].length - a[1].length).map(([a, l]) => [a, l.length, l.join('; ')]) }); }
+      if (COM.length) B.push({ t:'h3', x:`Chefias registradas (${COM.length})` });
+      if (COM.length || !SEM.length) B.push({ t:'tab', pq:true, cab:['Unidade', 'Símbolo', 'Titular', 'Situação', 'Desde', 'Substituto', 'Atenção'], larg:['*', 34, 76, 50, 44, 64, 70], lin:COM.sort((a, b) => (prof.get(a.s.id) || 0) - (prof.get(b.s.id) || 0)).map(x => [x.s.nome, simboloChefia(x.s.id) || '—', x.c.titular || '—', { x:x.c.situacao, cor:{ Vago:'#fee2e2', Interino:'#fef3c7', 'Em nomeação':'#dbeafe' }[x.c.situacao] }, fmtDia(x.c.desde), x.c.substituto || '—', alertasChefia(x.s, x.c).map(a => a[1]).filter(a => a !== 'sem registro').join('; ')]) }); }
     if (k === 'riscos') { H(k); const r = D.base.filter(emRisco);
       B.push({ t:'h3', x:`Setores em risco (${r.length})` }, { t:'tab', pq:true, cab:['Setor', 'Impacto', 'Validação', 'Responsável', 'Pontos − / +'], larg:['*', 50, 70, 90, 50], lin:r.map(s => [s.nome, IMPACTO[num(s.impacto)][0], statusVal(s.id), s.responsavel || 'sem responsável', linhasDe(s.negativos).length + ' / ' + linhasDe(s.positivos).length]) });
       B.push({ t:'h3', x:'Validações pendentes mais antigas' }, { t:'tab', pq:true, cab:['Setor', 'Validador', 'Pedida em', 'Dias'], larg:['*', '*', 60, 34], dir:[3], lin:D.pend.slice().sort((a, b) => diasDesde(b.solicitadoEm) - diasDesde(a.solicitadoEm)).slice(0, 25).map(v => [nomeSetor(v.setorId), nomeSetor(v.validadorId), fmtDia(v.solicitadoEm), diasDesde(v.solicitadoEm)]) }); }
@@ -4457,6 +4611,41 @@ function montarRelatorio(F, emis){
     if (k === 'reunioes') { H(k); const R = (DB.reunioes || []).slice().sort((a, b) => String(b.data).localeCompare(String(a.data)));
       R.slice(0, 12).forEach(r => { const it = itensReu(r); B.push({ t:'h3', x:`${r.titulo} · ${fmtData(r.data)} · ${r.status || 'Planejada'}` }, { t:'tab', pq:true, cab:['Assunto', 'Decisão', 'Encaminhamento', 'Responsável', 'Prazo'], larg:['*', 60, '*', 60, 46], lin:it.map(x => [tituloItem(x), x.decisao || '—', x.encaminhamento || '—', x.responsavel || '—', x.prazo ? fmtDia(x.prazo) : '—']) }); });
       if (!R.length) B.push({ t:'p', x:'Nenhuma reunião registrada.' }); }
+    if (k === 'orgGeral') { H(k); const r = F.area ? orgSVG(setoresOficiais(), { raiz:F.area, modo:FG.cor, vinculos:FG.vinculos }) : orgSVG(setoresOficiais(), { nivelMax:2, modo:FG.cor, vinculos:FG.vinculos });
+      B.push(FIG(F.area ? `Organograma de ${relNomeArea(F.area)}` : 'Organograma geral da SEDUC-MT (até o 3º nível)', r, `${r.n} unidades desenhadas. Cores: ${MODOS_COR_ORG[FG.cor].toLowerCase()}.`)); }
+    if (k === 'orgAreas') { H(k); const L = setoresOficiais(), ats = (F.area ? [F.area] : areas).filter(a => L.some(s => s.paiId === a && s.status !== 'Extinto'));
+      ats.forEach(a => { const r = orgSVG(L, { raiz:a, modo:FG.cor, vinculos:FG.vinculos }); B.push(FIG(`Organograma de ${(porId.get(a) || {}).nome || nomeCurto(porId.get(a))}`, r, `${r.n} unidades.`)); });
+      const soltas = areas.filter(a => !ats.includes(a) && !F.area); if (soltas.length) B.push({ t:'h3', x:'Unidades ligadas diretamente ao Gabinete, sem subdivisões' }, { t:'lista', it:soltas.map(a => ['• ' + ((porId.get(a) || {}).nome || ''), 0]) }); }
+    if (k === 'orgProp') { H(k); if (!P.length) B.push({ t:'p', x:'Nenhuma proposta selecionada.' });
+      P.forEach(p => { const L = estruturaProposta(p).lista, mp = new Map(L.map(s => [s.id, s])), areaL = id => { let s = mp.get(id), g = 0; while (s && s.paiId && mp.get(s.paiId) && mp.get(s.paiId).paiId && g++ < 60) s = mp.get(s.paiId); return s ? s.id : ''; };
+        const mud = L.filter(s => (s._marcas || []).some(m => ['novo', 'extinto', 'movido', 'renomeado'].includes(m))), afet = [...new Set(mud.map(s => areaL(s.id)).filter(Boolean))];
+        B.push({ t:'h2', x:p.nome }, { t:'p', x:`${mud.length} unidade(s) alterada(s) em ${afet.length} área(s).` });
+        afet.forEach(a => { const r = orgSVG(L, { raiz:a, modo:FG.cor, marcas:true }); B.push(FIG(`${p.nome}: ${(mp.get(a) || {}).nome || ''}`, r, 'Bordas coloridas indicam as alterações da proposta em relação à estrutura vigente.')); }); }); }
+    if (k === 'mapaMT') { H(k); const r = mapaSVG({ modo:'dre', ligacoes:FG.ligacoes, nomes:FG.nomes }); B.push(FIG('Unidades escolares estaduais por Diretoria Regional de Educação', r, `${E.lista.length} unidades escolares, ${dres.length} DREs. Municípios coloridos pela DRE que atende a maior parte das suas escolas.`)); }
+    if (k === 'mapaDist') { H(k); const r = mapaSVG({ modo:'dist', nomes:FG.nomes }); B.push(FIG('Distância das escolas até a sede da sua DRE', r, 'Cor da escola e da linha pela distância em linha reta até a sede da DRE a que é subordinada.')); }
+    if (k === 'mapaMun') { H(k); const r = mapaSVG({ modo:'mun', nomes:true }); B.push(FIG('Divisão municipal de Mato Grosso e unidades escolares', r, 'Limites municipais (IBGE, malha simplificada) com o nome de cada município.')); }
+    if (k === 'mapaDRE') { H(k); if (!F.dre) B.push({ t:'p', x:'Escolha uma DRE nos filtros para gerar o mapa aproximado.' });
+      else { const r = mapaSVG({ modo:'dre', dre:F.dre, ligacoes:true, nomes:true }); B.push(FIG(`${F.dre}: escolas, municípios e ligações com a sede`, r, `${E.lista.filter(o => o.e.dre === F.dre).length} unidades escolares.`)); } }
+    if (k === 'ficha') { H(k); const s = F.setor && porId.get(F.setor);
+      if (!s) B.push({ t:'p', x:'Escolha um setor nos filtros para gerar a ficha.' });
+      else { const c = chefiaDe(s), sub = filhosDe(s.id).filter(x => x.status !== 'Extinto'), cam = caminho(s.id);
+        B.push({ t:'h2', x:s.nome + (s.sigla ? ' – ' + s.sigla : '') });
+        B.push({ t:'tab', cab:['Campo', 'Informação'], larg:[130, '*'], lin:[['Tipo', s.tipo], ['Subordinação', cam.map(x => x.sigla || x.nome).join(' › ') || 'nível mais alto'], ['Situação', s.status || 'Ativo'], ['Responsável', s.responsavel || '—'], ['Contato', s.contato || '—'], ['Servidores', s.servidores || '—'], ['Comissionados', s.comissionados || '—'], ['Impacto', (IMPACTO[num(s.impacto)] || IMPACTO[0])[0] + (s.impactoDescricao ? ' – ' + s.impactoDescricao : '')], ['Validação', statusVal(s.id)], ['Chefia', CHEFIAS.includes(s.tipo) ? `${c.situacao}${c.titular ? ' · ' + c.titular : ''}${c.substituto ? ' · substituto: ' + c.substituto : ''}${simboloChefia(s.id) ? ' · ' + simboloChefia(s.id) : ''}` : '—'], ['Atualizado em', fmtData(s.atualizadoEm) + (s.atualizadoPor ? ' por ' + s.atualizadoPor : '')]] });
+        const lin = t => String(t || '').split(/\n|;\s*/).map(limparComp).filter(Boolean);
+        if (lin(s.competencias).length) B.push({ t:'h3', x:'Competências' }, { t:'lista', it:lin(s.competencias).map((x, i) => [`${romano(i + 1)} – ${x}`, 0]) });
+        if (lin(s.entregas).length) B.push({ t:'h3', x:'Entregas' }, { t:'lista', it:lin(s.entregas).map(x => ['• ' + x, 0]) });
+        if (linhasDe(s.positivos).length || linhasDe(s.negativos).length) B.push({ t:'h3', x:'Pontos positivos e de atenção' }, { t:'alertas', it:linhasDe(s.positivos).map(x => ['ok', x]).concat(linhasDe(s.negativos).map(x => ['alerta', x])) });
+        if (sub.length) { const r = orgSVG(setoresOficiais(), { raiz:s.id, modo:FG.cor, vinculos:FG.vinculos }); B.push(FIG(`Estrutura subordinada a ${s.sigla || s.nome}`, r, `${r.n} unidades.`)); }
+        const vs = (valPorSetor.get(s.id) || []); if (vs.length) B.push({ t:'h3', x:'Validações' }, { t:'tab', pq:true, cab:['Validador', 'Situação', 'Parecer', 'Pedida em'], lin:vs.map(v => [nomeSetor(v.validadorId), v.status || 'Pendente', v.parecer || '—', fmtDia(v.solicitadoEm)]) });
+        const vi = (DB.vinculos || []).filter(v => v.origemId === s.id || v.destinoId === s.id); if (vi.length) B.push({ t:'h3', x:'Vínculos com outros setores' }, { t:'tab', pq:true, cab:['Setor', 'Tipo', 'Descrição'], lin:vi.map(v => [nomeSetor(v.origemId === s.id ? v.destinoId : v.origemId), v.tipo, v.descricao || '—']) });
+        const ds = DB.despesas.filter(d => d.setorId === s.id && (d.cenario || 'Atual') === 'Atual'); if (ds.length) B.push({ t:'h3', x:'Custos lançados' }, { t:'tab', pq:true, cab:['Item', 'Qtd.', 'Mensal', 'Anual'], dir:[1, 2, 3], lin:ds.map(d => { const x = calcDesp(d); return [x.r.codigo || d.descricao || x.categoria, x.qtd, fmtM(x.mensal), fmtM(x.anual)]; }) });
+        const hs = DB.historico.filter(h => h.setorId === s.id).slice(0, 15); if (hs.length) B.push({ t:'h3', x:'Histórico recente' }, { t:'tab', pq:true, cab:['Data', 'Usuário', 'Alteração'], larg:[70, 80, '*'], lin:hs.map(h => [fmtData(h.data), h.usuario, h.acao]) }); } }
+    if (k === 'notas') { H(k);
+      B.push({ t:'h3', x:'Fontes dos dados' }, { t:'lista', it:[['• Estrutura, setores, chefias, metas e reuniões: planilha do GABOrg (Google Planilhas), na situação de ' + emis.quando + '.', 0], ['• Unidades escolares: base geolocalizada da SEDUC-MT (' + fmtN(escolasLista().length) + ' escolas).', 0], ['• Limites municipais: IBGE (malha municipal simplificada).', 0], ['• Valores de cargos: Tabela de valores do módulo Financeiro.', 0]] });
+      B.push({ t:'h3', x:'Métodos' }, { t:'lista', it:[['• Índice de maturidade (0 a 100) = 40% cadastro completo + 30% setores validados + 20% chefias com responsável + 10% setores fora de risco.', 0], ['• Setor em risco: impacto alto ou crítico e, além disso, sem validação, sem responsável ou com mais pontos negativos que positivos.', 0], [`• Distâncias: linha reta entre a escola e a sede da DRE (ponto central das escolas urbanas da cidade-sede); estrada e tempo estimados como ${String(FATOR_ESTRADA).replace('.', ',')} × linha reta a ${VEL_MEDIA} km/h.`, 0], ['• Amplitude de controle: número de unidades diretamente subordinadas a cada chefia.', 0]] });
+      B.push({ t:'h3', x:'Legenda dos tipos de unidade' }, { t:'legenda', it:Object.keys(TIPOS).filter(t => t !== 'Outro').map(t => [corTipo(t), t]) });
+      B.push({ t:'h3', x:'Legenda de impacto e validação' }, { t:'legenda', it:IMPACTO.map(([n, c]) => [c, 'Impacto: ' + n]).concat(Object.entries(STATUS_VAL).map(([n, c]) => [c, 'Validação: ' + n])) });
+      B.push({ t:'h3', x:'Autenticidade' }, { t:'p', x:`Este documento tem o código ${emis.codigo}. Para conferir se é autêntico, abra o GABOrg › Relatórios e minutas › Verificar código.` }); }
   });
   B.push({ t:'selo', codigo:emis.codigo, data:emis.data, quando:emis.quando, por:emis.por });
   return B;
@@ -4563,37 +4752,74 @@ function renderRelatorios(){
   if (rmAba === 'relatorio') previaRel(); else if (rmAba === 'portaria') previaPort(); else if (rmAba === 'decreto') atualizarMinuta();
 }
 /* ---------- relatório ---------- */
-function rmRelatorio(){
-  const c = relCfg, P = DB.propostas || [], sel = new Set(c.secoes), dres = distanciasMT().dres;
-  return `<div class="re-min"><div class="cartao bl re-min-cfg rm-cfg" style="--c:#1e3a8a"><h3><i class="fa-solid fa-sliders"></i>Monte o relatório</h3>
-    <label><span class="rot">Título</span><input id="rl-tit" class="campo" value="${esc(c.titulo)}" oninput="lerRel()"></label>
-    <label><span class="rot">Observação na capa <small>opcional</small></span><input id="rl-obs" class="campo" value="${esc(c.obs)}" oninput="lerRel()" placeholder="ex.: preparado para a reunião de 30/10"></label>
-    <span class="rot">Modelos prontos</span><div class="rm-mod">${Object.entries(REL_MODELOS).map(([k, [n]]) => `<button class="btn btn-s btn-sm" onclick="relCfg.secoes=REL_MODELOS['${k}'][1].slice();salvarRelCfg();renderRelatorios()">${n}</button>`).join('')}</div>
-    <span class="rot">Filtros</span>
-    <div class="g2"><select id="rl-area" class="campo" onchange="lerRel()"><option value="">Toda a Secretaria</option>${areas.map(a => `<option value="${esc(a)}" ${a === c.area ? 'selected' : ''}>${esc(nomeCurto(porId.get(a)))}</option>`).join('')}</select>
-      <select id="rl-dre" class="campo" onchange="lerRel()"><option value="">Todas as DREs</option>${dres.map(d => `<option value="${esc(d)}" ${d === c.dre ? 'selected' : ''}>${esc(nomeDRE(d))}</option>`).join('')}</select></div>
-    ${P.length ? `<details class="rm-det" ${c.props !== '*' ? 'open' : ''}><summary>Propostas incluídas: ${c.props === '*' ? 'todas' : (c.props || []).length}</summary><label class="lg-lembrar"><input type="checkbox" id="rl-ptodas" ${c.props === '*' ? 'checked' : ''} onchange="lerRel()">Todas</label>${P.map(p => `<label class="lg-lembrar"><input type="checkbox" data-rp="${esc(p.id)}" ${c.props === '*' || (c.props || []).includes(p.id) ? 'checked' : ''} onchange="$('#rl-ptodas').checked=false;lerRel()">${esc(p.nome)}</label>`).join('')}</details>` : ''}
-    <span class="rot">O que entra no relatório <small>${sel.size} seções</small></span>
-    <div class="rm-secs">${REL_SECOES.map(([g, l]) => `<div class="rm-g"><div class="rm-gh"><b>${g}</b><button onclick="relAlternarGrupo('${g}')">${l.every(x => sel.has(x[0])) ? 'tirar todas' : 'incluir todas'}</button></div>${l.map(([k, n]) => `<label class="lg-lembrar"><input type="checkbox" data-rs="${k}" ${sel.has(k) ? 'checked' : ''} onchange="lerRel()">${n}</label>`).join('')}</div>`).join('')}</div>
-    <div class="rm-emit"><button class="btn btn-p" onclick="emitirRelatorio('pdf')"><i class="fa-solid fa-file-pdf"></i>Gerar PDF</button><button class="btn btn-s" onclick="emitirRelatorio('print')"><i class="fa-solid fa-print"></i>Imprimir</button><button class="btn btn-s" onclick="emitirRelatorio('word')"><i class="fa-solid fa-file-word"></i>Word</button></div>
-    <p class="s" style="margin:0;font-size:11.5px;color:var(--mut)">Cada emissão recebe um código de verificação, a data e o selo do sistema, e fica registrada na planilha.</p></div>
-    <div class="re-papel"><div id="rl-doc" class="rm-folha"></div></div></div>`;
-}
+/* ---------- relatório: interface ---------- */
 function salvarRelCfg(){ store.set('gaborg_rel', relCfg); }
-function lerRel(){
-  const v = id => { const e = $(id); return e ? e.value : ''; };
-  relCfg.titulo = v('#rl-tit'); relCfg.obs = v('#rl-obs'); relCfg.area = v('#rl-area'); relCfg.dre = v('#rl-dre');
-  relCfg.secoes = [...document.querySelectorAll('[data-rs]:checked')].map(x => x.dataset.rs);
-  const t = $('#rl-ptodas'); relCfg.props = !t || t.checked ? '*' : [...document.querySelectorAll('[data-rp]:checked')].map(x => x.dataset.rp);
-  salvarRelCfg(); clearTimeout(lerRel.t); lerRel.t = setTimeout(previaRel, 250);
+function relPadrao(){ relCfg = Object.assign({ titulo:'Relatório da estrutura organizacional', obs:'', area:'', dre:'', setor:'', props:'*', secoes:REL_MODELOS.executivo[2].slice(), orient:'retrato', capa:true, sumario:true }, relCfg); relCfg.fig = Object.assign({ cor:'tipo', vinculos:false, ligacoes:false, nomes:false }, relCfg.fig || {}); const T = relTitulos(); if (!Array.isArray(relCfg.secoes)) relCfg.secoes = REL_MODELOS.executivo[2].slice(); relCfg.secoes = relCfg.secoes.filter(k => T[k]); }
+relPadrao();
+function rmRelatorio(){
+  relPadrao(); const c = relCfg, P = DB.propostas || [], sel = new Set(c.secoes), dres = distanciasMT().dres, T = relTitulos(), M = param('modelosRel', []);
+  const passo = (n, t, corpo, ab) => `<details class="rm-passo" ${ab ? 'open' : ''}><summary><span>${n}</span>${t}</summary><div class="rm-pc">${corpo}</div></details>`;
+  return `<div class="re-min rm-grade"><div class="cartao bl re-min-cfg rm-cfg" style="--c:#1e3a8a">
+    <h3><i class="fa-solid fa-wand-magic-sparkles"></i>Monte o seu relatório</h3>
+    ${passo(1, 'Ponto de partida', `<div class="rm-pres">${Object.entries(REL_MODELOS).map(([k, [ic, n, l, req]]) => `<button class="rm-pre ${JSON.stringify(c.secoes) === JSON.stringify(l) ? 'on' : ''}" onclick="aplicarModeloRel('${k}')"><i class="fa-solid ${ic}"></i><b>${n}</b><small>${l.length} seções${req ? ' · escolha ' + (req === 'dre' ? 'a DRE' : 'o setor') : ''}</small></button>`).join('')}</div>
+      ${M.length ? `<span class="rot" style="margin-top:8px">Meus modelos</span><div class="rm-meus">${M.map((m, i) => `<div><button onclick="carregarModeloRel(${i})"><i class="fa-solid fa-bookmark"></i>${esc(m.nome)}</button>${podeGestao() ? `<button class="x" title="Excluir" onclick="excluirModeloRel(${i})"><i class="fa-solid fa-xmark"></i></button>` : ''}</div>`).join('')}</div>` : ''}
+      ${podeGestao() ? '<button class="btn btn-g btn-sm" onclick="salvarModeloRel()"><i class="fa-solid fa-floppy-disk"></i>Salvar a configuração atual como modelo</button>' : ''}`, true)}
+    ${passo(2, `Conteúdo <small>${sel.size} seções</small>`, `<div class="rm-secs">${REL_SECOES.map(([g, l]) => `<div class="rm-g"><div class="rm-gh"><b>${g}</b><button onclick="relAlternarGrupo('${g}')">${l.every(x => sel.has(x[0])) ? 'tirar todas' : 'incluir todas'}</button></div>${l.map(([k, n]) => `<label class="lg-lembrar"><input type="checkbox" data-rs="${k}" ${sel.has(k) ? 'checked' : ''} onchange="lerRel()">${n}</label>`).join('')}</div>`).join('')}</div>
+      ${c.secoes.length ? `<span class="rot" style="margin-top:8px">Ordem no documento</span><ol class="rm-ord">${c.secoes.map((k, i) => `<li><span>${esc(T[k] || k)}</span><button title="Subir" onclick="moverSecRel(${i},-1)" ${i ? '' : 'disabled'}><i class="fa-solid fa-arrow-up"></i></button><button title="Descer" onclick="moverSecRel(${i},1)" ${i < c.secoes.length - 1 ? '' : 'disabled'}><i class="fa-solid fa-arrow-down"></i></button><button title="Tirar" onclick="relCfg.secoes.splice(${i},1);salvarRelCfg();renderRelatorios()"><i class="fa-solid fa-xmark"></i></button></li>`).join('')}</ol>` : ''}`, true)}
+    ${passo(3, 'Filtros', `<label><span class="rot">Secretaria adjunta</span><select id="rl-area" class="campo" onchange="lerRel()"><option value="">Toda a Secretaria</option>${areas.map(a => `<option value="${esc(a)}" ${a === c.area ? 'selected' : ''}>${esc(nomeCurto(porId.get(a)))}</option>`).join('')}</select></label>
+      <label><span class="rot">DRE <small>rede escolar, distâncias e mapa da DRE</small></span><select id="rl-dre" class="campo" onchange="lerRel()"><option value="">Todas as DREs</option>${dres.map(d => `<option value="${esc(d)}" ${d === c.dre ? 'selected' : ''}>${esc(nomeDRE(d))}</option>`).join('')}</select></label>
+      <label><span class="rot">Setor <small>para a ficha do setor</small></span><select id="rl-setor" class="campo" onchange="lerRel()"><option value="">—</option>${opcoesSetoresFin(c.setor)}</select></label>
+      ${P.length ? `<details class="rm-det" ${c.props !== '*' ? 'open' : ''}><summary>Propostas incluídas: ${c.props === '*' ? 'todas' : (c.props || []).length}</summary><label class="lg-lembrar"><input type="checkbox" id="rl-ptodas" ${c.props === '*' ? 'checked' : ''} onchange="lerRel()">Todas</label>${P.map(p => `<label class="lg-lembrar"><input type="checkbox" data-rp="${esc(p.id)}" ${c.props === '*' || (c.props || []).includes(p.id) ? 'checked' : ''} onchange="$('#rl-ptodas').checked=false;lerRel()">${esc(p.nome)}</label>`).join('')}</details>` : ''}`)}
+    ${passo(4, 'Figuras e mapas', `<label><span class="rot">Cores do organograma</span><select id="rl-cor" class="campo" onchange="lerRel()">${Object.entries(MODOS_COR_ORG).map(([k, n]) => `<option value="${k}" ${k === c.fig.cor ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+      <label class="lg-lembrar"><input type="checkbox" id="rl-vin" ${c.fig.vinculos ? 'checked' : ''} onchange="lerRel()">Traçar os vínculos entre setores no organograma</label>
+      <label class="lg-lembrar"><input type="checkbox" id="rl-lig" ${c.fig.ligacoes ? 'checked' : ''} onchange="lerRel()">Traçar a ligação de cada escola com a sua DRE no mapa</label>
+      <label class="lg-lembrar"><input type="checkbox" id="rl-nom" ${c.fig.nomes ? 'checked' : ''} onchange="lerRel()">Mostrar o nome dos municípios no mapa</label>`)}
+    ${passo(5, 'Capa e formato', `<label><span class="rot">Título</span><input id="rl-tit" class="campo" value="${esc(c.titulo)}" oninput="lerRel()"></label>
+      <label><span class="rot">Observação na capa <small>opcional</small></span><input id="rl-obs" class="campo" value="${esc(c.obs)}" oninput="lerRel()" placeholder="ex.: preparado para a reunião de 30/10"></label>
+      <div class="rm-seg"><button class="${c.orient !== 'paisagem' ? 'on' : ''}" onclick="relCfg.orient='retrato';salvarRelCfg();renderRelatorios()"><i class="fa-solid fa-file"></i>Retrato</button><button class="${c.orient === 'paisagem' ? 'on' : ''}" onclick="relCfg.orient='paisagem';salvarRelCfg();renderRelatorios()"><i class="fa-solid fa-file fa-rotate-90"></i>Paisagem</button></div>
+      <label class="lg-lembrar"><input type="checkbox" id="rl-capa" ${c.capa ? 'checked' : ''} onchange="lerRel()">Capa com selo, código, data e hora</label>
+      <label class="lg-lembrar"><input type="checkbox" id="rl-sum" ${c.sumario ? 'checked' : ''} onchange="lerRel()">Sumário com o número das páginas</label>
+      <p class="s" style="margin:4px 0 0;font-size:11.5px;color:var(--mut)">Em retrato, os organogramas e mapas largos saem em páginas deitadas.</p>`)}
+    <div class="rm-emit rm-emit-fixo"><button class="btn btn-p" onclick="emitirRelatorio('pdf')"><i class="fa-solid fa-file-pdf"></i>Baixar PDF</button><button class="btn btn-s" onclick="emitirRelatorio('print')"><i class="fa-solid fa-print"></i>Imprimir</button><button class="btn btn-s" onclick="emitirRelatorio('word')"><i class="fa-solid fa-file-word"></i>Word</button></div></div>
+    <div class="re-papel"><div class="rm-barra-prev"><span><i class="fa-solid fa-eye"></i>Prévia</span><span id="rl-info"></span></div><div id="rl-doc" class="rm-folha ${c.orient === 'paisagem' ? 'pais' : ''}"></div></div></div>`;
 }
-function relAlternarGrupo(g){ const l = REL_SECOES.find(x => x[0] === g)[1].map(x => x[0]), s = new Set(relCfg.secoes), todas = l.every(k => s.has(k)); l.forEach(k => todas ? s.delete(k) : s.add(k)); relCfg.secoes = REL_SECOES.flatMap(x => x[1].map(y => y[0])).filter(k => s.has(k)); salvarRelCfg(); renderRelatorios(); }
-function previaRel(){ const d = $('#rl-doc'); if (!d) return; try { d.innerHTML = docHTML(montarRelatorio(relCfg, emisPrevia('REL')), { cabecalho:relCfg.titulo }); } catch (e) { d.innerHTML = `<p style="color:#dc2626">Erro ao montar: ${esc(e.message)}</p>`; console.error(e); } }
+function lerRel(){
+  const v = id => { const e = $(id); return e ? e.value : ''; }, ck = id => { const e = $(id); return e ? e.checked : false; };
+  relCfg.titulo = v('#rl-tit'); relCfg.obs = v('#rl-obs'); relCfg.area = v('#rl-area'); relCfg.dre = v('#rl-dre'); relCfg.setor = v('#rl-setor'); relCfg.capa = ck('#rl-capa'); relCfg.sumario = ck('#rl-sum');
+  relCfg.fig = { cor:v('#rl-cor') || 'tipo', vinculos:ck('#rl-vin'), ligacoes:ck('#rl-lig'), nomes:ck('#rl-nom') };
+  const marc = [...document.querySelectorAll('[data-rs]:checked')].map(x => x.dataset.rs), antes = relCfg.secoes.length;
+  relCfg.secoes = relCfg.secoes.filter(k => marc.includes(k)).concat(marc.filter(k => !relCfg.secoes.includes(k)));
+  const t = $('#rl-ptodas'); relCfg.props = !t || t.checked ? '*' : [...document.querySelectorAll('[data-rp]:checked')].map(x => x.dataset.rp);
+  salvarRelCfg();
+  if (relCfg.secoes.length !== antes) { renderRelatorios(); return; }
+  clearTimeout(lerRel.t); lerRel.t = setTimeout(previaRel, 300);
+}
+function moverSecRel(i, d){ const a = relCfg.secoes; if (!a[i + d]) return; [a[i], a[i + d]] = [a[i + d], a[i]]; salvarRelCfg(); renderRelatorios(); }
+function relAlternarGrupo(g){ const l = REL_SECOES.find(x => x[0] === g)[1].map(x => x[0]), todas = l.every(k => relCfg.secoes.includes(k)); relCfg.secoes = todas ? relCfg.secoes.filter(k => !l.includes(k)) : relCfg.secoes.concat(l.filter(k => !relCfg.secoes.includes(k))); salvarRelCfg(); renderRelatorios(); }
+function aplicarModeloRel(k){
+  const [, n, l, req] = REL_MODELOS[k]; relCfg.secoes = l.slice(); if (!relCfg.titulo || Object.values(REL_MODELOS).some(m => relCfg.titulo === 'Relatório: ' + m[1]) || relCfg.titulo === 'Relatório da estrutura organizacional') relCfg.titulo = k === 'executivo' ? 'Relatório da estrutura organizacional' : 'Relatório: ' + n;
+  if (req === 'dre' && !relCfg.dre) relCfg.dre = distanciasMT().dres[0];
+  if (req === 'setor' && !relCfg.setor) { const s = setoresOficiais().find(x => CHEFIAS.includes(x.tipo) && x.paiId); relCfg.setor = s ? s.id : ''; }
+  salvarRelCfg(); renderRelatorios();
+  if (req) setTimeout(() => { const e = $(req === 'dre' ? '#rl-dre' : '#rl-setor'); if (e) { e.closest('details').open = true; e.focus(); e.classList.add('rm-pisca'); } toast(req === 'dre' ? 'Escolha a DRE nos filtros.' : 'Escolha o setor nos filtros.'); }, 80);
+}
+async function salvarModeloRel(){
+  const nome = await abrirModal({ titulo:'Salvar como modelo', rotulo:'Salvar', html:'<label><span class="rot">Nome do modelo</span><input id="mr-n" class="campo" required placeholder="ex.: Relatório mensal ao Gabinete"></label>', aoConfirmar:async m => { const n = m.querySelector('#mr-n').value.trim(); if (!n) throw new Error('Dê um nome ao modelo.'); return n; } });
+  if (!nome) return; const M = param('modelosRel', []).filter(x => x.nome !== nome); M.unshift({ nome, cfg:JSON.parse(JSON.stringify(relCfg)) }); salvarParam('modelosRel', M.slice(0, 30)); toast('Modelo salvo para todos os usuários.'); renderRelatorios();
+}
+function carregarModeloRel(i){ const m = param('modelosRel', [])[i]; if (!m) return; relCfg = JSON.parse(JSON.stringify(m.cfg)); relPadrao(); salvarRelCfg(); renderRelatorios(); toast('Modelo "' + m.nome + '" carregado.'); }
+async function excluirModeloRel(i){ const M = param('modelosRel', []), m = M[i]; if (!m || !await confirmar('Excluir modelo', `Excluir o modelo "<b>${esc(m.nome)}</b>"?`, 'Excluir', true)) return; M.splice(i, 1); salvarParam('modelosRel', M); renderRelatorios(); }
+function previaRel(){
+  const d = $('#rl-doc'); if (!d) return; const t0 = performance.now();
+  try { const B = montarRelatorio(relCfg, emisPrevia('REL')); d.innerHTML = docHTML(B, { cabecalho:relCfg.titulo }); const i = $('#rl-info'); if (i) i.textContent = `${relCfg.secoes.length} seções · ${B.filter(b => b.t === 'fig').length} figura(s) · ${B.filter(b => b.t === 'tab').length} tabela(s)`; }
+  catch (e) { d.innerHTML = `<p style="color:#dc2626">Erro ao montar: ${esc(e.message)}</p>`; console.error(e); }
+}
 function emitirRelatorio(formato){
   lerRel(); if (!relCfg.secoes.length) return toast('Escolha ao menos uma seção.', 'aviso');
   const F = JSON.parse(JSON.stringify(relCfg));
-  return emitirDoc({ tipo:'REL', titulo:F.titulo || 'Relatório', formato, nomeArq:'relatorio', montar:e => montarRelatorio(F, e), detalhe:`${F.secoes.length} seções · ${relNomeArea(F.area)}${F.dre ? ' · ' + F.dre : ''}` });
+  return emitirDoc({ tipo:'REL', titulo:F.titulo || 'Relatório', formato, paisagem:F.orient === 'paisagem', nomeArq:'relatorio', montar:e => montarRelatorio(F, e), detalhe:`${F.secoes.length} seções · ${relNomeArea(F.area)}${F.dre ? ' · ' + F.dre : ''}${F.setor ? ' · ' + nomeSetor(F.setor) : ''}`, cfgRel:F });
 }
+
 /* ---------- portaria ---------- */
 function rmPortaria(){
   const o = portCfg, P = DB.propostas || [];
@@ -4632,7 +4858,7 @@ function rmVerificar(){
   return `<div class="cartao bl" style="--c:#16a34a"><h3><i class="fa-solid fa-shield-halved"></i>Verificar um documento</h3><p class="s">Digite o código impresso no rodapé ou no selo do documento.</p>
       <div class="rm-ver"><input id="rm-cod" class="campo" value="${esc(rmCod)}" placeholder="GAB-REL-20261025-XXXXX" onkeydown="if(event.key==='Enter'){rmCod=this.value;renderRelatorios()}"><button class="btn btn-p" onclick="rmCod=$('#rm-cod').value;renderRelatorios()"><i class="fa-solid fa-magnifying-glass"></i>Verificar</button></div>${res}</div>
     <div class="cartao bl" style="--c:#1e3a8a;margin-top:14px"><h3><i class="fa-solid fa-clock-rotate-left"></i>Documentos emitidos <span class="ct">${L.length}</span></h3>
-      <div class="tab-wrap"><table class="tab"><thead><tr><th>Código</th><th>Tipo</th><th>Título</th><th>Formato</th><th>Emitido em</th><th>Por</th></tr></thead><tbody>${L.slice(0, 200).map(x => `<tr onclick="rmCod=${arg(x.c)};renderRelatorios()"><td><code>${esc(x.c)}</code></td><td>${esc(x.tipo)}</td><td style="white-space:normal">${esc(x.titulo)}${x.det ? `<small style="display:block;color:var(--mut)">${esc(x.det)}</small>` : ''}</td><td>${esc(String(x.formato || '').toUpperCase())}</td><td>${fmtData(x.em)}</td><td>${esc(x.por || '')}</td></tr>`).join('') || '<tr><td colspan="6" class="vazio">Nenhum documento emitido ainda.</td></tr>'}</tbody></table></div></div>`;
+      <div class="tab-wrap"><table class="tab"><thead><tr><th>Código</th><th>Tipo</th><th>Título</th><th>Formato</th><th>Emitido em</th><th>Por</th></tr></thead><tbody>${L.slice(0, 200).map(x => `<tr onclick="rmCod=${arg(x.c)};renderRelatorios()"><td><code>${esc(x.c)}</code></td><td>${esc(x.tipo)}</td><td style="white-space:normal">${esc(x.titulo)}${x.det ? `<small style="display:block;color:var(--mut)">${esc(x.det)}</small>` : ''}</td><td>${esc(String(x.formato || '').toUpperCase())}</td><td>${fmtData(x.em)}</td><td>${esc(x.por || '')}${x.cfg ? `<button class="btn btn-g btn-sm" title="Gerar de novo com a mesma configuração (novo código)" onclick="event.stopPropagation();relCfg=JSON.parse(JSON.stringify(emissoes().find(y=>y.c===${arg(x.c)}).cfg));relPadrao();salvarRelCfg();abaRm('relatorio')"><i class="fa-solid fa-rotate"></i></button>` : ''}</td></tr>`).join('') || '<tr><td colspan="6" class="vazio">Nenhum documento emitido ainda.</td></tr>'}</tbody></table></div></div>`;
 }
 
 /* ===================== ANIMAÇÕES E INTERATIVIDADE ===================== */
