@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.26.1';
+const VERSAO = '1.27.0';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -86,8 +86,9 @@ const CAMPOS = {
   metas: ['id','setorId','objetivo','titulo','indicador','unidade','linhaBase','meta','resultado','prazo','status','observacao','atualizadoEm','atualizadoPor'],
   reunioes: ['id','titulo','data','participantes','itens','status','observacao','criadoEm','criadoPor','atualizadoEm','atualizadoPor'],
   parametros: ['id','valor','atualizadoEm','atualizadoPor'],
+  servidores: ['id','matricula','nome','cargo','vinculo','tipoLotacao','unidade','lotacaoCod','lotacao','setorId','dataInicio','dataFinal','sugerido','importadoEm','importadoPor'],
 };
-const TABS_DB = ['setores','validacoes','vinculos','historico','rubricas','despesas','propostas','propSetores','escolas','chefias','etapas','metas','reunioes','parametros'];
+const TABS_DB = ['setores','validacoes','vinculos','historico','rubricas','despesas','propostas','propSetores','escolas','chefias','etapas','metas','reunioes','parametros','servidores'];
 
 /* ===================== ESTRUTURA DO DECRETO Nº 2.236/2026 =====================
    Hierarquia montada a partir do anexo (organograma). Cada nível = 2 espaços.
@@ -357,7 +358,7 @@ function confirmar(titulo, texto, rotulo, perigo){
 }
 
 /* ===================== ESTADO ===================== */
-let DB = { setores:[], validacoes:[], vinculos:[], historico:[], rubricas:[], despesas:[], propostas:[], propSetores:[], escolas:[], chefias:[], etapas:[], metas:[], reunioes:[], parametros:[] };
+let DB = { setores:[], validacoes:[], vinculos:[], historico:[], rubricas:[], despesas:[], propostas:[], propSetores:[], escolas:[], chefias:[], etapas:[], metas:[], reunioes:[], parametros:[], servidores:[] };
 let backendVersao = '';
 const URL_PADRAO = 'https://script.google.com/macros/s/AKfycbzZsM71FJARYYoqpRcFY4tHUAVBV-EdVW2NDL6eLaMId-iXY6Z-bnhuOkxA2nyfrdUz/exec';
 let cfg = Object.assign({ url:URL_PADRAO, login:'', usuario:'', perfil:'', modo:'' }, store.get('gaborg_cfg', {}));
@@ -1088,7 +1089,7 @@ const CORPO = {
         <label><span class="rot">Servidores</span><input class="campo" data-campo="servidores" data-num value="${esc(s.servidores)}" inputmode="numeric" placeholder="0"></label>
         <label><span class="rot">Cargos comissionados</span><input class="campo" data-campo="comissionados" data-num value="${esc(s.comissionados)}" inputmode="numeric" placeholder="0"></label>
       </div>
-      <div id="pn-soma">${blocoSoma(s)}</div>
+      <div id="pn-soma">${blocoSoma(s)}</div>${svResumoSetor(s)}
       ${cenSwap ? '<p class="s" style="margin-top:14px;font-size:12.5px"><i class="fa-solid fa-lightbulb"></i> Os custos (DGA, bolsas e despesas) desta proposta ficam em <b>Propostas › Alterações</b>.</p>' : blocoFinSetor(s)}`;
   },
   analise(s){
@@ -1270,6 +1271,7 @@ function atualizarVistaAtual(){
   else if (vistaAtual === 'reestruturacao') renderReestruturacao();
   else if (vistaAtual === 'implantacao') renderImplantacao();
   else if (vistaAtual === 'chefias') renderChefias();
+  else if (vistaAtual === 'servidores') renderServidores();
   else if (vistaAtual === 'resultados') renderResultados();
   else if (vistaAtual === 'regional') renderRegional();
   else if (vistaAtual === 'reunioes') renderReunioes();
@@ -3926,6 +3928,290 @@ function exportarMinuta(modo){
   toast('Documento emitido: ' + codigo);
 }
 
+/* ===================== SERVIDORES (Órgão Central e DREs) =====================
+   A planilha de lotação é importada pelo próprio sistema e gravada na aba "Servidores" da planilha Google.
+   O CPF nunca é importado. Usuários com perfil Leitor recebem os dados sem nome e sem matrícula. */
+let svAba = store.get('gaborg_sv_aba', 'geral'), svFil = { q:'', tipo:'', unid:'', cargo:'', vinc:'', sit:'' }, svLim = 100, svPrev = null, svUniArea = '', svUniVazios = false;
+const SV_ABAS = [['geral', 'Visão geral', 'fa-chart-pie'], ['unidades', 'Por unidade', 'fa-sitemap'], ['dres', 'DREs', 'fa-map-location-dot'], ['lista', 'Lista', 'fa-list'], ['importar', 'Importar planilha', 'fa-file-import']];
+const SV_CARGOS = [['Professor', '#2563eb', /^PROFESSOR(ES)?\b/], ['ADES', '#0e7490', /^ADES$/], ['TAE', '#7c3aed', /^TAE$/], ['AAE', '#0891b2', /^AAE$/], ['TDES', '#4f46e5', /^TDES$/], ['Estagiário', '#65a30d', /ESTAGI/], ['Residente técnico', '#84cc16', /RESIDENTE/], ['Exclusivamente comissionado', '#d97706', /COMISSIONADO/], ['Militar', '#334155', /MILITAR|POLICIAL/]];
+const SV_COR_OUTROS = '#94a3b8';
+const svGrupoCargo = c => { const t = String(c || '').trim().toUpperCase(); if (!t) return 'Não informado'; const g = SV_CARGOS.find(x => x[2].test(t)); return g ? g[0] : 'Outros cargos'; };
+const svCorCargo = g => (SV_CARGOS.find(x => x[0] === g) || [0, g === 'Não informado' ? '#cbd5e1' : SV_COR_OUTROS])[1];
+const svEhDRE = r => /^DRE\b/i.test(r.unidade || '') || /DRE/i.test(r.tipoLotacao || '');
+const svNomeUnid = u => /^DRE\s/i.test(u || '') ? 'DRE ' + nomeDRE(u) : String(u || '—');
+const svTemp = r => /TEMPOR/i.test(r.vinculo || '');
+const svEfet = r => /EFETIV/i.test(r.vinculo || '');
+const svChave = r => (r.unidade || '') + '|' + (r.lotacaoCod || r.lotacao || '');
+const svLista = () => DB.servidores || [];
+const svComNome = () => svLista().some(r => r.nome);
+const svDiasFim = r => r.dataFinal ? diasAte(r.dataFinal) : null;
+function svVerMaior(a, b){ const p = s => String(s || '0').split('.').map(Number); const x = p(a), y = p(b); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); } return false; }
+const svBackendOk = () => !online() || !backendVersao || !svVerMaior('1.11.0', backendVersao);
+
+/* ---------- correspondência lotação → setor da estrutura ---------- */
+const SV_PARADAS = new Set(['de', 'da', 'do', 'das', 'dos', 'e', 'a', 'o', 'em', 'para', 'na', 'no']);
+const svTokens = s => new Set(norm(s).replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(w => w && !SV_PARADAS.has(w)));
+function svLimparLotacao(txt, unidade){
+  let t = String(txt || '').replace(/^\s*\d+\s*-\s*/, '').replace(/\s*-\s*DME\s*$/i, '').trim();
+  const dre = String(unidade || '').replace(/^DRE\s+/i, '');
+  if (dre) t = t.replace(new RegExp('\\s*(DA|DE)?\\s*DIRETORIA\\s+(REGIONAL|METROPOLITANA)\\s+(DE\\s+(EDUCA[ÇC][ÃA]O\\s+)?)?(DE\\s+)?' + dre.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*$', 'i'), '').trim();
+  return t;
+}
+function svRaizes(){
+  const L = setoresOficiais().filter(s => s.status !== 'Extinto'), dre = new Map(), area = new Map();
+  L.forEach(s => { if (/^Diretoria (Regional de Educação de|Metropolitana de Educação)/i.test(s.nome) && !/Adjunta/i.test(s.nome)) dre.set(norm(s.nome), s.id); if (s.sigla && areas.includes(s.id)) area.set(s.sigla.toUpperCase(), s.id); });
+  return { L, dre, area };
+}
+function svCandidatos(unidade, R){
+  const u = String(unidade || '').toUpperCase().trim(), sub = id => [porId.get(id), ...[...descendentes(id)].map(i => porId.get(i))].filter(s => s && s.status !== 'Extinto');
+  if (/^DRE\s/.test(u)) { const n = norm(u.replace(/^DRE\s+/, '')); for (const [k, id] of R.dre) if (k.endsWith(n) || (n === 'metropolitana' && k.includes('metropolitana'))) return sub(id); return []; }
+  if (R.area.has(u)) return sub(R.area.get(u));
+  return R.L;
+}
+function svCasar(unidade, lotacao, R, mapa){
+  const k = unidade + '|' + lotacao.cod; if (mapa && mapa[k]) return mapa[k] !== '-' && porId.has(mapa[k]) ? mapa[k] : '';
+  const alvo = svLimparLotacao(lotacao.nome, unidade), ta = svTokens(alvo), cand = svCandidatos(unidade, R);
+  if (!ta.size || /^diretoria (regional|metropolitana)( de educacao)?$/.test(norm(alvo))) return /^DRE\s/i.test(unidade) && cand[0] ? cand[0].id : '';
+  let melhor = '', ms = 0;
+  const testar = (lista, min) => lista.forEach(s => { const tb = svTokens(s.nome); let i = 0; ta.forEach(w => { if (tb.has(w)) i++; }); const sc = i / (ta.size + tb.size - i); if (sc > ms || (sc === ms && melhor && (prof.get(s.id) || 0) < (prof.get(melhor) || 0))) { ms = sc; melhor = s.id; } });
+  testar(cand); if (ms >= .6) return melhor;
+  if (/^DRE\s/i.test(unidade)) return '';
+  ms = 0; melhor = ''; testar(R.L); return ms >= .85 ? melhor : '';
+}
+const svMapa = () => { const m = param('mapaLotacao', {}); return m && typeof m === 'object' ? m : {}; };
+
+/* ---------- indicadores ---------- */
+function svDados(lista){
+  const L = lista || svLista(), cont = f => L.filter(f).length;
+  const porUnid = new Map(); L.forEach(r => { const u = r.unidade || '—'; if (!porUnid.has(u)) porUnid.set(u, []); porUnid.get(u).push(r); });
+  const porCargo = {}; L.forEach(r => { const g = svGrupoCargo(r.cargo); porCargo[g] = (porCargo[g] || 0) + 1; });
+  const porSetor = new Map(); L.forEach(r => { if (!r.setorId) return; if (!porSetor.has(r.setorId)) porSetor.set(r.setorId, []); porSetor.get(r.setorId).push(r); });
+  const semCasar = new Map(); L.filter(r => !r.setorId || !porId.has(r.setorId)).forEach(r => { const k = svChave(r); if (!semCasar.has(k)) semCasar.set(k, { k, unidade:r.unidade, cod:r.lotacaoCod, nome:svLimparLotacao(r.lotacao, ''), l:[] }); semCasar.get(k).l.push(r); });
+  const vence90 = L.filter(r => { const d = svDiasFim(r); return d !== null && d >= 0 && d <= 90; }), venceAno = L.filter(r => r.dataFinal && r.dataFinal.slice(0, 4) === hojeISO().slice(0, 4) && (svDiasFim(r) ?? -1) >= 0);
+  return { L, n:L.length, oc:cont(r => !svEhDRE(r)), dre:cont(svEhDRE), efet:cont(svEfet), temp:cont(svTemp), prof:cont(r => svGrupoCargo(r.cargo) === 'Professor'), est:cont(r => ['Estagiário', 'Residente técnico'].includes(svGrupoCargo(r.cargo))),
+    com:cont(r => svGrupoCargo(r.cargo) === 'Exclusivamente comissionado'), semCargo:cont(r => !r.cargo), sug:cont(r => r.sugerido === '1' || /^sim$/i.test(r.sugerido)), porUnid, porCargo, porSetor, semCasar, vence90, venceAno };
+}
+function svBarras(it, total){ const mx = Math.max(1, ...it.map(x => x[1])); return it.map(([n, v, partes, on, ic]) => `<div class="barra-l sv-b" ${on ? `style="cursor:pointer" onclick="${on}"` : ''}><span class="n" title="${esc(n)}">${ic || ''}${esc(n)}</span><span class="t">${(partes || [[v, '#2563eb']]).map(([q, c]) => `<span style="width:${(q / mx * 100).toFixed(2)}%;background:${c}" title="${fmtN(q)}"></span>`).join('')}</span><b>${fmtN(v)}${total ? `<small>${pct(v, total)}%</small>` : ''}</b></div>`).join(''); }
+const svIrLista = o => `svFil=Object.assign({q:'',tipo:'',unid:'',cargo:'',vinc:'',sit:''},${esc(JSON.stringify(o))});svLim=100;abaSv('lista')`;
+
+/* ---------- tela ---------- */
+function abaSv(k){ svAba = k; store.set('gaborg_sv_aba', k); renderServidores(); const r = $('#v-servidores .rolagem'); if (r) r.scrollTop = 0; }
+function renderServidores(){
+  const el = $('#sv-corpo'); if (!el) return;
+  const D = svDados(), imp = param('servidoresImport', null);
+  const aviso = !svBackendOk() ? `<div class="cartao bl" style="--c:#dc2626"><h3><i class="fa-solid fa-triangle-exclamation"></i>Atualize o Codigo.gs para a versão 1.11.0</h3><p class="s">A planilha Google ainda não tem a aba "Servidores" (backend ${esc(backendVersao)}). Cole o novo Codigo.gs no Apps Script e publique uma nova versão; sem isso os servidores ficam só neste navegador.</p></div>` : '';
+  const topo = abasG(SV_ABAS.filter(a => a[0] !== 'importar' || ehAdmin()), svAba, 'abaSv') + (imp && imp.em ? `<p class="sv-orig"><i class="fa-solid fa-file-excel"></i>Base: <b>${esc(imp.arquivo || 'planilha')}</b> · importada em ${fmtData(imp.em)} por ${esc(imp.por || '—')} · ${fmtN(D.n)} servidores</p>` : '');
+  if (!D.n && svAba !== 'importar') { el.innerHTML = aviso + topo + `<div class="cartao vazio"><i class="fa-solid fa-id-card-clip" style="font-size:34px;color:var(--marca);margin-bottom:10px"></i><h3 style="margin:0 0 6px">Nenhum servidor importado ainda</h3><p>${ehAdmin() ? 'Importe a planilha de lotação (Órgão Central e DREs) para ver quem está em cada unidade.' : 'Peça a um administrador para importar a planilha de lotação.'}</p>${ehAdmin() ? `<button class="btn btn-p" onclick="abaSv('importar')"><i class="fa-solid fa-file-import"></i>Importar planilha</button>` : ''}</div>`; return; }
+  const corpo = { geral:svGeral, unidades:svUnidades, dres:svDREs, lista:svListaTela, importar:svImportarTela }[svAba] || svGeral;
+  el.innerHTML = aviso + topo + corpo(D);
+}
+function svGeral(D){
+  const U = [...D.porUnid].map(([u, l]) => [u, l.length, l.filter(svEfet).length, l.filter(svTemp).length]).sort((a, b) => b[1] - a[1]);
+  const C = Object.entries(D.porCargo).sort((a, b) => b[1] - a[1]);
+  const S = setoresOficiais().filter(s => s.status !== 'Extinto' && !['Conselho', 'Colegiado', 'Comissão', 'Câmara', 'Unidades Escolares'].includes(s.tipo) && !/^Unidades Escolares$/i.test(s.nome));
+  const vazios = S.filter(s => !D.porSetor.has(s.id)), semC = [...D.semCasar.values()].sort((a, b) => b.l.length - a.l.length);
+  const tempAlta = [...D.porSetor].map(([id, l]) => [id, l.length, l.filter(svTemp).length]).filter(x => x[1] >= 5 && x[2] / x[1] > .6).sort((a, b) => b[2] / b[1] - a[2] / a[1]);
+  const meses = {}; D.L.forEach(r => { const d = svDiasFim(r); if (d === null || d < 0 || d > 366) return; const m = r.dataFinal.slice(0, 7); meses[m] = (meses[m] || 0) + 1; });
+  const nomeMes = m => new Date(m + '-15T12:00:00').toLocaleDateString('pt-BR', { month:'short', year:'numeric' }).replace('.', '');
+  const ocE = D.L.filter(r => !svEhDRE(r)), drE = D.L.filter(svEhDRE);
+  const al = [];
+  if (semC.length) al.push(['#dc2626', `<b>${fmtN(D.L.length - [...D.porSetor.values()].reduce((t, l) => t + l.length, 0))}</b> servidores em <b>${semC.length}</b> lotações que não correspondem a nenhuma unidade da nova estrutura (Decreto nº 2.236/2026).`, "abaSv('unidades')"]);
+  if (D.vence90.length) al.push(['#d97706', `<b>${fmtN(D.vence90.length)}</b> vínculos terminam nos próximos 90 dias${D.vence90.filter(svTemp).length ? ` (${fmtN(D.vence90.filter(svTemp).length)} temporários)` : ''}: risco de descontinuidade.`, svIrLista({ sit:'vence90' })]);
+  if (D.venceAno.length > D.vence90.length) al.push(['#d97706', `<b>${fmtN(D.venceAno.length)}</b> vínculos terminam até 31/12/${hojeISO().slice(0, 4)} (${pct(D.venceAno.length, D.n)}% da força de trabalho).`, svIrLista({ sit:'venceAno' })]);
+  if (vazios.length) al.push(['#7c3aed', `<b>${vazios.length}</b> unidades da nova estrutura ainda sem nenhum servidor lotado na planilha.`, "svUniVazios=true;abaSv('unidades')"]);
+  if (tempAlta.length) al.push(['#d97706', `<b>${tempAlta.length}</b> unidades com mais de 60% de temporários (mín. 5 servidores). Maior: ${esc(nomeSetor(tempAlta[0][0]))} (${pct(tempAlta[0][2], tempAlta[0][1])}%).`, "abaSv('unidades')"]);
+  if (D.prof) al.push(['#2563eb', `<b>${fmtN(D.prof)}</b> professores (${pct(D.prof, D.n)}%) estão lotados em unidades administrativas, fora da sala de aula.`, svIrLista({ cargo:'Professor' })]);
+  if (D.semCargo) al.push(['#94a3b8', `<b>${fmtN(D.semCargo)}</b> registros sem cargo informado.`, svIrLista({ cargo:'Não informado' })]);
+  if (D.sug) al.push(['#0e7490', `<b>${fmtN(D.sug)}</b> servidores marcados como "sugeridos" na planilha de origem.`, svIrLista({ sit:'sugerido' })]);
+  return `<div class="kpis">${kpiG('#1e3a8a', 'fa-users', 'Servidores', fmtN(D.n), `${fmtN(D.oc)} no Órgão Central · ${fmtN(D.dre)} nas DREs`, "abaSv('lista')")}
+    ${kpiG('#16a34a', 'fa-user-check', 'Efetivos', fmtN(D.efet), pct(D.efet, D.n) + '% do total', svIrLista({ vinc:'EFETIVO' }))}
+    ${kpiG('#d97706', 'fa-user-clock', 'Temporários', fmtN(D.temp), pct(D.temp, D.n) + '% do total', svIrLista({ vinc:'TEMPOR' }))}
+    ${kpiG('#2563eb', 'fa-chalkboard-user', 'Professores fora da sala', fmtN(D.prof), 'lotados em unidades administrativas', svIrLista({ cargo:'Professor' }))}
+    ${kpiG('#65a30d', 'fa-user-graduate', 'Estagiários e residentes', fmtN(D.est), pct(D.est, D.n) + '% do total')}
+    ${kpiG('#b45309', 'fa-user-tie', 'Exclusivamente comissionados', fmtN(D.com), 'sem vínculo efetivo')}
+    ${kpiG('#dc2626', 'fa-hourglass-half', 'Vínculos a vencer (90 dias)', fmtN(D.vence90.length), fmtN(D.venceAno.length) + ' até o fim do ano', svIrLista({ sit:'vence90' }))}
+    ${kpiG('#7c3aed', 'fa-link-slash', 'Fora da nova estrutura', fmtN([...D.semCasar.values()].reduce((t, x) => t + x.l.length, 0)), D.semCasar.size + ' lotações sem correspondência', "abaSv('unidades')")}</div>
+    ${al.length ? `<div class="cartao bl" style="--c:#dc2626"><h3><i class="fa-solid fa-bell"></i>Pontos de atenção</h3><p class="s">O que a planilha de lotação mostra sobre a nova estrutura</p><div class="pend">${al.map(([c, t, on]) => `<button onclick="${on}"><i class="fa-solid fa-circle" style="color:${c};font-size:8px"></i><span>${t}</span><i class="fa-solid fa-chevron-right" style="margin-left:auto;color:var(--mut2)"></i></button>`).join('')}</div></div>` : ''}
+    <div class="grade2"><div class="cartao bl" style="--c:#1e3a8a"><h3><i class="fa-solid fa-building-columns"></i>Onde estão os servidores</h3><p class="s">Por secretaria adjunta e DRE · <span class="sv-leg"><i style="background:#16a34a"></i>efetivos <i style="background:#f59e0b"></i>temporários</span></p>${svBarras(U.map(([u, n, e, t]) => [svNomeUnid(u), n, [[e, '#16a34a'], [t, '#f59e0b'], [n - e - t, '#cbd5e1']], svIrLista({ unid:u })]), D.n)}</div>
+      <div><div class="cartao bl" style="--c:#2563eb"><h3><i class="fa-solid fa-id-badge"></i>Por cargo</h3><p class="s">Agrupado pela carreira</p>${svBarras(C.map(([g, n]) => [g, n, [[n, svCorCargo(g)]], svIrLista({ cargo:g })]), D.n)}</div>
+      <div class="cartao bl" style="--c:#0e7490"><h3><i class="fa-solid fa-scale-balanced"></i>Órgão Central × DREs</h3><p class="s">Composição dos vínculos</p>${svBarras([['Órgão Central', ocE.length, [[ocE.filter(svEfet).length, '#16a34a'], [ocE.filter(svTemp).length, '#f59e0b']], svIrLista({ tipo:'oc' })], ['DREs', drE.length, [[drE.filter(svEfet).length, '#16a34a'], [drE.filter(svTemp).length, '#f59e0b']], svIrLista({ tipo:'dre' })]], D.n)}
+        <p class="s" style="margin-top:8px">Temporários: ${pct(ocE.filter(svTemp).length, ocE.length)}% no Órgão Central e ${pct(drE.filter(svTemp).length, drE.length)}% nas DREs.</p></div>
+      <div class="cartao bl" style="--c:#d97706"><h3><i class="fa-solid fa-calendar-xmark"></i>Fim dos vínculos (próximos 12 meses)</h3><p class="s">Quantos vínculos terminam em cada mês</p>${Object.keys(meses).length ? svBarras(Object.keys(meses).sort().map(m => [nomeMes(m), meses[m], [[meses[m], '#f59e0b']]])) : '<p class="vazio">Nenhum vínculo termina nos próximos 12 meses.</p>'}</div></div></div>`;
+}
+function svUnidades(D){
+  const R = setoresOficiais().filter(s => s.status !== 'Extinto' && (!svUniArea || areaDe.get(s.id) === svUniArea || s.id === svUniArea));
+  const ord = R.map(s => ({ s, l:D.porSetor.get(s.id) || [] })).filter(x => svUniVazios || x.l.length).sort((a, b) => ordemArvore(a.s.id) - ordemArvore(b.s.id));
+  const semC = [...D.semCasar.values()].sort((a, b) => (a.unidade || '').localeCompare(b.unidade || '', 'pt-BR') || b.l.length - a.l.length);
+  const pode = podeGestao(), op = pode ? `<option value="">— sem correspondência —</option>` + setoresOficiais().filter(s => s.status !== 'Extinto').slice().sort((a, b) => ordemArvore(a.id) - ordemArvore(b.id)).map(s => `<option value="${esc(s.id)}">${'  '.repeat(Math.min(prof.get(s.id) || 0, 6))}${esc(s.nome)}${s.sigla ? ' (' + esc(s.sigla) + ')' : ''}</option>`).join('') : '';
+  const cel = (l, f) => { const n = l.filter(f).length; return n ? fmtN(n) : '<span class="sv-z">—</span>'; };
+  return `<div class="filtros"><select class="campo" onchange="svUniArea=this.value;renderServidores()"><option value="">Todas as áreas</option>${areas.map(a => `<option value="${esc(a)}" ${a === svUniArea ? 'selected' : ''}>${esc(nomeCurto(porId.get(a)))}</option>`).join('')}</select>
+      <label class="lg-lembrar" style="margin:0"><input type="checkbox" ${svUniVazios ? 'checked' : ''} onchange="svUniVazios=this.checked;renderServidores()">Mostrar unidades sem servidores</label><span style="flex:1"></span>
+      ${pode ? `<button class="btn btn-s btn-sm" onclick="svAplicarContagem()"><i class="fa-solid fa-arrows-rotate"></i>Atualizar nº de servidores dos setores</button>` : ''}</div>
+    <div class="tab-wrap"><table class="tab sv-tab"><thead><tr><th>Unidade da estrutura</th><th class="dir">Servidores</th><th class="dir">Efetivos</th><th class="dir">Temporários</th><th class="dir">% temp.</th><th class="dir">Professores</th><th class="dir">Estagiários</th><th class="dir">Comissionados</th></tr></thead><tbody>
+    ${ord.map(({ s, l }) => { const t = l.filter(svTemp).length; return `<tr onclick="svVerSetor(${arg(s.id)})" class="${l.length ? '' : 'sv-vazio'}"><td class="nm" style="white-space:normal;padding-left:${8 + Math.min(prof.get(s.id) || 0, 8) * 12}px"><i class="fa-solid ${icTipo(s.tipo)}" style="color:${corTipo(s.tipo)};margin-right:6px"></i><b>${esc(s.nome)}</b>${s.sigla ? ` <small style="color:var(--mut)">${esc(s.sigla)}</small>` : ''}</td>
+      <td class="dir"><b>${l.length ? fmtN(l.length) : '<span class="sv-z">0</span>'}</b></td><td class="dir">${cel(l, svEfet)}</td><td class="dir">${cel(l, svTemp)}</td><td class="dir">${l.length ? `<span style="color:${t / l.length > .6 ? '#d97706' : 'inherit'}">${pct(t, l.length)}%</span>` : '—'}</td>
+      <td class="dir">${cel(l, r => svGrupoCargo(r.cargo) === 'Professor')}</td><td class="dir">${cel(l, r => ['Estagiário', 'Residente técnico'].includes(svGrupoCargo(r.cargo)))}</td><td class="dir">${cel(l, r => svGrupoCargo(r.cargo) === 'Exclusivamente comissionado')}</td></tr>`; }).join('') || '<tr><td colspan="8" class="vazio">Nenhuma unidade com servidores neste filtro.</td></tr>'}</tbody></table></div>
+    ${svCorrCard(D, semC, op, pode)}`;
+}
+const ordemArvore = (() => { let cache = null, ver = null; return id => { if (ver !== porId) { ver = porId; cache = new Map(); let i = 0; const vis = s => { cache.set(s.id, i++); filhosDe(s.id).forEach(vis); }; setoresOficiais().filter(s => !s.paiId || !porId.has(s.paiId)).forEach(vis); } return cache.has(id) ? cache.get(id) : 1e9; }; })();
+let svCorr = 'sem';
+function svCorrCard(D, semC, op, pode){
+  const todas = new Map(); D.L.forEach(r => { const k = svChave(r); if (!todas.has(k)) todas.set(k, { k, unidade:r.unidade, cod:r.lotacaoCod, nome:svLimparLotacao(r.lotacao, ''), l:[], setorId:r.setorId && porId.has(r.setorId) ? r.setorId : '' }); todas.get(k).l.push(r); });
+  const manual = svMapa(), L = svCorr === 'todas' ? [...todas.values()].sort((a, b) => (a.unidade || '').localeCompare(b.unidade || '', 'pt-BR') || (a.nome || '').localeCompare(b.nome || '', 'pt-BR')) : semC;
+  return `<div class="cartao bl" style="--c:#7c3aed;margin-top:14px"><h3><i class="fa-solid fa-link-slash"></i>Correspondência das lotações com a nova estrutura</h3>
+    <p class="s">${semC.length} lotação(ões) da planilha sem unidade correspondente no Decreto nº 2.236/2026 · ${todas.size} lotações no total. A ligação automática compara os nomes; ${pode ? 'confira e corrija quando precisar — a escolha vale para as próximas importações.' : 'Editores podem corrigir.'}</p>
+    <div class="rm-seg" style="max-width:420px;margin-bottom:10px"><button class="${svCorr === 'sem' ? 'on' : ''}" onclick="svCorr='sem';renderServidores()">Sem correspondência (${semC.length})</button><button class="${svCorr === 'todas' ? 'on' : ''}" onclick="svCorr='todas';renderServidores()">Todas as lotações (${todas.size})</button></div>
+    ${L.length ? `<div class="tab-wrap" style="max-height:520px"><table class="tab"><thead><tr><th>Lotação na planilha</th><th>Unidade</th><th class="dir">Servidores</th><th>${pode ? 'Unidade na nova estrutura' : 'Na nova estrutura'}</th></tr></thead><tbody>${L.map(x => { const sid = x.setorId || ''; return `<tr><td style="white-space:normal"><b>${esc(x.nome || '—')}</b>${x.cod ? ` <small style="color:var(--mut)">cód. ${esc(x.cod)}</small>` : ''}</td><td>${esc(svNomeUnid(x.unidade))}</td><td class="dir">${fmtN(x.l.length)}</td>
+      <td style="white-space:normal;min-width:260px">${sid ? `<b>${esc(nomeSetor(sid))}</b><small style="display:block;color:var(--mut)">${esc(caminho(sid).slice(1).map(nomeCurto).join(' › ') || '')}</small>` : chipG('sem correspondência', '#7c3aed')}
+        <div style="display:flex;gap:6px;align-items:center;margin-top:4px">${manual[x.k] ? chipG('manual', '#7c3aed') : sid ? chipG('automática', '#16a34a') : ''}${pode ? `<button class="btn btn-s btn-sm" onclick="svEscolher(${arg(x.k)})"><i class="fa-solid fa-pen"></i>${sid ? 'Alterar' : 'Ligar'}</button>` : ''}</div></td></tr>`; }).join('')}</tbody></table></div>` : '<p class="vazio">Todas as lotações foram ligadas a uma unidade da estrutura.</p>'}</div>`;
+}
+let svEsc = null;
+function svEscOps(q){ const E = svEsc; if (!E) return ''; return '<option value="">— sem correspondência —</option>' + E.L.filter(x => !q || norm(x.r).includes(norm(q))).map(x => `<option value="${esc(x.id)}" ${x.id === E.sel ? 'selected' : ''}>${esc(x.r)}</option>`).join(''); }
+function svEscolher(k){
+  const ex = svLista().find(r => svChave(r) === k); if (!ex) return;
+  svEsc = { k, sel:ex.setorId, L:setoresOficiais().filter(s => s.status !== 'Extinto').slice().sort((a, b) => ordemArvore(a.id) - ordemArvore(b.id)).map(s => ({ id:s.id, r:s.nome + (s.sigla ? ' (' + s.sigla + ')' : '') + (caminho(s.id).length > 1 ? ' — ' + caminho(s.id).slice(1).map(nomeCurto).join(' › ') : '') })) };
+  abrirModal({ titulo:'Ligar lotação à nova estrutura', rotulo:'Salvar', largura:720, html:`<p class="s" style="margin:0 0 8px"><b>${esc(svLimparLotacao(ex.lotacao, ''))}</b> · ${esc(svNomeUnid(ex.unidade))}</p>
+    <input class="campo" id="sv-esc-q" placeholder="Filtrar por nome, sigla ou DRE" oninput="document.getElementById('sv-esc-s').innerHTML=svEscOps(this.value)" style="margin-bottom:8px">
+    <select class="campo" id="sv-esc-s" size="12" style="height:auto">${svEscOps('')}</select>`,
+    aoConfirmar:() => { const v = $('#sv-esc-s').value; svLigar(k, v); return true; } });
+}
+function svVerSetor(id){
+  const s = porId.get(id); if (!s) return; const l = (svDados().porSetor.get(id) || []).slice().sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR'));
+  const nomes = svComNome();
+  abrirModal({ titulo:(s.sigla ? s.sigla + ' · ' : '') + s.nome, rotulo:'Fechar', semCancelar:true, largura:760, html:`<p class="s" style="margin:0 0 10px">${fmtN(l.length)} servidor(es) lotado(s) nesta unidade segundo a planilha · ${fmtN(l.filter(svEfet).length)} efetivos · ${fmtN(l.filter(svTemp).length)} temporários</p>
+    ${l.length ? `<div class="tab-wrap" style="max-height:52vh"><table class="tab"><thead><tr>${nomes ? '<th>Nome</th><th>Matrícula</th>' : ''}<th>Cargo</th><th>Vínculo</th><th>Início</th><th>Fim</th></tr></thead><tbody>${l.map(r => `<tr>${nomes ? `<td>${esc(r.nome || '—')}</td><td>${esc(r.matricula || '—')}</td>` : ''}<td>${esc(r.cargo || '—')}</td><td>${chipG(esc(r.vinculo || '—'), svTemp(r) ? '#d97706' : '#16a34a')}</td><td>${r.dataInicio ? fmtDia(r.dataInicio) : '—'}</td><td>${r.dataFinal ? fmtDia(r.dataFinal) : '—'}</td></tr>`).join('')}</tbody></table></div>` : '<p class="vazio">Nenhum servidor lotado nesta unidade na planilha importada.</p>'}
+    ${nomes ? '' : '<p class="s" style="margin-top:8px"><i class="fa-solid fa-lock"></i> Nomes e matrículas aparecem só para Editores e Administradores.</p>'}` });
+}
+function svLigar(k, setorId){
+  if (!podeGestao()) return;
+  const m = svMapa(); if (setorId) m[k] = setorId; else m[k] = '-'; salvarParam('mapaLotacao', m);
+  const ops = []; svLista().forEach(r => { if (svChave(r) === k) { r.setorId = setorId; ops.push({ op:'upsert', table:'servidores', record:{ id:r.id, setorId } }); } });
+  svEnfileirarLote(ops); toast(setorId ? `${ops.length} servidor(es) ligado(s) a ${nomeSetor(setorId)}.` : `${ops.length} servidor(es) marcados como sem correspondência.`); renderServidores();
+}
+async function svAplicarContagem(){
+  const P = svDados().porSetor, mud = setoresOficiais().filter(s => s.status !== 'Extinto' && String(num(s.servidores)) !== String((P.get(s.id) || []).length) && ((P.get(s.id) || []).length || num(s.servidores)));
+  if (!mud.length) return toast('O nº de servidores dos setores já está igual ao da planilha.');
+  if (!await confirmar('Atualizar o nº de servidores', `O campo "Nº de servidores" de <b>${mud.length}</b> setor(es) passará a ser a quantidade de servidores lotados na planilha importada. Continuar?`, 'Atualizar')) return;
+  mud.forEach(s => { s.servidores = String((P.get(s.id) || []).length); s.atualizadoEm = agora(); s.atualizadoPor = cfg.usuario || ''; enfileirar('setores', s); });
+  redesenharTudo(); toast(`${mud.length} setor(es) atualizado(s).`);
+}
+function svDREs(D){
+  const E = escolasLista(), dres = dresDe(E), Ld = D.L.filter(svEhDRE);
+  const linhas = dres.map(d => { const l = Ld.filter(r => norm(r.unidade) === norm(d)), e = E.filter(x => x.dre === d); return { d, l, n:l.length, ef:l.filter(svEfet).length, te:l.filter(svTemp).length, pr:l.filter(r => svGrupoCargo(r.cargo) === 'Professor').length, es:e.length, mun:new Set(e.map(x => x.municipio)).size }; });
+  const med = linhas.reduce((t, x) => t + x.n, 0) / Math.max(1, linhas.reduce((t, x) => t + x.es, 0));
+  return `<div class="kpis">${kpiG('#0e7490', 'fa-users', 'Servidores nas DREs', fmtN(Ld.length), dres.length + ' diretorias regionais')}${kpiG('#16a34a', 'fa-school', 'Servidores por escola', med.toFixed(1).replace('.', ','), 'média da rede (servidores da DRE ÷ escolas)')}
+      ${kpiG('#d97706', 'fa-user-clock', 'Temporários nas DREs', pct(Ld.filter(svTemp).length, Ld.length) + '%', fmtN(Ld.filter(svTemp).length) + ' servidores')}${kpiG('#2563eb', 'fa-chalkboard-user', 'Professores nas DREs', fmtN(Ld.filter(r => svGrupoCargo(r.cargo) === 'Professor').length), 'em funções administrativas')}</div>
+    <div class="grade2"><div class="cartao bl" style="--c:#0e7490"><h3><i class="fa-solid fa-scale-unbalanced"></i>Servidores por escola em cada DRE</h3><p class="s">Quanto maior, mais equipe para apoiar cada escola</p>${svBarras(linhas.slice().sort((a, b) => b.n / Math.max(1, b.es) - a.n / Math.max(1, a.es)).map(x => [nomeDRE(x.d), +(x.n / Math.max(1, x.es)).toFixed(1), [[x.n / Math.max(1, x.es), corDRE(dres, x.d)]], svIrLista({ unid:x.l[0] ? x.l[0].unidade : x.d })])).replace(/<b>([\d.]+)<\/b>/g, (m, v) => `<b>${String(v).replace('.', ',')}</b>`)}</div>
+      <div class="cartao bl" style="--c:#16a34a"><h3><i class="fa-solid fa-users-between-lines"></i>Tamanho das equipes</h3><p class="s"><span class="sv-leg"><i style="background:#16a34a"></i>efetivos <i style="background:#f59e0b"></i>temporários</span></p>${svBarras(linhas.slice().sort((a, b) => b.n - a.n).map(x => [nomeDRE(x.d), x.n, [[x.ef, '#16a34a'], [x.te, '#f59e0b'], [x.n - x.ef - x.te, '#cbd5e1']], svIrLista({ unid:x.l[0] ? x.l[0].unidade : x.d })]))}</div></div>
+    <div class="tab-wrap"><table class="tab sv-tab"><thead><tr><th>DRE</th><th class="dir">Servidores</th><th class="dir">Efetivos</th><th class="dir">Temporários</th><th class="dir">% temp.</th><th class="dir">Professores</th><th class="dir">Escolas</th><th class="dir">Municípios</th><th class="dir">Serv./escola</th></tr></thead><tbody>
+    ${linhas.map(x => `<tr onclick="${svIrLista({ unid:x.l[0] ? x.l[0].unidade : x.d })}"><td><i class="fa-solid fa-circle" style="color:${corDRE(dres, x.d)};font-size:9px;margin-right:6px"></i><b>${esc(nomeDRE(x.d))}</b></td><td class="dir"><b>${fmtN(x.n)}</b></td><td class="dir">${fmtN(x.ef)}</td><td class="dir">${fmtN(x.te)}</td><td class="dir">${pct(x.te, x.n)}%</td><td class="dir">${fmtN(x.pr)}</td><td class="dir">${fmtN(x.es)}</td><td class="dir">${fmtN(x.mun)}</td><td class="dir"><b>${(x.n / Math.max(1, x.es)).toFixed(1).replace('.', ',')}</b></td></tr>`).join('')}</tbody></table></div>`;
+}
+function svFiltrar(D){
+  const q = norm(svFil.q), f = svFil;
+  return D.L.filter(r => (!f.tipo || (f.tipo === 'dre') === svEhDRE(r)) && (!f.unid || r.unidade === f.unid) && (!f.cargo || svGrupoCargo(r.cargo) === f.cargo) && (!f.vinc || String(r.vinculo || '').toUpperCase().includes(f.vinc))
+    && (!f.sit || (f.sit === 'vence90' ? (d => d !== null && d >= 0 && d <= 90)(svDiasFim(r)) : f.sit === 'venceAno' ? (r.dataFinal && r.dataFinal.slice(0, 4) === hojeISO().slice(0, 4) && (svDiasFim(r) ?? -1) >= 0) : f.sit === 'semSetor' ? !r.setorId || !porId.has(r.setorId) : f.sit === 'sugerido' ? r.sugerido === '1' : true))
+    && (!q || norm([r.nome, r.matricula, r.cargo, r.lotacao, nomeSetor(r.setorId)].join(' ')).includes(q)));
+}
+function svListaTela(D){
+  const L = svFiltrar(D).sort((a, b) => (a.nome || a.lotacao || '').localeCompare(b.nome || b.lotacao || '', 'pt-BR')), nomes = svComNome(), V = L.slice(0, svLim);
+  const unids = [...D.porUnid.keys()].sort((a, b) => (/^DRE/.test(a) - /^DRE/.test(b)) || a.localeCompare(b, 'pt-BR')), cargos = Object.keys(D.porCargo).sort();
+  const sel = (k, rot, ops) => `<select class="campo" onchange="svFil.${k}=this.value;svLim=100;renderServidores()"><option value="">${rot}</option>${ops.map(([v, n]) => `<option value="${esc(v)}" ${svFil[k] === v ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>`;
+  return `<div class="filtros"><div class="busca"><i class="fa-solid fa-magnifying-glass"></i><input class="campo" placeholder="${nomes ? 'Buscar nome, matrícula, cargo ou lotação' : 'Buscar cargo ou lotação'}" value="${esc(svFil.q)}" oninput="svFil.q=this.value;svLim=100;clearTimeout(window.tSv);window.tSv=setTimeout(()=>{renderServidores();const i=document.querySelector('#sv-corpo .busca input');i.focus();i.setSelectionRange(i.value.length,i.value.length)},300)"></div>
+      ${sel('tipo', 'Órgão Central e DREs', [['oc', 'Órgão Central'], ['dre', 'DREs']])}${sel('unid', 'Todas as unidades', unids.map(u => [u, svNomeUnid(u)]))}${sel('cargo', 'Todos os cargos', cargos.map(c => [c, c]))}${sel('vinc', 'Todos os vínculos', [['EFETIVO', 'Efetivos'], ['TEMPOR', 'Temporários']])}
+      ${sel('sit', 'Qualquer situação', [['vence90', 'Vínculo termina em 90 dias'], ['venceAno', 'Vínculo termina este ano'], ['semSetor', 'Fora da nova estrutura'], ['sugerido', 'Marcados como sugeridos']])}
+      ${podeGestao() ? `<button class="btn btn-s btn-sm" onclick="svExportar()"><i class="fa-solid fa-file-csv"></i>Exportar</button>` : ''}</div>
+    <p class="s" style="margin:-4px 0 8px;color:var(--mut)">${fmtN(L.length)} servidor(es)${L.length !== D.n ? ' de ' + fmtN(D.n) : ''}${nomes ? '' : ' · <i class="fa-solid fa-lock"></i> nomes e matrículas visíveis só para Editores e Administradores'}</p>
+    <div class="tab-wrap"><table class="tab sv-tab"><thead><tr>${nomes ? '<th>Nome</th><th>Matrícula</th>' : ''}<th>Cargo</th><th>Vínculo</th><th>Unidade</th><th>Lotação (planilha)</th><th>Na nova estrutura</th><th>Início</th><th>Fim</th></tr></thead><tbody>
+    ${V.map(r => { const d = svDiasFim(r); return `<tr>${nomes ? `<td><b>${esc(r.nome || '—')}</b></td><td>${esc(r.matricula || '—')}</td>` : ''}<td>${esc(r.cargo || '—')}</td><td>${chipG(esc(r.vinculo || '—'), svTemp(r) ? '#d97706' : '#16a34a')}</td><td>${esc(svNomeUnid(r.unidade))}</td><td style="white-space:normal;min-width:200px">${esc(svLimparLotacao(r.lotacao, ''))}</td>
+      <td style="white-space:normal;min-width:180px">${r.setorId && porId.has(r.setorId) ? `<a href="#" onclick="event.preventDefault();irPara(${arg(r.setorId)})">${esc(nomeSetor(r.setorId))}</a>` : chipG('sem correspondência', '#7c3aed')}</td><td>${r.dataInicio ? fmtDia(r.dataInicio) : '—'}</td><td>${r.dataFinal ? fmtDia(r.dataFinal) + (d !== null && d >= 0 && d <= 90 ? ' ' + chipG(d + ' dias', '#dc2626') : '') : '—'}</td></tr>`; }).join('') || `<tr><td colspan="${nomes ? 9 : 7}" class="vazio">Nenhum servidor com esses filtros.</td></tr>`}</tbody></table></div>
+    ${L.length > svLim ? `<div style="text-align:center;margin:12px 0"><button class="btn btn-s" onclick="svLim+=200;renderServidores()"><i class="fa-solid fa-angles-down"></i>Mostrar mais (${fmtN(L.length - svLim)} restantes)</button></div>` : ''}`;
+}
+function svExportar(){
+  const L = svFiltrar(svDados()), nomes = svComNome();
+  csvBaixar('gaborg-servidores', [(nomes ? ['Nome', 'Matrícula'] : []).concat(['Cargo', 'Grupo do cargo', 'Vínculo', 'Tipo de lotação', 'Unidade', 'Código da lotação', 'Lotação', 'Unidade na nova estrutura', 'Área', 'Início', 'Fim'])]
+    .concat(L.map(r => (nomes ? [r.nome, r.matricula] : []).concat([r.cargo, svGrupoCargo(r.cargo), r.vinculo, r.tipoLotacao, svNomeUnid(r.unidade), r.lotacaoCod, svLimparLotacao(r.lotacao, ''), nomeSetor(r.setorId) || 'sem correspondência', nomeCurto(porId.get(areaDe.get(r.setorId))) || '', r.dataInicio ? fmtDia(r.dataInicio) : '', r.dataFinal ? fmtDia(r.dataFinal) : '']))));
+}
+
+/* ---------- importação ---------- */
+function svImportarTela(D){
+  if (!ehAdmin()) return '<div class="cartao vazio">Só administradores importam a planilha de servidores.</div>';
+  const P = svPrev;
+  return `<div class="grade2"><div class="cartao bl" style="--c:#16a34a"><h3><i class="fa-solid fa-file-import"></i>Importar a planilha de lotação</h3>
+      <p class="s">Aceita o arquivo Excel (.xlsx) ou CSV exportado do sistema de pessoal, com as colunas <b>TipoLotacao, ADJ/DRE, Lotacao, Nome, Matricula, Cargo, DataInicio, DataFinal, TipoVinculo</b> e Sugeridos. A importação <b>substitui</b> a lista atual de servidores.</p>
+      <label class="sv-arq"><input type="file" accept=".xlsx,.xls,.csv" onchange="svLerArquivo(this.files[0]);this.value=''"><i class="fa-solid fa-cloud-arrow-up"></i><b>Escolher arquivo</b><small>ou arraste para cá</small></label>
+      <p class="s" style="margin-top:10px"><i class="fa-solid fa-shield-halved" style="color:#16a34a"></i> <b>Proteção de dados:</b> a coluna CPF é ignorada e nunca é gravada. Os dados ficam na planilha Google do sistema (aba "Servidores"), não no código publicado. Leitores veem apenas números, sem nome e matrícula.</p></div>
+    <div class="cartao bl" style="--c:#2563eb"><h3><i class="fa-solid fa-eye"></i>Conferência antes de gravar</h3>
+      ${P ? `<p class="s">Arquivo <b>${esc(P.arquivo)}</b> · ${fmtN(P.regs.length)} servidores lidos${P.ign ? ` · ${P.ign} linha(s) vazia(s) ignorada(s)` : ''}</p>
+        <div class="kpis" style="grid-template-columns:repeat(2,minmax(0,1fr))">${kpiG('#1e3a8a', 'fa-users', 'Servidores', fmtN(P.regs.length), `${fmtN(P.regs.filter(r => !svEhDRE(r)).length)} Órgão Central · ${fmtN(P.regs.filter(svEhDRE).length)} DREs`)}${kpiG('#16a34a', 'fa-link', 'Ligados à estrutura', pct(P.regs.filter(r => r.setorId).length, P.regs.length) + '%', `${fmtN(P.regs.filter(r => r.setorId).length)} servidores em unidades do decreto`)}
+        ${kpiG('#d97706', 'fa-user-clock', 'Temporários', fmtN(P.regs.filter(svTemp).length), pct(P.regs.filter(svTemp).length, P.regs.length) + '%')}${kpiG('#7c3aed', 'fa-link-slash', 'Lotações sem correspondência', fmtN(new Set(P.regs.filter(r => !r.setorId).map(svChave)).size), 'podem ser ligadas depois em "Por unidade"')}</div>
+        <p class="s">Colunas reconhecidas: ${P.cols.map(c => chipG(esc(c), '#2563eb')).join(' ')}${P.cpf ? ' ' + chipG('CPF (ignorada)', '#94a3b8') : ''}</p>
+        ${!svBackendOk() ? `<p class="s" style="color:#dc2626"><i class="fa-solid fa-triangle-exclamation"></i> O Codigo.gs da planilha está na versão ${esc(backendVersao)}. Atualize para a 1.11.0 antes de importar, para os servidores ficarem gravados na planilha.</p>` : ''}
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn btn-p" onclick="svConfirmar()" ${svBackendOk() ? '' : 'disabled'}><i class="fa-solid fa-check"></i>Gravar ${fmtN(P.regs.length)} servidores</button><button class="btn btn-s" onclick="svPrev=null;renderServidores()">Cancelar</button></div>`
+      : `<p class="vazio">Escolha um arquivo para ver o resumo aqui antes de gravar.</p>`}</div></div>`;
+}
+function svDataISO(v){
+  if (v == null || v === '') return '';
+  if (v instanceof Date) return isNaN(v) ? '' : v.getFullYear() + '-' + String(v.getMonth() + 1).padStart(2, '0') + '-' + String(v.getDate()).padStart(2, '0');
+  if (typeof v === 'number' && v > 20000 && v < 80000) { const d = new Date(Math.round((v - 25569) * 864e5)); return d.toISOString().slice(0, 10); }
+  const s = String(v).trim(), m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/); if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+  const m2 = s.match(/^(\d{4})-(\d{2})-(\d{2})/); return m2 ? m2[0] : '';
+}
+async function svLerArquivo(f){
+  if (!f || !ehAdmin()) return;
+  try {
+    toast('Lendo a planilha...');
+    let linhas;
+    if (/\.csv$/i.test(f.name)) { const t = await f.text(), sep = (t.split('\n')[0].match(/;/g) || []).length >= (t.split('\n')[0].match(/,/g) || []).length ? ';' : ','; linhas = t.split(/\r?\n/).map(l => l.split(sep).map(c => c.replace(/^"|"$/g, '').trim())); }
+    else { await carregarScript(['https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js', 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js']); const wb = XLSX.read(await f.arrayBuffer(), { type:'array', cellDates:true }); linhas = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header:1, raw:true, defval:'' }); }
+    const chaves = { tipolotacao:'tipoLotacao', adjdre:'unidade', lotacao:'lotacao', nome:'nome', matricula:'matricula', cargo:'cargo', datainicio:'dataInicio', datafinal:'dataFinal', tipovinculo:'vinculo', sugeridos:'sugerido', sugerido:'sugerido' };
+    const nk = s => norm(s).replace(/[^a-z0-9]/g, '');
+    const hi = linhas.findIndex(l => l.some(c => nk(c) === 'tipolotacao') || (l.some(c => nk(c) === 'nome') && l.some(c => nk(c) === 'matricula')));
+    if (hi < 0) throw new Error('Não encontrei o cabeçalho (TipoLotacao, ADJ/DRE, Lotacao, Nome, Matricula...).');
+    const cab = linhas[hi].map(nk), col = {}; cab.forEach((c, i) => { if (chaves[c] && col[chaves[c]] == null) col[chaves[c]] = i; });
+    if (col.lotacao == null || (col.unidade == null && col.tipoLotacao == null)) throw new Error('A planilha precisa das colunas ADJ/DRE (ou TipoLotacao) e Lotacao.');
+    const R = svRaizes(), mapa = svMapa(), usados = new Map(), regs = []; let ign = 0;
+    linhas.slice(hi + 1).forEach(l => {
+      const g = k => col[k] == null ? '' : l[col[k]], lot = String(g('lotacao') || '').trim(); if (!lot && !String(g('nome') || '').trim()) { ign++; return; }
+      const cod = (lot.match(/^\s*(\d+)\s*-/) || [])[1] || '', unidade = String(g('unidade') || g('tipoLotacao') || '').trim().toUpperCase(), mat = String(g('matricula') || '').trim().replace(/\.0$/, '');
+      let id = 'sv' + (mat || (regs.length + 1)); const n = (usados.get(id) || 0) + 1; usados.set(id, n); if (n > 1) id += '-' + n;
+      const sg = String(g('sugerido') || '').trim();
+      regs.push(novoReg('servidores', { id, matricula:mat, nome:String(g('nome') || '').trim(), cargo:String(g('cargo') || '').trim(), vinculo:String(g('vinculo') || '').trim().toUpperCase(), tipoLotacao:String(g('tipoLotacao') || '').trim(), unidade, lotacaoCod:cod, lotacao:lot,
+        setorId:svCasar(unidade, { cod:cod || lot, nome:lot }, R, mapa), dataInicio:svDataISO(g('dataInicio')), dataFinal:svDataISO(g('dataFinal')), sugerido:sg === '1' || /^sim$/i.test(sg) ? '1' : '0' }));
+    });
+    if (!regs.length) throw new Error('Nenhum servidor encontrado no arquivo.');
+    svPrev = { arquivo:f.name, regs, ign, cols:Object.keys(col).map(k => ({ tipoLotacao:'TipoLotacao', unidade:'ADJ/DRE', lotacao:'Lotacao', nome:'Nome', matricula:'Matricula', cargo:'Cargo', dataInicio:'DataInicio', dataFinal:'DataFinal', vinculo:'TipoVinculo', sugerido:'Sugeridos' }[k])), cpf:cab.includes('cpf') };
+    svAba = 'importar'; renderServidores(); toast(`${fmtN(regs.length)} servidores lidos. Confira o resumo e grave.`);
+  } catch (e) { console.error(e); toast('Não foi possível ler a planilha: ' + e.message, 'erro'); }
+}
+function svEnfileirarLote(ops){
+  salvarLocal(); if (!online() || !ops.length) return statusSync();
+  fila.push(...ops); store.set('gaborg_fila', fila); clearTimeout(tFila); tFila = setTimeout(enviarFila, 300); statusSync();
+}
+async function svConfirmar(){
+  const P = svPrev; if (!P || !ehAdmin()) return;
+  if (!svBackendOk()) return toast('Atualize o Codigo.gs para a versão 1.11.0 antes de importar.', 'aviso');
+  const ant = svLista(), novos = new Set(P.regs.map(r => r.id));
+  if (!await confirmar('Gravar servidores', `A lista atual (${fmtN(ant.length)}) será substituída por <b>${fmtN(P.regs.length)}</b> servidores do arquivo <b>${esc(P.arquivo)}</b>. O CPF não é gravado. Continuar?`, 'Gravar')) return;
+  const quando = agora(), por = cfg.usuario || cfg.login || '';
+  P.regs.forEach(r => { r.importadoEm = quando; r.importadoPor = por; });
+  const ops = ant.filter(r => !novos.has(r.id)).map(r => ({ op:'delete', table:'servidores', record:{ id:r.id } })).concat(P.regs.map(r => ({ op:'upsert', table:'servidores', record:Object.assign({}, r) })));
+  DB.servidores = P.regs; svPrev = null;
+  salvarParam('servidoresImport', { em:quando, por, arquivo:P.arquivo, n:P.regs.length, ligados:P.regs.filter(r => r.setorId).length });
+  svEnfileirarLote(ops); svAba = 'geral'; store.set('gaborg_sv_aba', 'geral'); renderServidores();
+  toast(`${fmtN(P.regs.length)} servidores gravados${online() ? '; enviando para a planilha em lotes de 500' : ''}.`);
+}
+/* realinha os servidores sem unidade quando a estrutura muda (novos setores, nomes corrigidos) */
+function svRecasar(){
+  if (!podeGestao()) return; const R = svRaizes(), mapa = svMapa(), ops = [];
+  svLista().forEach(r => { if (r.setorId && porId.has(r.setorId)) return; const id = svCasar(r.unidade, { cod:r.lotacaoCod || r.lotacao, nome:r.lotacao }, R, mapa); if (id && id !== r.setorId) { r.setorId = id; ops.push({ op:'upsert', table:'servidores', record:{ id:r.id, setorId:id } }); } });
+  svEnfileirarLote(ops); return ops.length;
+}
+function svResumoSetor(s){
+  if (!svLista().length) return '';
+  const ids = new Set([s.id, ...descendentes(s.id)]), dir = svLista().filter(r => r.setorId === s.id), tot = svLista().filter(r => ids.has(r.setorId));
+  return `<div class="sv-pn"><i class="fa-solid fa-id-card-clip"></i><div><b>${fmtN(dir.length)}</b> servidor(es) lotado(s) aqui na planilha de lotação${tot.length > dir.length ? ` · <b>${fmtN(tot.length)}</b> somando os subordinados` : ''}<small>${fmtN(dir.filter(svEfet).length)} efetivos · ${fmtN(dir.filter(svTemp).length)} temporários${num(s.servidores) !== dir.length ? ` · o cadastro informa ${fmtN(s.servidores || 0)}` : ''}</small></div>${dir.length ? `<button class="btn btn-s btn-sm" onclick="svVerSetor(${arg(s.id)})">Ver</button>` : ''}</div>`;
+}
+
 /* ===================== IMPLANTAÇÃO DA NOVA ESTRUTURA ===================== */
 let imProp = store.get('gaborg_im_prop', '*'), imVer = 'fases';
 const FASES_IM = ['Preparação', 'Aprovação', 'Publicação', 'Pessoas', 'Instalação das unidades', 'Sistemas e comunicação'];
@@ -4675,7 +4961,7 @@ const REL_SECOES = [
   ['Organogramas', [['orgGeral', 'Organograma geral (figura)'], ['orgAreas', 'Organograma de cada secretaria adjunta (figuras)'], ['orgProp', 'Organogramas das propostas com as alterações destacadas']]],
   ['Mapas de Mato Grosso', [['mapaMT', 'Mapa das escolas e DREs'], ['mapaDist', 'Mapa das distâncias até as DREs'], ['mapaMun', 'Mapa da divisão municipal'], ['mapaDRE', 'Mapa aproximado da DRE escolhida']]],
   ['Estrutura', [['estrutura', 'Estrutura hierárquica em lista'], ['quadro', 'Quadro de setores'], ['governanca', 'Amplitude de controle e qualidade do cadastro'], ['competencias', 'Competências repetidas e lacunas'], ['ficha', 'Ficha completa do setor escolhido']]],
-  ['Pessoas e governança', [['chefias', 'Chefias e sucessão'], ['riscos', 'Riscos e prioridades'], ['validacoes', 'Validações entre setores']]],
+  ['Pessoas e governança', [['servidores', 'Servidores: lotação, vínculos e cargos'], ['chefias', 'Chefias e sucessão'], ['riscos', 'Riscos e prioridades'], ['validacoes', 'Validações entre setores']]],
   ['Financeiro e propostas', [['financeiro', 'Custos e cargos em comissão'], ['propostas', 'Propostas: alterações, custo e metas']]],
   ['Rede escolar', [['rede', 'Rede escolar por DRE'], ['distancias', 'Distâncias das escolas até as DREs'], ['regional', 'Gestão regional e sugestões'], ['escolas', 'Lista de unidades escolares']]],
   ['Gestão', [['implantacao', 'Implantação: etapas e prazos'], ['metas', 'Pacto de resultados'], ['reunioes', 'Reuniões, decisões e encaminhamentos']]],
@@ -4683,7 +4969,7 @@ const REL_SECOES = [
 ];
 const REL_MODELOS = {
   executivo:['fa-briefcase', 'Executivo', ['resumo', 'kpis', 'orgGeral', 'mapaMT', 'areas', 'riscos', 'propostas', 'regional', 'notas']],
-  completo:['fa-book', 'Completo', ['resumo', 'kpis', 'areas', 'orgGeral', 'orgAreas', 'mapaMT', 'mapaDist', 'estrutura', 'quadro', 'governanca', 'competencias', 'chefias', 'riscos', 'validacoes', 'financeiro', 'propostas', 'orgProp', 'rede', 'distancias', 'regional', 'implantacao', 'metas', 'reunioes', 'notas']],
+  completo:['fa-book', 'Completo', ['resumo', 'kpis', 'areas', 'orgGeral', 'orgAreas', 'mapaMT', 'mapaDist', 'estrutura', 'quadro', 'governanca', 'competencias', 'servidores', 'chefias', 'riscos', 'validacoes', 'financeiro', 'propostas', 'orgProp', 'rede', 'distancias', 'regional', 'implantacao', 'metas', 'reunioes', 'notas']],
   organograma:['fa-sitemap', 'Organogramas', ['kpis', 'orgGeral', 'orgAreas', 'governanca', 'chefias', 'notas']],
   mapas:['fa-map-location-dot', 'Mapas de MT', ['mapaMT', 'mapaDist', 'mapaMun', 'rede', 'notas']],
   rede:['fa-school', 'Rede escolar', ['rede', 'mapaMT', 'distancias', 'mapaDist', 'regional', 'escolas', 'notas']],
@@ -4723,6 +5009,26 @@ function montarRelatorio(F, emis){
       B.push({ t:'p', x:`${fmtN(C.C.length)} competências cadastradas em ${new Set(C.C.map(c => c.s.id)).size} setores. ${C.pares.length} pares de competências parecidas em setores diferentes.` });
       B.push({ t:'tab', pq:true, cab:['Semelhança', 'Setor A', 'Competência A', 'Setor B', 'Competência B'], larg:[42, 70, '*', 70, '*'], lin:C.pares.slice(0, 60).map(p => [Math.round(p.sim * 100) + '%', nomeCurto(p.a.s), p.a.t, nomeCurto(p.b.s), p.b.t]) });
       if (ref.length) { const lac = ref.map(t => ({ t, m:melhorSetorPara(t, C) })).filter(x => !x.m || x.m.sim < .3 || x.m.n < 2); B.push({ t:'h3', x:`Atribuições de referência sem setor responsável (${lac.length} de ${ref.length})` }, { t:'lista', it:lac.map(x => ['• ' + x.t, 0]) }); } }
+    if (k === 'servidores') { H(k); const ids = F.area ? new Set([F.area, ...descendentes(F.area)]) : null, sigA = F.area ? String((porId.get(F.area) || {}).sigla || '').toUpperCase() : '';
+      const SL = svLista().filter(r => (!ids || ids.has(r.setorId) || (sigA && r.unidade === sigA)) && (!F.dre || norm(r.unidade) === norm(F.dre))), SD = svDados(SL), imp = param('servidoresImport', null);
+      if (!SD.n) B.push({ t:'p', x:'Nenhum servidor importado para este recorte. Importe a planilha de lotação em Servidores › Importar planilha.' });
+      else {
+        B.push({ t:'kpis', it:[['Servidores', fmtN(SD.n), `${fmtN(SD.oc)} Órgão Central · ${fmtN(SD.dre)} DREs`, '#1e3a8a'], ['Efetivos', fmtN(SD.efet), pct(SD.efet, SD.n) + '% do total', '#16a34a'], ['Temporários', fmtN(SD.temp), pct(SD.temp, SD.n) + '% do total', '#d97706'], ['Professores fora da sala', fmtN(SD.prof), 'em unidades administrativas', '#2563eb'],
+          ['Estagiários e residentes', fmtN(SD.est), '', '#65a30d'], ['Exclusivamente comissionados', fmtN(SD.com), '', '#b45309'], ['Vínculos a vencer (90 dias)', fmtN(SD.vence90.length), fmtN(SD.venceAno.length) + ' até o fim do ano', '#dc2626'], ['Fora da nova estrutura', fmtN([...SD.semCasar.values()].reduce((t, x) => t + x.l.length, 0)), SD.semCasar.size + ' lotações', '#7c3aed']] });
+        B.push({ t:'h3', x:'Servidores por secretaria adjunta e DRE' }, { t:'tab', pq:true, cab:['Unidade', 'Servidores', 'Efetivos', 'Temporários', '% temp.', 'Professores', 'Estagiários'], dir:[1, 2, 3, 4, 5, 6], larg:['*', 52, 48, 58, 42, 58, 52], lin:[...SD.porUnid].sort((a, b) => b[1].length - a[1].length).map(([u, l]) => [svNomeUnid(u), fmtN(l.length), fmtN(l.filter(svEfet).length), fmtN(l.filter(svTemp).length), pct(l.filter(svTemp).length, l.length) + '%', fmtN(l.filter(r => svGrupoCargo(r.cargo) === 'Professor').length), fmtN(l.filter(r => ['Estagiário', 'Residente técnico'].includes(svGrupoCargo(r.cargo))).length)]) });
+        B.push({ t:'h3', x:'Servidores por cargo' }, { t:'barras', it:Object.entries(SD.porCargo).sort((a, b) => b[1] - a[1]).map(([g, n]) => [g, n, fmtN(n) + ' · ' + pct(n, SD.n) + '%', svCorCargo(g)]) });
+        const top = [...SD.porSetor].map(([id, l]) => [id, l]).sort((a, b) => b[1].length - a[1].length).slice(0, 15);
+        B.push({ t:'h3', x:'Unidades da nova estrutura com mais servidores' }, { t:'tab', pq:true, cab:['Unidade', 'Área', 'Servidores', 'Efetivos', 'Temporários'], dir:[2, 3, 4], larg:['*', 110, 52, 48, 58], lin:top.map(([id, l]) => [nomeSetor(id), nomeCurto(porId.get(areaDe.get(id))) || '—', fmtN(l.length), fmtN(l.filter(svEfet).length), fmtN(l.filter(svTemp).length)]) });
+        const sc = [...SD.semCasar.values()].sort((a, b) => b.l.length - a.l.length);
+        if (sc.length) B.push({ t:'h3', x:`Lotações sem correspondência na nova estrutura (${sc.length})` }, { t:'tab', pq:true, cab:['Lotação na planilha de origem', 'Unidade', 'Servidores'], dir:[2], larg:['*', 130, 52], lin:sc.slice(0, 40).map(x => [x.nome || '—', svNomeUnid(x.unidade), fmtN(x.l.length)]) });
+        const al = [];
+        if (SD.vence90.length) al.push(['alerta', `${fmtN(SD.vence90.length)} vínculos terminam nos próximos 90 dias (${pct(SD.vence90.length, SD.n)}% da força de trabalho).`]);
+        if (SD.venceAno.length > SD.vence90.length) al.push(['atencao', `${fmtN(SD.venceAno.length)} vínculos terminam até 31/12/${hojeISO().slice(0, 4)}.`]);
+        if (SD.prof) al.push(['info', `${fmtN(SD.prof)} professores (${pct(SD.prof, SD.n)}%) estão lotados em unidades administrativas.`]);
+        if (sc.length) al.push(['atencao', `${sc.length} lotações da planilha não existem na nova estrutura; os servidores delas precisam ser remanejados.`]);
+        if (al.length) B.push({ t:'h3', x:'Pontos de atenção' }, { t:'alertas', it:al });
+        B.push({ t:'nota', x:`Fonte: planilha de lotação ${imp && imp.arquivo ? '"' + imp.arquivo + '" ' : ''}importada em ${imp && imp.em ? fmtData(imp.em) : '—'}. O relatório não traz nomes, matrículas nem CPF.` });
+      } }
     if (k === 'chefias') { H(k); const L = D.base.filter(s => CHEFIAS.includes(s.tipo)).map(s => ({ s, c:chefiaDe(s) })), cn = q => L.filter(x => x.c.situacao === q).length;
       B.push({ t:'kpis', it:[['Chefias', L.length, ''], ['Com titular', cn('Titular'), '', '#16a34a'], ['Interinas / em nomeação', cn('Interino') + cn('Em nomeação'), '', '#d97706'], ['Vagas', cn('Vago'), '', '#dc2626']] });
       const reg = x => !!(x.c.titular || x.c.substituto || x.c.desde || (x.c.situacao && x.c.situacao !== 'Não informado')), COM = L.filter(reg), SEM = L.filter(x => !reg(x));

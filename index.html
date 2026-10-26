@@ -687,6 +687,11 @@ body.sem-mini .m-mini{opacity:0;transform:translateY(12px);pointer-events:none}
 .bl h3 i{color:var(--c,var(--marca))}
 .bl p.s{margin:0 0 12px;font-size:12px;color:var(--mut)}
 .barra-l{display:grid;grid-template-columns:minmax(0,170px) 1fr 52px;gap:10px;align-items:center;padding:4px 0;font-size:12.5px}
+.sv-orig{font-size:12px;color:var(--mut);margin:-6px 0 12px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}.sv-orig i{color:#16a34a}
+.sv-leg i{display:inline-block;width:9px;height:9px;border-radius:3px;margin:0 3px 0 8px;vertical-align:-1px}.sv-b b small{font-weight:500;color:var(--mut2);margin-left:5px;font-size:11px}.sv-b{grid-template-columns:minmax(0,190px) 1fr 82px}.sv-b b{text-align:right}
+.sv-z{color:var(--mut2)}.sv-tab tr.sv-vazio td{opacity:.6}.sv-tab td.dir,.sv-tab th.dir{text-align:right}.sv-tab tbody tr{cursor:pointer}
+.sv-arq{position:relative;display:flex;flex-direction:column;align-items:center;gap:4px;padding:26px 16px;border:2px dashed var(--linha);border-radius:14px;cursor:pointer;color:var(--mut);transition:.2s}.sv-arq:hover{border-color:var(--marca);color:var(--marca);background:var(--marca-bg)}.sv-arq input{position:absolute;inset:0;opacity:0;cursor:pointer}.sv-arq i{font-size:28px}.sv-arq b{color:var(--txt)}
+.sv-pn{display:flex;gap:10px;align-items:center;margin-top:10px;padding:10px 12px;border-radius:10px;background:var(--sup2);font-size:12.5px}.sv-pn>i{color:#0e7490;font-size:18px}.sv-pn>div{flex:1}.sv-pn small{display:block;color:var(--mut);margin-top:2px}
 .barra-l span.n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--txt2)}
 .barra-l .t{height:10px;border-radius:999px;background:var(--sup3);overflow:hidden;display:flex}
 .barra-l .t span{height:100%}
@@ -1056,8 +1061,8 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background
 <body>
 <!-- Vigia de inicialização: se o arquivo.js não carregar ou falhar, mostra o motivo em vez de uma tela vazia -->
 <script>
-window.GABORG_VERSAO_HTML = '1.26.1'; window.GABORG_ERROS = [];
-window.GABORG_NOVIDADES = "Novos símbolos das unidades escolares, que lembram cada tipo: prédio escolar (regular), estrela de insígnia (cívico-militar), escudo (militar), planta (campo), pena (indígena), pessoas (quilombola), relógio (integral), acessibilidade (especializada) e cruz (confessional).";
+window.GABORG_VERSAO_HTML = '1.27.0'; window.GABORG_ERROS = [];
+window.GABORG_NOVIDADES = "Nova seção Servidores: importe a planilha de lotação do Órgão Central e das DREs e veja servidores por unidade, cargo, vínculo e DRE, vínculos a vencer e lotações fora da nova estrutura. Requer o Codigo.gs 1.11.0.";
 window.addEventListener('error', function (e) {
   var alvo = e.target || {};
   if (alvo.tagName === 'SCRIPT') window.GABORG_ERROS.push('Não foi possível baixar o arquivo ' + (alvo.getAttribute('src') || '') + '.');
@@ -1180,6 +1185,7 @@ window.addEventListener('load', function () { setTimeout(function () { window.GA
       <button class="nav-b" data-vista="reestruturacao"><i class="fa-solid fa-compass-drafting"></i><span>Reestruturação</span></button>
       <button class="nav-b" data-vista="implantacao"><i class="fa-solid fa-list-check"></i><span>Implantação</span><span class="qt hidden" id="nav-im"></span></button>
       <button class="nav-b" data-vista="chefias"><i class="fa-solid fa-user-tie"></i><span>Chefias</span></button>
+      <button class="nav-b" data-vista="servidores"><i class="fa-solid fa-id-card-clip"></i><span>Servidores</span></button>
       <button class="nav-b" data-vista="resultados"><i class="fa-solid fa-bullseye"></i><span>Resultados</span></button>
       <button class="nav-b" data-vista="regional"><i class="fa-solid fa-route"></i><span>Gestão regional</span></button>
       <button class="nav-b" data-vista="reunioes"><i class="fa-solid fa-people-group"></i><span>Reuniões</span></button>
@@ -1351,6 +1357,10 @@ window.addEventListener('load', function () { setTimeout(function () { window.GA
       <div class="topo"><div><h1><i class="fa-solid fa-user-tie"></i>Chefias e sucessão</h1><p>Quem ocupa cada chefia, vagas, interinos, substitutos e atos de nomeação.</p></div></div>
       <div class="rolagem" id="ch-corpo"></div>
     </section>
+    <section class="vista fora" id="v-servidores">
+      <div class="topo"><div><h1><i class="fa-solid fa-id-card-clip"></i>Servidores</h1><p>Quem está lotado em cada unidade do Órgão Central e das DREs, vínculos, cargos e correspondência com a nova estrutura.</p></div></div>
+      <div class="rolagem" id="sv-corpo"></div>
+    </section>
     <section class="vista fora" id="v-resultados">
       <div class="topo"><div><h1><i class="fa-solid fa-bullseye"></i>Pacto de resultados</h1><p>Metas de cada setor ligadas aos objetivos estratégicos da Secretaria.</p></div></div>
       <div class="rolagem" id="rs-corpo"></div>
@@ -1418,6 +1428,6 @@ window.addEventListener('load', function () { setTimeout(function () { window.GA
 
 <div id="toast"><i class="fa-solid fa-check"></i><span></span></div>
 
-<script src="arquivo.js?v=1.26.1" onerror="window.GABORG_ERROS.push('O arquivo arquivo.js não foi encontrado no servidor (erro 404).');GABORG_DIAGNOSTICO()"></script>
+<script src="arquivo.js?v=1.27.0" onerror="window.GABORG_ERROS.push('O arquivo arquivo.js não foi encontrado no servidor (erro 404).');GABORG_DIAGNOSTICO()"></script>
 </body>
 </html>
