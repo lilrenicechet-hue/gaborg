@@ -687,6 +687,7 @@ body.sem-mini .m-mini{opacity:0;transform:translateY(12px);pointer-events:none}
 .bl h3 i{color:var(--c,var(--marca))}
 .bl p.s{margin:0 0 12px;font-size:12px;color:var(--mut)}
 .barra-l{display:grid;grid-template-columns:minmax(0,170px) 1fr 52px;gap:10px;align-items:center;padding:4px 0;font-size:12.5px}
+.eb-res{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--mut)}.eb-res b{color:var(--txt);font-size:15px}.eb-tab .eb-in{height:30px;font-size:12.5px;min-width:200px}.eb-tab .eb-num{min-width:0;width:90px;text-align:right}.eb-in.ok{border-color:#16a34a;box-shadow:0 0 0 2px #16a34a33}.eb-in.erro{border-color:#dc2626}.eb-tab td.dir,.eb-tab th.dir{text-align:right}
 .sv-orig{font-size:12px;color:var(--mut);margin:-6px 0 12px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}.sv-orig i{color:#16a34a}
 .sv-leg i{display:inline-block;width:9px;height:9px;border-radius:3px;margin:0 3px 0 8px;vertical-align:-1px}.sv-b b small{font-weight:500;color:var(--mut2);margin-left:5px;font-size:11px}.sv-b{grid-template-columns:minmax(0,190px) 1fr 82px}.sv-b b{text-align:right}
 .sv-z{color:var(--mut2)}.sv-tab tr.sv-vazio td{opacity:.6}.sv-tab td.dir,.sv-tab th.dir{text-align:right}.sv-tab tbody tr{cursor:pointer}
@@ -1061,8 +1062,8 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background
 <body>
 <!-- Vigia de inicialização: se o arquivo.js não carregar ou falhar, mostra o motivo em vez de uma tela vazia -->
 <script>
-window.GABORG_VERSAO_HTML = '1.27.0'; window.GABORG_ERROS = [];
-window.GABORG_NOVIDADES = "Nova seção Servidores: importe a planilha de lotação do Órgão Central e das DREs e veja servidores por unidade, cargo, vínculo e DRE, vínculos a vencer e lotações fora da nova estrutura. Requer o Codigo.gs 1.11.0.";
+window.GABORG_VERSAO_HTML = '1.28.0'; window.GABORG_ERROS = [];
+window.GABORG_NOVIDADES = "Base de escolas 2026: quantidade de alunos por escola e escolas cívico-militares atualizadas (264). Escolas editáveis no Mapa de MT (Editar escolas) e novo modo de mapa por quantidade de alunos. Requer o Codigo.gs 1.12.0.";
 window.addEventListener('error', function (e) {
   var alvo = e.target || {};
   if (alvo.tagName === 'SCRIPT') window.GABORG_ERROS.push('Não foi possível baixar o arquivo ' + (alvo.getAttribute('src') || '') + '.');
@@ -1325,7 +1326,7 @@ window.addEventListener('load', function () { setTimeout(function () { window.GA
           <div id="esc-foco"></div>
           <div class="mt-sub" id="esc-sub">Escolas por DRE</div>
           <div class="mt-lista" id="esc-lista"></div>
-          <div class="mt-pe"><button class="btn btn-s btn-sm" onclick="exportarEscolasMT()"><i class="fa-solid fa-file-csv"></i>Exportar CSV</button><label class="btn btn-s btn-sm so-adm" title="Atualizar com uma planilha .xlsx no mesmo formato"><i class="fa-solid fa-file-arrow-up"></i>Atualizar base<input type="file" accept=".xlsx,.xls" class="sr" onchange="importarEscolasMT(this.files[0]);this.value=''"></label></div>
+          <div class="mt-pe"><button class="btn btn-s btn-sm" onclick="exportarEscolasMT()"><i class="fa-solid fa-file-csv"></i>Exportar CSV</button><button class="btn btn-s btn-sm so-edit" onclick="abrirBaseEscolas()" title="Editar tipo, alunos e dados das escolas"><i class="fa-solid fa-pen-to-square"></i>Editar escolas</button><label class="btn btn-s btn-sm so-adm" title="Atualizar com uma planilha .xlsx no mesmo formato"><i class="fa-solid fa-file-arrow-up"></i>Atualizar base<input type="file" accept=".xlsx,.xls" class="sr" onchange="importarEscolasMT(this.files[0]);this.value=''"></label></div>
         </aside>
         <div class="mt-area">
           <div id="esc-map"></div>
@@ -1428,6 +1429,6 @@ window.addEventListener('load', function () { setTimeout(function () { window.GA
 
 <div id="toast"><i class="fa-solid fa-check"></i><span></span></div>
 
-<script src="arquivo.js?v=1.27.0" onerror="window.GABORG_ERROS.push('O arquivo arquivo.js não foi encontrado no servidor (erro 404).');GABORG_DIAGNOSTICO()"></script>
+<script src="arquivo.js?v=1.28.0" onerror="window.GABORG_ERROS.push('O arquivo arquivo.js não foi encontrado no servidor (erro 404).');GABORG_DIAGNOSTICO()"></script>
 </body>
 </html>
