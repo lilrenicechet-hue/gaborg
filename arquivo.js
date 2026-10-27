@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.30.1';
+const VERSAO = '1.31.0';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -380,8 +380,8 @@ const SECOES_ACESSO = [
   ['Estrutura', [['estrutura', 'Mapa e lista de setores', 'fa-diagram-project', ['mapa', 'lista'], 'Organograma, lista, painel do setor, valores, vínculos'], ['escolas', 'Mapa de MT (escolas)', 'fa-map-location-dot', ['escolas'], 'Mapa das escolas e DREs; editar escolas e alunos']]],
   ['Análise', [['painel', 'Indicadores', 'fa-chart-line', ['painel'], 'Indicadores estratégicos (só leitura)', true], ['relatorios', 'Relatórios e minutas', 'fa-file-pdf', ['relatorios'], 'Montar relatórios, portarias e decretos', true], ['financeiro', 'Financeiro', 'fa-coins', ['financeiro'], 'Rubricas, despesas e custos'],
     ['propostas', 'Propostas', 'fa-lightbulb', ['propostas'], 'Cenários de reestruturação'], ['validacoes', 'Validações', 'fa-stamp', ['validacoes'], 'Pedidos e respostas de validação'], ['tv', 'Modo TV', 'fa-tv', [], 'Apresentação em tela cheia', true]]],
-  ['Gestão', [['reestruturacao', 'Reestruturação', 'fa-compass-drafting', ['reestruturacao'], 'Metas, atribuições e minuta'], ['implantacao', 'Implantação', 'fa-list-check', ['implantacao'], 'Etapas, prazos e responsáveis'], ['chefias', 'Chefias', 'fa-user-tie', ['chefias'], 'Titulares, substitutos e atos'],
-    ['servidores', 'Servidores', 'fa-id-card-clip', ['servidores'], 'Lotação, vínculos e importação'], ['resultados', 'Resultados', 'fa-bullseye', ['resultados'], 'Pacto de metas'], ['regional', 'Gestão regional', 'fa-route', ['regional'], 'Análise das DREs e sugestões'], ['reunioes', 'Reuniões', 'fa-people-group', ['reunioes'], 'Pautas, decisões e encaminhamentos']]]
+  ['Gestão', [['reestruturacao', 'Reestruturação', 'fa-compass-drafting', ['reestruturacao'], 'Diagnóstico, metas, competências e minuta'], ['chefias', 'Chefias', 'fa-user-tie', ['chefias'], 'Titulares, substitutos e atos'],
+    ['servidores', 'Servidores', 'fa-id-card-clip', ['servidores'], 'Lotação, vínculos e importação'], ['regional', 'Gestão regional', 'fa-route', ['regional'], 'Análise das DREs e sugestões']]]
 ];
 const SECOES_LISTA = SECOES_ACESSO.flatMap(g => g[1]);
 const SEM_EDICAO = new Set(SECOES_LISTA.filter(x => x[5]).map(x => x[0]));
@@ -402,7 +402,8 @@ const podeVerSec = k => nivelSec(k) !== 'oculto';
 const podeEditarSec = k => !SEM_EDICAO.has(k) && nivelSec(k) === 'editar';
 const podeExtra = k => { const a = acesso(); return !!(a.administrar || (a.extras || {})[k]); };
 const editaAlgo = a => !!(a.administrar || SECOES_LISTA.some(([k]) => !SEM_EDICAO.has(k) && (a.secoes || {})[k] === 'editar'));
-const podeVerVista = v => !VISTA_SECAO[v] || podeVerSec(VISTA_SECAO[v]) || (v === 'usuarios' && ehAdmin());
+const VISTAS_REMOVIDAS = new Set(['implantacao', 'resultados', 'reunioes']);
+const podeVerVista = v => !VISTAS_REMOVIDAS.has(v) && (!VISTA_SECAO[v] || podeVerSec(VISTA_SECAO[v]) || (v === 'usuarios' && ehAdmin()));
 const primeiraVista = () => { const b = [...document.querySelectorAll('.lado .nav-b[data-vista]')].find(b => podeVerVista(b.dataset.vista)); return b ? b.dataset.vista : 'config'; };
 function aplicarAcessoUI(){
   document.querySelectorAll('.lado .nav-b[data-vista]').forEach(b => b.classList.toggle('sem-acesso', !podeVerVista(b.dataset.vista) || (b.dataset.vista === 'usuarios' && !ehAdmin())));
@@ -3962,15 +3963,152 @@ function metricasEstrutura(lista){
 }
 
 /* ===================== REESTRUTURAÇÃO: SIMULADOR COM METAS, COMPETÊNCIAS E MINUTA ===================== */
-let reAba = store.get('gaborg_re_aba', 'simulador'), reSel = null, reCompAba = 'sobre', reBusca = '';
-const RE_ABAS = [['simulador','Metas e simulador','fa-bullseye'],['competencias','Competências','fa-list-check'],['minuta','Minuta do decreto','fa-file-signature']];
+let reAba = store.get('gaborg_re_aba2', 'diagnostico'), reSel = null, reCompAba = 'sobre', reBusca = '';
+const RE_ABAS = [['diagnostico','1. Diagnóstico','fa-stethoscope'],['simulador','2. Metas e cenários','fa-bullseye'],['competencias','4. Competências','fa-list-check'],['minuta','5. Minuta do decreto','fa-file-signature']];
 const METAS_PADRAO = { tetoCusto:'', variacaoMax:'0', maxNiveis:'6', ampMax:'8', ampMin:'2', maxSetores:'', maxSemResp:'' };
-function abaRe(a){ reAba = a; store.set('gaborg_re_aba', a); renderReestruturacao(); }
+function abaRe(a){ reAba = a; store.set('gaborg_re_aba2', a); renderReestruturacao(); const r = $('#v-reestruturacao .rolagem'); if (r) r.scrollTop = 0; }
 function renderReestruturacao(){
   const el = $('#re-corpo'); if (!el) return;
-  el.innerHTML = avisoGestao() + abasG(RE_ABAS, reAba, 'abaRe') + `<div class="ind-corpo">${reAba === 'competencias' ? reCompetencias() : reAba === 'minuta' ? reMinuta() : reSimulador()}</div>`;
+  el.innerHTML = avisoGestao() + guiaRe() + abasG(RE_ABAS, reAba, 'abaRe') + `<div class="ind-corpo">${reAba === 'competencias' ? reCompetencias() : reAba === 'minuta' ? reMinuta() : reAba === 'simulador' ? reSimulador() : reDiagnostico()}</div>`;
   if (reAba === 'minuta') atualizarMinuta();
 }
+/* ---------- (1) Diagnóstico inteligente da estrutura ---------- */
+let reDiagCen = '', reDiagAbertos = new Set(), reDiagMarc = new Set(), reGuia = store.get('gaborg_re_guia', true);
+const TIPOS_COLEGIADOS = ['Conselho', 'Colegiado', 'Câmara', 'Comissão', 'Unidades Escolares', 'Secretaria'];
+const SEV = { alta:['Alta', '#dc2626', 3], media:['Média', '#d97706', 2], baixa:['Baixa', '#2563eb', 1] };
+const DIMS_RE = {
+  hierarquia:['Hierarquia', 'fa-layer-group', '#1e3a8a', 'Quantos níveis separam o Secretário de quem executa. Cadeias longas atrasam decisões e diluem responsabilidades.'],
+  amplitude:['Amplitude de controle', 'fa-people-arrows', '#7c3aed', 'Quantos setores cada chefia coordena diretamente. Muitos sobrecarregam; só um indica nível que pode ser fundido.'],
+  duplicidade:['Duplicidades', 'fa-clone', '#f97316', 'Competências escritas de forma parecida em setores diferentes: retrabalho e conflito de responsabilidade.'],
+  cobertura:['Cobertura das atribuições', 'fa-list-check', '#0891b2', 'Se cada atribuição da Secretaria tem um setor responsável e se as chefias têm competências descritas.'],
+  pessoas:['Pessoas e lotação', 'fa-id-card-clip', '#16a34a', 'Se as unidades têm gente para funcionar, quem ocupa as chefias e quanto se depende de vínculos temporários.'],
+  regional:['Rede regional (DREs)', 'fa-map-location-dot', '#0e7490', 'Se as Diretorias Regionais têm equipe e carga equilibradas em relação às escolas e aos alunos que atendem.'],
+  custo:['Custo', 'fa-coins', '#b45309', 'Quanto custa a estrutura de chefias e onde estão as oportunidades de economia.']
+};
+function diagnosticoRe(cenId){
+  const C = cenariosRe(), c = C.find(x => x.id === cenId) || C[0], base = C[0], L = c.lista.filter(s => s.status !== 'Extinto'), M = metricasEstrutura(c.lista);
+  const mt = Object.assign({}, METAS_PADRAO, param('metasReestr', {})), ampMax = numBR(mt.ampMax) || 8, maxNiv = numBR(mt.maxNiveis) || 6;
+  const operac = L.filter(s => !TIPOS_COLEGIADOS.includes(s.tipo)), chef = M.chefias.filter(([s]) => !TIPOS_COLEGIADOS.includes(s.tipo));
+  const sv = svAtivos(), temSv = sv.length > 0, porSetor = new Map(); sv.forEach(r => { if (!r.setorId) return; if (!porSetor.has(r.setorId)) porSetor.set(r.setorId, []); porSetor.get(r.setorId).push(r); });
+  const temCusto = (c.linhas || []).length > 0, nome = s => s.nome + (s.sigla ? ' (' + s.sigla + ')' : ''), ev = (s, extra) => ({ id:s.id, nome:nome(s), extra:extra || '' });
+  const A = [], add = (dim, sev, titulo, porque, evid, acao, impacto, extra) => A.push(Object.assign({ id:dim + '_' + A.length, dim, sev, titulo, porque, evid:evid || [], acao, impacto:impacto || '' }, extra || {}));
+  // HIERARQUIA
+  const fundo = L.filter(s => (M.prof.get(s.id) || 0) > maxNiv);
+  if (fundo.length) add('hierarquia', fundo.length > 10 ? 'alta' : 'media', `${fundo.length} setor(es) abaixo do ${maxNiv}º nível hierárquico`, `Entre o Secretário e esses setores há mais de ${maxNiv} chefias. Cada nível a mais é mais uma assinatura, mais tempo e menos clareza sobre quem decide.`, fundo.map(s => ev(s, (M.prof.get(s.id) || 0) + 'º nível')), `Subordinar esses setores a um nível acima ou eliminar níveis intermediários que só repassam demandas.`, `estrutura com no máximo ${maxNiv} níveis`);
+  const cadeias = chef.filter(([s, k]) => k === 1).filter(([s]) => { const f = (M.fil.get(s.id) || []).filter(x => x.tipo !== 'Unidades Escolares'); return f.length === 1 && (M.fil.get(f[0].id) || []).length === 1; });
+  if (cadeias.length) add('hierarquia', 'media', `${cadeias.length} "corredor(es)" de chefias com um único subordinado em sequência`, 'Quando uma chefia tem um só subordinado, que também tem um só, a cadeia cresce sem dividir o trabalho: é hierarquia que não organiza nada.', cadeias.map(([s]) => ev(s, '→ ' + ((M.fil.get(s.id) || [])[0] || {}).nome)), 'Juntar os níveis do corredor em uma só unidade.', 'menos níveis e menos cargos');
+  // AMPLITUDE
+  const sobre = chef.filter(([, k]) => k > ampMax).sort((a, b) => b[1] - a[1]);
+  if (sobre.length) add('amplitude', sobre.some(([, k]) => k > ampMax * 1.8) ? 'alta' : 'media', `${sobre.length} chefia(s) coordenam mais de ${ampMax} setores diretamente`, `Acima de ${ampMax} subordinados diretos, a chefia vira gargalo: reuniões, despachos e acompanhamento não cabem na agenda. O maior caso é ${nome(sobre[0][0])}, com ${sobre[0][1]}.`, sobre.map(([s, k]) => ev(s, k + ' subordinados')), 'Agrupar os subordinados por tema em 2 ou 3 coordenações intermediárias, ou passar parte deles para outra chefia com afinidade.', `amplitude dentro do limite de ${ampMax}`);
+  const sub = chef.filter(([s, k]) => k === 1 && !/^Gabinete/.test(s.tipo));
+  if (sub.length) {
+    const eco = sub.reduce((t, [s]) => t + custoChefiaCen(c, s.id), 0);
+    add('amplitude', sub.length > 8 ? 'alta' : 'media', `${sub.length} chefia(s) com um único setor subordinado`, 'Uma chefia que coordena só um setor quase sempre duplica o trabalho do subordinado. Fundir os dois reduz cargos sem perder função.', sub.map(([s]) => ev(s, 'coordena só ' + (((M.fil.get(s.id) || []).find(x => x.tipo !== 'Unidades Escolares') || {}).nome || '1 setor'))), 'Fundir: o setor subordinado passa a responder ao nível de cima e a chefia intermediária é extinta (ou o contrário, se a chefia tiver mais competências).',
+      eco ? `economia estimada de ${fmtRc(eco)}/ano` : `${sub.length} cargo(s) a menos`, { fusao:sub.map(([s]) => { const f = (M.fil.get(s.id) || []).find(x => x.tipo !== 'Unidades Escolares'); return f ? { chefia:s.id, filho:f.id, pai:s.paiId } : null; }).filter(Boolean), economia:eco });
+  }
+  const vazias = chef.filter(([s, k]) => k === 0 && ['Superintendência', 'Diretoria'].includes(s.tipo));
+  if (vazias.length) add('amplitude', 'baixa', `${vazias.length} superintendência(s)/diretoria(s) sem nenhum setor subordinado`, 'Esses níveis existem para coordenar outras unidades; sem subordinados, ou fazem trabalho de execução ou estão sem função clara.', vazias.map(([s]) => ev(s, s.tipo)), 'Rever o tipo da unidade (talvez seja uma coordenadoria) ou vincular a ela os setores que tratam do mesmo tema.', 'tipos coerentes com a função');
+  // DUPLICIDADE
+  const B = baseCompetencias(), pares = new Map();
+  B.pares.filter(p => p.sim >= .55).forEach(p => { const k = [p.a.s.id, p.b.s.id].sort().join('|'); const o = pares.get(k) || { a:p.a.s, b:p.b.s, n:0, max:0, ex:p }; o.n++; o.max = Math.max(o.max, p.sim); pares.set(k, o); });
+  const P = [...pares.values()].sort((a, b) => b.n - a.n || b.max - a.max);
+  if (P.length) add('duplicidade', P.some(x => x.n >= 3) ? 'alta' : 'media', `${P.length} par(es) de setores com competências muito parecidas`, `Quando dois setores fazem "a mesma coisa", ninguém responde sozinho pelo resultado. Exemplo: "${B.pares[0] ? cortaTxt(B.pares[0].a.t, 90) : ''}" aparece em ${nome(P[0].a)} e em ${nome(P[0].b)}.`, P.map(x => ({ id:x.a.id, nome:`${nome(x.a)} ↔ ${nome(x.b)}`, extra:`${x.n} competência(s) parecida(s) · até ${Math.round(x.max * 100)}%` })), 'Definir um único dono para cada competência repetida; se a repetição for grande, fundir as unidades.', 'responsabilidades sem sobreposição');
+  const pctCompD = pct(chef.filter(([s]) => String(s.competencias || '').trim()).length, chef.length);
+  if (!P.length && pctCompD < 40) add('duplicidade', 'baixa', 'Poucas competências cadastradas para comparar', `Só ${pctCompD}% das chefias têm competências descritas. Sem os textos, o sistema não consegue apontar onde dois setores fazem a mesma coisa.`, [], 'Cadastrar as competências das chefias; a análise de duplicidade passa a funcionar sozinha.', 'detecção de duplicidades', { semDados:true });
+  const nomesRep = new Map(); L.forEach(s => { const k = s.paiId + '|' + norm(s.nome); nomesRep.set(k, (nomesRep.get(k) || []).concat(s)); });
+  const rep = [...nomesRep.values()].filter(l => l.length > 1);
+  if (rep.length) add('duplicidade', 'media', `${rep.length} nome(s) de unidade repetido(s) sob a mesma chefia`, 'Duas unidades com o mesmo nome no mesmo lugar da estrutura confundem atos, lotação e responsabilidades.', rep.map(l => ev(l[0], l.length + ' com esse nome')), 'Renomear para deixar claro o que cada uma faz, ou fundir.', 'nomes únicos');
+  // COBERTURA
+  const comComp = chef.filter(([s]) => String(s.competencias || '').trim()).length, pctComp = pct(comComp, chef.length);
+  if (pctComp < 80) add('cobertura', pctComp < 40 ? 'alta' : 'media', `${chef.length - comComp} de ${chef.length} chefias sem competências descritas (${100 - pctComp}%)`, 'Sem competências escritas, não dá para saber se há duplicidade, lacuna ou se a unidade é necessária. É a base de qualquer reestruturação.', chef.filter(([s]) => !String(s.competencias || '').trim()).map(([s]) => ev(s, s.tipo)), 'Cadastrar as competências de cada chefia (painel do setor › Competências) a partir do regimento ou do decreto.', 'diagnóstico de duplicidade e lacuna completo', { semDados:pctComp < 40 });
+  const refL = String(param('atribuicoes', '') || '').split('\n').map(limparComp).filter(t => t.length > 8);
+  if (refL.length) { const lac = refL.map(t => ({ t, m:melhorSetorPara(t, B) })).filter(x => !x.m || x.m.sim < .3 || x.m.n < 2);
+    if (lac.length) add('cobertura', lac.length > refL.length * .2 ? 'alta' : 'media', `${lac.length} de ${refL.length} atribuições da Secretaria sem setor responsável`, 'São atribuições que a Secretaria precisa cumprir, mas que nenhuma unidade tem entre as suas competências: risco de ninguém fazer.', lac.map(x => ({ id:x.m ? x.m.c.s.id : '', nome:cortaTxt(x.t, 110), extra:x.m ? 'mais próximo: ' + nomeCurto(x.m.c.s) : 'sem setor parecido' })), 'Atribuir cada uma a uma unidade existente (incluindo nas competências) ou criar a unidade que falta.', 'nenhuma atribuição órfã'); }
+  else add('cobertura', 'baixa', 'Lista de atribuições de referência não cadastrada', 'Com a lista de atribuições do decreto ou do regimento, o sistema aponta o que a estrutura não cobre.', [], 'Abrir Competências › Atribuições de referência e colar a lista, uma por linha.', 'detecção de lacunas', { semDados:true });
+  // PESSOAS
+  if (temSv) {
+    const semGente = operac.filter(s => !porSetor.has(s.id) && !/^Unidades? Escolares?$/i.test(s.nome) && !['Gabinete'].includes(s.tipo) && c.id === '' );
+    if (semGente.length) add('pessoas', semGente.length > operac.length * .25 ? 'alta' : 'media', `${semGente.length} unidade(s) sem nenhum servidor lotado`, 'A unidade existe no papel, mas ninguém está lotado nela segundo a planilha de lotação. Ou a lotação está desatualizada, ou a unidade não funciona de fato.', semGente.map(s => ev(s, s.tipo)), 'Confirmar a lotação real (Servidores › Por unidade). Se a unidade não funciona, avaliar extinção ou fusão com a mais próxima por tema.', 'estrutura que corresponde ao que funciona');
+    const uma = operac.filter(s => (porSetor.get(s.id) || []).length === 1);
+    if (uma.length) add('pessoas', 'media', `${uma.length} unidade(s) com um único servidor`, 'Com uma só pessoa, férias, licença ou saída param a unidade. É risco de continuidade.', uma.map(s => ev(s, (porSetor.get(s.id)[0].cargo || ''))), 'Reforçar a equipe ou juntar a unidade a outra do mesmo tema para formar uma equipe mínima.', 'continuidade do serviço');
+    const fora = sv.filter(r => !r.setorId || !porId.has(r.setorId));
+    if (fora.length) add('pessoas', fora.length > 50 ? 'alta' : 'media', `${fora.length} servidor(es) em lotações que não existem na nova estrutura`, 'Essas pessoas trabalham em unidades que o decreto não prevê. Sem remanejamento formal, ficam sem chefia e sem atribuições definidas.', [...new Set(fora.map(svChave))].map(k => { const l = fora.filter(r => svChave(r) === k); return { id:'', nome:svLimparLotacao(l[0].lotacao, '') || '—', extra:`${l.length} servidor(es) · ${svNomeUnid(l[0].unidade)}` }; }), 'Ligar cada lotação antiga a uma unidade nova (Servidores › Por unidade) e formalizar o remanejamento.', 'todos os servidores numa unidade do decreto');
+    const temp = [...porSetor].filter(([id, l]) => l.length >= 5 && l.filter(svTemp).length / l.length > .6 && porId.has(id));
+    if (temp.length) add('pessoas', 'media', `${temp.length} unidade(s) com mais de 60% de temporários`, 'A memória e a continuidade dessas unidades dependem de contratos que terminam. No fim do contrato, o conhecimento sai junto.', temp.sort((a, b) => b[1].filter(svTemp).length / b[1].length - a[1].filter(svTemp).length / a[1].length).map(([id, l]) => ev(porId.get(id), pct(l.filter(svTemp).length, l.length) + '% temporários de ' + l.length)), 'Priorizar efetivos nas funções-chave dessas unidades (remanejamento ou concurso) e documentar os processos.', 'menos dependência de contratos');
+    const prof = sv.filter(r => svGrupoCargo(r.cargo) === 'Professor').length;
+    if (prof > sv.length * .3) add('pessoas', 'baixa', `${prof} professores (${pct(prof, sv.length)}%) em funções administrativas`, 'Professores fora da sala de aula são uma escolha legítima para funções pedagógicas, mas em funções administrativas pressionam a rede por substitutos.', [], 'Mapear quais desses professores estão em atividades pedagógicas e quais em administrativas; avaliar retorno à sala ou troca por carreiras administrativas.', 'equilíbrio entre carreiras');
+  } else add('pessoas', 'baixa', 'Planilha de servidores não importada', 'Sem a lotação, o diagnóstico não sabe quais unidades têm equipe nem onde faltam pessoas.', [], 'Importar a planilha em Servidores › Importar planilha.', 'diagnóstico de pessoas', { semDados:true });
+  const vagas = chef.filter(([s]) => { const ch = chefiaDe(s); return ch.situacao === 'Vago' || !(ch.titular || s.responsavel); });
+  if (vagas.length && vagas.length < chef.length * .9) add('pessoas', vagas.length > 10 ? 'media' : 'baixa', `${vagas.length} chefia(s) vagas ou sem titular registrado`, 'Chefia vaga ou sem responsável conhecido significa decisões paradas ou tomadas informalmente.', vagas.map(([s]) => ev(s, chefiaDe(s).situacao)), 'Registrar titulares e substitutos em Chefias e priorizar as nomeações das unidades críticas.', 'todas as chefias com responsável');
+  // REGIONAL
+  try {
+    const X = distanciasMT(), E = escolasLista(), D = X.dres.map(d => { const es = E.filter(e => e.dre === d), s = sv.filter(r => svEhDRE(r) && norm(r.unidade) === norm(d)); return { d, es:es.length, al:alunosDe(es), sv:s.length, km:X.lista.filter(o => o.e.dre === d && o.km > 200).length }; });
+    if (temSv) { const r = D.filter(x => x.sv && x.es).map(x => Object.assign(x, { r:x.sv / x.es })).sort((a, b) => a.r - b.r);
+      if (r.length > 2 && r[r.length - 1].r / r[0].r > 1.8) add('regional', 'media', `Equipes das DREs desiguais: de ${r[0].r.toFixed(1).replace('.', ',')} a ${r[r.length - 1].r.toFixed(1).replace('.', ',')} servidores por escola`, `A DRE ${nomeDRE(r[0].d)} tem ${r[0].sv} servidores para ${r[0].es} escolas; a de ${nomeDRE(r[r.length - 1].d)} tem ${r[r.length - 1].sv} para ${r[r.length - 1].es}. Escolas da primeira recebem menos apoio.`, r.slice(0, 4).map(x => ({ id:'', nome:'DRE ' + nomeDRE(x.d), extra:`${x.sv} servidores · ${x.es} escolas · ${fmtN(x.al)} alunos` })), 'Redistribuir vagas entre DREs pelo número de escolas e de alunos, começando pelas menos atendidas.', 'apoio às escolas mais equilibrado'); }
+    const longe = D.filter(x => x.km >= 5).sort((a, b) => b.km - a.km);
+    if (longe.length) add('regional', 'baixa', `${longe.reduce((t, x) => t + x.km, 0)} escolas a mais de 200 km da sede da sua DRE`, 'Distâncias longas encarecem visitas técnicas e atrasam o atendimento. Núcleos regionais ou polos de apoio encurtam o caminho.', longe.map(x => ({ id:'', nome:'DRE ' + nomeDRE(x.d), extra:x.km + ' escolas a mais de 200 km' })), 'Avaliar núcleos regionais ou mudar a vinculação das escolas mais próximas de outra DRE (Gestão regional).', 'atendimento mais próximo');
+    const mxE = Math.max(...D.map(x => x.es)), mdE = D.reduce((t, x) => t + x.es, 0) / D.length, gr = D.filter(x => x.es > mdE * 1.8);
+    if (gr.length) add('regional', 'media', `${gr.length} DRE(s) com mais que o dobro da média de escolas`, `A média é de ${Math.round(mdE)} escolas por DRE; ${gr.map(x => nomeDRE(x.d) + ' tem ' + x.es).join(', ')}. A carga de acompanhamento não é proporcional.`, gr.map(x => ({ id:'', nome:'DRE ' + nomeDRE(x.d), extra:`${x.es} escolas · ${fmtN(x.al)} alunos` })), 'Dividir a DRE, criar diretorias adjuntas por território ou reforçar a equipe na proporção da carga.', 'carga regional equilibrada');
+  } catch (e) {}
+  // CUSTO
+  if (temCusto) { const ch = chef.map(([s]) => [s, custoChefiaCen(c, s.id)]).filter(x => x[1] > 0), tot = ch.reduce((t, x) => t + x[1], 0);
+    const varPct = base.a ? (c.a - base.a) / base.a * 100 : 0;
+    if (c.id && varPct > 0) add('custo', varPct > 5 ? 'alta' : 'media', `A proposta aumenta o custo anual em ${fmtP(varPct)}`, `O cenário custa ${fmtRc(c.a)}/ano contra ${fmtRc(base.a)} da estrutura atual (+${fmtRc(c.a - base.a)}).`, [], 'Compensar com as fusões sugeridas em Amplitude de controle ou rever os cargos criados.', 'custo igual ou menor que o atual');
+    const eco = A.filter(a => a.economia).reduce((t, a) => t + a.economia, 0);
+    if (eco) add('custo', 'baixa', `Oportunidade de economia: ${fmtRc(eco)}/ano`, `As chefias com um só subordinado custam ${fmtRc(eco)}/ano em cargos (${pct(eco, tot)}% do custo das chefias).`, [], 'Aplicar as fusões sugeridas e redirecionar os cargos para as unidades sobrecarregadas.', fmtRc(eco) + '/ano'); }
+  else add('custo', 'baixa', 'Custos não lançados', 'Sem custos, o diagnóstico não estima economia das fusões nem compara o custo das propostas.', [], 'No Financeiro, aplicar os cargos padrão das chefias (um clique) ou lançar as despesas.', 'estimativa de economia', { semDados:true });
+  // notas por dimensão
+  const nota = {}; Object.keys(DIMS_RE).forEach(k => { const l = A.filter(a => a.dim === k && !a.semDados); let n = 100 - l.reduce((t, a) => t + { alta:26, media:13, baixa:5 }[a.sev], 0); nota[k] = A.some(a => a.dim === k && a.semDados) && !l.length ? null : Math.max(5, Math.min(100, n)); });
+  const val = Object.values(nota).filter(v => v !== null), geral = val.length ? Math.round(val.reduce((a, b) => a + b, 0) / val.length) : null;
+  const conf = [['Competências descritas', pctComp, "abaRe('competencias')"], ['Servidores importados', temSv ? 100 : 0, "trocarVista('servidores')"], ['Custos lançados', temCusto ? 100 : 0, "trocarVista('financeiro')"], ['Chefias com titular', pct(chef.length - vagas.length, chef.length), "trocarVista('chefias')"], ['Atribuições de referência', refL.length ? 100 : 0, "reCompAba='ref';abaRe('competencias')"]];
+  return { c, C, M, L, A, nota, geral, conf, chef, temSv, temCusto };
+}
+function resumoDiagRe(G){
+  const top = G.A.filter(a => !a.semDados).sort((a, b) => SEV[b.sev][2] - SEV[a.sev][2] || b.evid.length - a.evid.length).slice(0, 3), fus = G.A.find(a => a.fusao), eco = G.A.filter(a => a.economia).reduce((t, a) => t + a.economia, 0);
+  const pior = Object.entries(G.nota).filter(([, v]) => v !== null).sort((a, b) => a[1] - b[1])[0];
+  const fr = [`${G.c.id ? 'A proposta "' + esc(G.c.nome) + '"' : 'A estrutura atual'} tem <b>${fmtN(G.L.length)}</b> unidades, <b>${G.chef.length}</b> chefias e <b>${G.M.niveis}</b> níveis hierárquicos, com cada chefia coordenando em média <b>${G.M.ampMedia.toLocaleString('pt-BR', { maximumFractionDigits:1 })}</b> setores.`];
+  if (pior) fr.push(`O ponto mais frágil é <b>${DIMS_RE[pior[0]][0].toLowerCase()}</b> (nota ${pior[1]}).`);
+  if (top.length) fr.push('As prioridades são: ' + top.map((a, i) => `<b>${i + 1})</b> ${esc(a.titulo.charAt(0).toLowerCase() + a.titulo.slice(1))}`).join('; ') + '.');
+  if (fus) fr.push(`Só as fusões de chefias com um único subordinado eliminariam <b>${fus.fusao.length}</b> cargo(s)${eco ? `, com economia estimada de <b>${fmtRc(eco)}/ano</b>` : ''}.`);
+  const falta = G.conf.filter(x => x[1] < 60).map(x => x[0].toLowerCase());
+  if (falta.length) fr.push(`Para um diagnóstico mais preciso, complete: ${falta.join(', ')}.`);
+  return fr.join(' ');
+}
+function reDiagnostico(){
+  const G = diagnosticoRe(reDiagCen), cor = n => n === null ? '#94a3b8' : n >= 80 ? '#16a34a' : n >= 60 ? '#65a30d' : n >= 40 ? '#d97706' : '#dc2626', rot = n => n === null ? 'sem dados' : n >= 80 ? 'Saudável' : n >= 60 ? 'Atenção leve' : n >= 40 ? 'Atenção' : 'Crítico';
+  const pode = podeGestao(), acionaveis = G.A.filter(a => a.fusao && a.fusao.length);
+  const card = a => { const [sn, sc] = SEV[a.sev], ab = reDiagAbertos.has(a.id), ev = ab ? a.evid : a.evid.slice(0, 6);
+    return `<div class="dg-ach" style="--c:${sc}"><div class="dg-ach-h"><span class="dg-sev">${a.semDados ? 'Falta informação' : 'Prioridade ' + sn.toLowerCase()}</span><b>${esc(a.titulo)}</b>${a.impacto ? `<span class="dg-imp"><i class="fa-solid fa-bullseye"></i>${esc(a.impacto)}</span>` : ''}</div>
+      <div class="dg-ach-c"><div><small>Por que importa</small><p>${esc(a.porque)}</p></div><div><small>O que fazer</small><p>${esc(a.acao)}</p></div></div>
+      ${a.evid.length ? `<div class="dg-ev">${ev.map(e => e.id && porId.has(e.id) ? `<button onclick="irPara(${arg(e.id)})" title="Abrir no mapa"><span>${esc(e.nome)}</span>${e.extra ? `<small>${esc(e.extra)}</small>` : ''}</button>` : `<div><span>${esc(e.nome)}</span>${e.extra ? `<small>${esc(e.extra)}</small>` : ''}</div>`).join('')}${a.evid.length > 6 ? `<button class="dg-mais" onclick="reDiagAbertos.${ab ? 'delete' : 'add'}('${a.id}');renderReestruturacao()">${ab ? 'mostrar menos' : `ver todos (${a.evid.length})`}</button>` : ''}</div>` : ''}
+      ${a.fusao && a.fusao.length && pode ? `<div class="dg-acao"><label class="lg-lembrar" style="margin:0"><input type="checkbox" ${reDiagMarc.has(a.id) ? 'checked' : ''} onchange="reDiagMarc[this.checked?'add':'delete']('${a.id}');renderReestruturacao()">Incluir estas ${a.fusao.length} fusões numa proposta</label></div>` : ''}</div>`; };
+  const dims = Object.entries(DIMS_RE);
+  return `<div class="dg-topo"><div class="dg-sel"><span class="rot">O que diagnosticar</span><select class="campo" onchange="reDiagCen=this.value;renderReestruturacao()">${G.C.map(c => `<option value="${esc(c.id)}" ${c.id === G.c.id ? 'selected' : ''}>${esc(c.nome)}${c.id ? ' · proposta' : ''}</option>`).join('')}</select></div></div>
+    <div class="dg-hero"><div class="dg-nota" style="--c:${cor(G.geral)}"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15.9" class="f"/><circle cx="18" cy="18" r="15.9" class="v" stroke-dasharray="${G.geral || 0} 100"/></svg><div><b>${G.geral ?? '—'}</b><small>de 100</small></div><span>${rot(G.geral)}</span></div>
+      <div class="dg-resumo"><h3><i class="fa-solid fa-wand-magic-sparkles"></i>Resumo do diagnóstico</h3><p>${resumoDiagRe(G)}</p></div>
+      <div class="dg-conf"><h4>Confiabilidade dos dados</h4>${G.conf.map(([t, p, on]) => `<button onclick="${on}" title="Completar"><span>${t}</span><i style="--p:${p}%;--c:${p >= 80 ? '#16a34a' : p >= 40 ? '#d97706' : '#dc2626'}"></i><b>${p}%</b></button>`).join('')}</div></div>
+    <div class="dg-dims">${dims.map(([k, [n, ic, c, d]]) => { const l = G.A.filter(a => a.dim === k && !a.semDados); return `<a class="dg-dim" href="#dg-${k}" onclick="event.preventDefault();document.getElementById('dg-${k}').scrollIntoView({behavior:'smooth',block:'start'})" style="--c:${cor(G.nota[k])}"><i class="fa-solid ${ic}"></i><b>${n}</b><span class="dg-n">${G.nota[k] ?? '—'}</span><small>${l.length ? l.length + ' ponto(s) de atenção' : G.nota[k] === null ? 'faltam dados' : 'sem problemas'}</small></a>`; }).join('')}</div>
+    ${acionaveis.length && pode ? `<div class="dg-plano"><i class="fa-solid fa-route"></i><div><b>Transformar o diagnóstico em proposta</b><small>Marque as sugestões com fusões abaixo e crie uma proposta com elas já montadas. Você revisa tudo no mapa da proposta antes de decidir.</small></div><button class="btn btn-p" ${reDiagMarc.size ? '' : 'disabled'} onclick="reCriarPropostaDiag()"><i class="fa-solid fa-lightbulb"></i>Criar proposta (${[...reDiagMarc].map(id => (G.A.find(a => a.id === id) || {}).fusao || []).flat().length} mudanças)</button></div>` : ''}
+    ${dims.map(([k, [n, ic, c, d]]) => { const l = G.A.filter(a => a.dim === k).sort((a, b) => SEV[b.sev][2] - SEV[a.sev][2]); return `<section class="dg-sec" id="dg-${k}"><div class="dg-sec-h" style="--c:${c}"><i class="fa-solid ${ic}"></i><div><h3>${n} <span class="chip" style="--c:${cor(G.nota[k])}">${G.nota[k] ?? '—'} · ${rot(G.nota[k])}</span></h3><p>${d}</p></div></div>${l.length ? l.map(card).join('') : '<div class="dg-ok"><i class="fa-solid fa-circle-check"></i>Nenhum problema encontrado nesta dimensão.</div>'}</section>`; }).join('')}
+    <details class="dg-gloss"><summary><i class="fa-solid fa-book-open"></i>Como o diagnóstico é calculado</summary><p>Cada dimensão começa com 100 pontos e perde 26 por ponto de atenção de prioridade alta, 13 por média e 5 por baixa. Os limites (níveis, amplitude, custo) vêm da aba <b>Metas e cenários</b>. Duplicidades usam a semelhança entre os textos das competências; pessoas usam a planilha de lotação; a rede regional usa escolas, alunos e servidores das DREs. Itens "Falta informação" não tiram pontos, mas reduzem a confiabilidade.</p></details>`;
+}
+function reCriarPropostaDiag(){
+  if (!podeGestao()) return;
+  const G = diagnosticoRe(reDiagCen), F = [...reDiagMarc].map(id => (G.A.find(a => a.id === id) || {}).fusao || []).flat(); if (!F.length) return;
+  abrirModal({ titulo:'Criar proposta a partir do diagnóstico', rotulo:'Criar proposta', largura:560, html:`<label><span class="rot">Nome da proposta</span><input id="dp-nome" class="campo" value="Simplificação de níveis — ${new Date().toLocaleDateString('pt-BR')}" required></label>
+    <p class="s">${F.length} fusão(ões): em cada uma, o setor subordinado passa a responder ao nível de cima e a chefia intermediária é extinta.</p><div class="dg-ev" style="max-height:200px;overflow:auto">${F.map(f => `<div><span>${esc(nomeSetor(f.chefia))}</span><small>${esc(nomeSetor(f.filho))} passa a responder a ${esc(nomeSetor(f.pai) || 'nível mais alto')}</small></div>`).join('')}</div>`,
+    aoConfirmar:m => { const nome = m.querySelector('#dp-nome').value.trim(); if (!nome) throw new Error('Dê um nome à proposta.');
+      const it = []; F.forEach(f => { it.push({ id:novoId('it'), tipo:'mover', setorId:f.filho, paiId:f.pai, origem:'diagnóstico' }); it.push({ id:novoId('it'), tipo:'extinguir', setorId:f.chefia, comSub:false, origem:'diagnóstico' }); });
+      const p = novoReg('propostas', { id:novoId('pp'), nome, descricao:'Criada pelo diagnóstico da Reestruturação: fusão de chefias com um único setor subordinado.', status:'Rascunho', itens:JSON.stringify(it), criadoEm:agora(), criadoPor:cfg.usuario || '', atualizadoEm:agora(), atualizadoPor:cfg.usuario || '' });
+      DB.propostas.push(p); enfileirar('propostas', p); salvarLocal(); reDiagMarc.clear(); reDiagCen = p.id; reSel = p.id;
+      toast('Proposta criada. O diagnóstico agora mostra o resultado dela.'); renderReestruturacao(); return true; } });
+}
+function guiaRe(){
+  const P = [['diagnostico', '1', 'Diagnóstico', 'Veja onde a estrutura tem problemas, em linguagem simples', 'fa-stethoscope'], ['simulador', '2', 'Metas e cenários', 'Defina limites e compare as propostas', 'fa-bullseye'], ['propostas', '3', 'Propostas', 'Monte as mudanças no mapa da proposta', 'fa-lightbulb'], ['competencias', '4', 'Competências', 'Evite duplicidades e lacunas', 'fa-list-check'], ['minuta', '5', 'Minuta', 'Gere o texto do decreto', 'fa-file-signature']];
+  return reGuia ? `<div class="re-guia"><div class="re-guia-h"><b><i class="fa-solid fa-signs-post"></i>Como fazer uma reestruturação, passo a passo</b><button class="btn btn-g btn-sm" onclick="reGuia=false;store.set('gaborg_re_guia',false);renderReestruturacao()">ocultar guia</button></div>
+    <div class="re-passos">${P.map(([k, n, t, d, ic]) => `<button class="${reAba === k ? 'on' : ''}" onclick="${k === 'propostas' ? "trocarVista('propostas')" : `abaRe('${k}')`}"><span class="n">${n}</span><i class="fa-solid ${ic}"></i><b>${t}</b><small>${d}</small></button>`).join('<i class="fa-solid fa-chevron-right re-seta"></i>')}</div></div>` : `<div style="text-align:right;margin:-4px 0 6px"><button class="btn btn-g btn-sm" onclick="reGuia=true;store.set('gaborg_re_guia',true);renderReestruturacao()"><i class="fa-solid fa-signs-post"></i>mostrar o passo a passo</button></div>`;
+}
+
 /* ---------- (4) Metas e simulador ---------- */
 function cenariosRe(){
   const at = baseAtual(), c = [{ id:'', nome:'Estrutura atual', status:'Oficial', lista:setoresOficiais(), m:at.m, a:at.a, linhas:DB.despesas.filter(d => (d.cenario || 'Atual') === 'Atual') }];
@@ -4011,7 +4149,8 @@ function reSimulador(){
     if (x.k === 'semResp') sug.push(['fa-user-xmark', `${sel.M.semResp} chefias sem responsável. Use a seção <b>Chefias</b> para registrar titulares e substitutos.`, '']);
     if (x.k === 'setores') sug.push(['fa-sitemap', `A estrutura tem ${fmtN(sel.M.ativos.length)} setores. Fusões das chefias com 1 subordinado e das unidades com competências repetidas (aba Competências) reduzem o total.`, '']);
   });
-  return `<div class="cartao bl" style="--c:#2563eb"><h3><i class="fa-solid fa-sliders"></i>Metas da reorganização</h3><p class="s">Os limites que toda proposta deve respeitar. Deixe em branco o que não quiser avaliar. As metas valem para todos os usuários.</p>
+  return `<div class="re-explica"><i class="fa-solid fa-circle-info"></i><div><b>Como usar esta etapa</b><ol><li><b>Defina as metas</b>: os limites que qualquer proposta precisa respeitar (custo, níveis, quantos setores cada chefia coordena).</li><li><b>Compare os cenários</b>: a tabela mostra, para a estrutura atual e cada proposta, quais metas são atendidas (verde) e quais não (vermelho).</li><li><b>Clique numa coluna</b> para ver o que falta naquele cenário e as sugestões para corrigir.</li></ol><small>Ainda não tem proposta? Crie uma em <a href="#" onclick="event.preventDefault();trocarVista('propostas')">Propostas</a> ou a partir do <a href="#" onclick="event.preventDefault();abaRe('diagnostico')">Diagnóstico</a>.</small></div></div>
+    <div class="cartao bl" style="--c:#2563eb"><h3><i class="fa-solid fa-sliders"></i>Metas da reorganização</h3><p class="s">Os limites que toda proposta deve respeitar. Deixe em branco o que não quiser avaliar. As metas valem para todos os usuários e também alimentam o Diagnóstico.</p>
       <div class="g-metas">${campo('tetoCusto', 'Teto de custo anual (R$)', 'cargos e despesas')}${campo('variacaoMax', 'Variação máxima do custo (%)', '0 = sem aumento')}${campo('maxNiveis', 'Máximo de níveis', 'hierárquicos')}${campo('ampMax', 'Máximo de subordinados', 'por chefia')}${campo('ampMin', 'Mínimo de subordinados', 'por chefia')}${campo('maxSetores', 'Máximo de setores', 'ativos')}${campo('maxSemResp', 'Chefias sem responsável (%)', 'no máximo')}</div>
       ${podeGestao() ? `<div class="acoes" style="margin-top:10px"><button class="btn btn-p btn-sm" onclick="salvarMetasRe()"><i class="fa-solid fa-floppy-disk"></i>Salvar metas</button></div>` : ''}</div>
     ${metas.length ? `<div class="cartao bl" style="--c:#7c3aed"><h3><i class="fa-solid fa-table-columns"></i>Como cada cenário se sai</h3><p class="s">Verde atende, vermelho fura a meta. Clique numa coluna para ver o diagnóstico e as sugestões.</p>
@@ -5373,16 +5512,15 @@ const REL_SECOES = [
   ['Pessoas e governança', [['servidores', 'Servidores: lotação, vínculos e cargos'], ['chefias', 'Chefias e sucessão'], ['riscos', 'Riscos e prioridades'], ['validacoes', 'Validações entre setores']]],
   ['Financeiro e propostas', [['financeiro', 'Custos e cargos em comissão'], ['propostas', 'Propostas: alterações, custo e metas']]],
   ['Rede escolar', [['rede', 'Rede escolar por DRE'], ['distancias', 'Distâncias das escolas até as DREs'], ['regional', 'Gestão regional e sugestões'], ['escolas', 'Lista de unidades escolares']]],
-  ['Gestão', [['implantacao', 'Implantação: etapas e prazos'], ['metas', 'Pacto de resultados'], ['reunioes', 'Reuniões, decisões e encaminhamentos']]],
   ['Encerramento', [['notas', 'Notas metodológicas, fontes e legendas']]]
 ];
 const REL_MODELOS = {
   executivo:['fa-briefcase', 'Executivo', ['resumo', 'kpis', 'orgGeral', 'mapaMT', 'areas', 'riscos', 'propostas', 'regional', 'notas']],
-  completo:['fa-book', 'Completo', ['resumo', 'kpis', 'areas', 'orgGeral', 'orgAreas', 'mapaMT', 'mapaDist', 'estrutura', 'quadro', 'governanca', 'competencias', 'servidores', 'chefias', 'riscos', 'validacoes', 'financeiro', 'propostas', 'orgProp', 'rede', 'distancias', 'regional', 'implantacao', 'metas', 'reunioes', 'notas']],
+  completo:['fa-book', 'Completo', ['resumo', 'kpis', 'areas', 'orgGeral', 'orgAreas', 'mapaMT', 'mapaDist', 'estrutura', 'quadro', 'governanca', 'competencias', 'servidores', 'chefias', 'riscos', 'validacoes', 'financeiro', 'propostas', 'orgProp', 'rede', 'distancias', 'regional', 'notas']],
   organograma:['fa-sitemap', 'Organogramas', ['kpis', 'orgGeral', 'orgAreas', 'governanca', 'chefias', 'notas']],
   mapas:['fa-map-location-dot', 'Mapas de MT', ['mapaMT', 'mapaDist', 'mapaMun', 'rede', 'notas']],
   rede:['fa-school', 'Rede escolar', ['rede', 'mapaMT', 'distancias', 'mapaDist', 'regional', 'escolas', 'notas']],
-  financeiro:['fa-coins', 'Financeiro e propostas', ['kpis', 'financeiro', 'propostas', 'orgProp', 'implantacao', 'notas']],
+  financeiro:['fa-coins', 'Financeiro e propostas', ['kpis', 'financeiro', 'propostas', 'orgProp', 'notas']],
   fichaDre:['fa-building-flag', 'Ficha de uma DRE', ['mapaDRE', 'rede', 'distancias', 'regional', 'escolas'], 'dre'],
   fichaSetor:['fa-id-card', 'Ficha de um setor', ['ficha', 'notas'], 'setor']
 };
@@ -5791,7 +5929,7 @@ function fecharPaleta(){ const el = $('#paleta'); if (el) el.remove(); }
 function listarPaleta(txt){
   const q = norm(txt), r = [];
   document.querySelectorAll('.lado .nav-b[data-vista]:not(.sem-acesso)').forEach(b => r.push({ g:'Seções', ic:b.querySelector('i').className, t:b.title || b.textContent.trim(), a:() => trocarVista(b.dataset.vista) }));
-  [['fa-solid fa-tv', 'Abrir o Modo TV', () => abrirModoTV()], ['fa-solid fa-file-pdf', 'Gerar um relatório em PDF', () => { trocarVista('relatorios'); abaRm('relatorio'); }], ['fa-solid fa-file-contract', 'Minuta de portaria', () => { trocarVista('relatorios'); abaRm('portaria'); }], ['fa-solid fa-shield-halved', 'Verificar o código de um documento', () => { trocarVista('relatorios'); abaRm('verificar'); }], ['fa-solid fa-people-group', 'Nova reunião', () => { trocarVista('reunioes'); setTimeout(() => formReuniao(''), 100); }], ['fa-solid fa-circle-half-stroke', 'Alternar tema claro/escuro', () => alternarTema()], ['fa-solid fa-route', 'Mapa de MT por distância até a DRE', () => { trocarVista('escolas'); setTimeout(() => modoMT('distancia'), 400); }]]
+  [['fa-solid fa-tv', 'Abrir o Modo TV', () => abrirModoTV()], ['fa-solid fa-file-pdf', 'Gerar um relatório em PDF', () => { trocarVista('relatorios'); abaRm('relatorio'); }], ['fa-solid fa-file-contract', 'Minuta de portaria', () => { trocarVista('relatorios'); abaRm('portaria'); }], ['fa-solid fa-shield-halved', 'Verificar o código de um documento', () => { trocarVista('relatorios'); abaRm('verificar'); }], ['fa-solid fa-circle-half-stroke', 'Alternar tema claro/escuro', () => alternarTema()], ['fa-solid fa-route', 'Mapa de MT por distância até a DRE', () => { trocarVista('escolas'); setTimeout(() => modoMT('distancia'), 400); }]]
     .forEach(([ic, t, a]) => r.push({ g:'Ações', ic, t, a }));
   let L = q ? r.filter(x => norm(x.t).includes(q)) : r;
   if (q.length >= 2) {
@@ -5963,14 +6101,14 @@ function tvMontarMapa(){
 }
 /* ===================== MODO TV: ROTEIROS, TELAS NOVAS E INTERAÇÃO ===================== */
 const ROTEIROS_TV = {
-  panorama:['fa-earth-americas', 'Panorama completo', 'Todas as telas, da estrutura à rede escolar', ['visao', 'indicadores', 'mapa', 'areas', 'chefias', 'riscos', 'rede', 'mapamt', 'distancias', 'regional', 'fin', 'props', 'implantacao', 'metas', 'agenda', 'val']],
+  panorama:['fa-earth-americas', 'Panorama completo', 'Todas as telas, da estrutura à rede escolar', ['visao', 'indicadores', 'mapa', 'areas', 'chefias', 'riscos', 'rede', 'mapamt', 'distancias', 'regional', 'fin', 'props', 'val']],
   estrutura:['fa-sitemap', 'Estrutura e pessoas', 'Organograma, áreas, chefias, riscos e validações', ['visao', 'mapa', 'areas', 'chefias', 'riscos', 'val']],
   rede:['fa-school', 'Rede escolar', 'As 631 escolas, o mapa de MT, distâncias e DREs', ['rede', 'mapamt', 'distancias', 'regional']],
-  gestao:['fa-compass-drafting', 'Gestão e decisões', 'Maturidade, propostas, implantação, metas e agenda', ['indicadores', 'props', 'implantacao', 'metas', 'agenda']],
+  gestao:['fa-compass-drafting', 'Gestão e decisões', 'Maturidade, riscos e propostas', ['indicadores', 'riscos', 'props']],
   propostas:['fa-lightbulb', 'Propostas', 'Uma tela para cada proposta, com custo e metas', ['props']],
   personalizado:['fa-hand-pointer', 'Personalizado', 'Você escolhe as telas', null]
 };
-const TELAS_TV = { visao:'Visão geral', indicadores:'Maturidade e alertas', mapa:'Mapa da estrutura', areas:'Estrutura por área', chefias:'Chefias', riscos:'Riscos', rede:'Rede escolar', mapamt:'Mapa de Mato Grosso', distancias:'Distâncias até as DREs', regional:'Gestão regional', fin:'Financeiro', props:'Propostas (uma por tela)', implantacao:'Implantação', metas:'Pacto de resultados', agenda:'Agenda e encaminhamentos', val:'Validações e impacto' };
+const TELAS_TV = { visao:'Visão geral', indicadores:'Maturidade e alertas', mapa:'Mapa da estrutura', areas:'Estrutura por área', chefias:'Chefias', riscos:'Riscos', rede:'Rede escolar', mapamt:'Mapa de Mato Grosso', distancias:'Distâncias até as DREs', regional:'Gestão regional', fin:'Financeiro', props:'Propostas (uma por tela)', val:'Validações e impacto' };
 Object.assign(tv, { roteiro:store.get('gaborg_tv_rot', 'panorama'), pers:store.get('gaborg_tv_pers', ['visao', 'rede', 'mapamt']), trans:store.get('gaborg_tv_trans', 'deslizar'), ticker:store.get('gaborg_tv_ticker', true), cont:null, det:null });
 function tvSlides(){
   const r = ROTEIROS_TV[tv.roteiro] || ROTEIROS_TV.panorama, base = r[3] || tv.pers, L = [];
