@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.28.0';
+const VERSAO = '1.28.1';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -4040,6 +4040,9 @@ const svEhDRE = r => /^DRE\b/i.test(r.unidade || '') || /DRE/i.test(r.tipoLotaca
 const svNomeUnid = u => /^DRE\s/i.test(u || '') ? 'DRE ' + nomeDRE(u) : String(u || '—');
 const svTemp = r => /TEMPOR/i.test(r.vinculo || '');
 const svEfet = r => /EFETIV/i.test(r.vinculo || '');
+const svComV = r => /COMISSION/i.test(r.vinculo || '') || (!svEfet(r) && !svTemp(r) && /COMISSIONADO/i.test(r.cargo || ''));
+const svPartes = l => { const e = l.filter(svEfet).length, t = l.filter(svTemp).length, c = l.filter(svComV).length; return [[e, '#16a34a'], [t, '#f59e0b'], [c, '#b45309'], [l.length - e - t - c, '#cbd5e1']]; };
+const SV_LEG = '<span class="sv-leg"><i style="background:#16a34a"></i>efetivos <i style="background:#f59e0b"></i>temporários <i style="background:#b45309"></i>comissionados</span>';
 const svChave = r => (r.unidade || '') + '|' + (r.lotacaoCod || r.lotacao || '');
 const svLista = () => DB.servidores || [];
 const svComNome = () => svLista().some(r => r.nome);
@@ -4088,7 +4091,7 @@ function svDados(lista){
   const semCasar = new Map(); L.filter(r => !r.setorId || !porId.has(r.setorId)).forEach(r => { const k = svChave(r); if (!semCasar.has(k)) semCasar.set(k, { k, unidade:r.unidade, cod:r.lotacaoCod, nome:svLimparLotacao(r.lotacao, ''), l:[] }); semCasar.get(k).l.push(r); });
   const vence90 = L.filter(r => { const d = svDiasFim(r); return d !== null && d >= 0 && d <= 90; }), venceAno = L.filter(r => r.dataFinal && r.dataFinal.slice(0, 4) === hojeISO().slice(0, 4) && (svDiasFim(r) ?? -1) >= 0);
   return { L, n:L.length, oc:cont(r => !svEhDRE(r)), dre:cont(svEhDRE), efet:cont(svEfet), temp:cont(svTemp), prof:cont(r => svGrupoCargo(r.cargo) === 'Professor'), est:cont(r => ['Estagiário', 'Residente técnico'].includes(svGrupoCargo(r.cargo))),
-    com:cont(r => svGrupoCargo(r.cargo) === 'Exclusivamente comissionado'), semCargo:cont(r => !r.cargo), sug:cont(r => r.sugerido === '1' || /^sim$/i.test(r.sugerido)), porUnid, porCargo, porSetor, semCasar, vence90, venceAno };
+    com:cont(r => svComV(r) || svGrupoCargo(r.cargo) === 'Exclusivamente comissionado'), semCargo:cont(r => !r.cargo), sug:cont(r => r.sugerido === '1' || /^sim$/i.test(r.sugerido)), porUnid, porCargo, porSetor, semCasar, vence90, venceAno };
 }
 function svBarras(it, total){ const mx = Math.max(1, ...it.map(x => x[1])); return it.map(([n, v, partes, on, ic]) => `<div class="barra-l sv-b" ${on ? `style="cursor:pointer" onclick="${on}"` : ''}><span class="n" title="${esc(n)}">${ic || ''}${esc(n)}</span><span class="t">${(partes || [[v, '#2563eb']]).map(([q, c]) => `<span style="width:${(q / mx * 100).toFixed(2)}%;background:${c}" title="${fmtN(q)}"></span>`).join('')}</span><b>${fmtN(v)}${total ? `<small>${pct(v, total)}%</small>` : ''}</b></div>`).join(''); }
 const svIrLista = o => `svFil=Object.assign({q:'',tipo:'',unid:'',cargo:'',vinc:'',sit:''},${esc(JSON.stringify(o))});svLim=100;abaSv('lista')`;
@@ -4131,9 +4134,9 @@ function svGeral(D){
     ${kpiG('#dc2626', 'fa-hourglass-half', 'Vínculos a vencer (90 dias)', fmtN(D.vence90.length), fmtN(D.venceAno.length) + ' até o fim do ano', svIrLista({ sit:'vence90' }))}
     ${kpiG('#7c3aed', 'fa-link-slash', 'Fora da nova estrutura', fmtN([...D.semCasar.values()].reduce((t, x) => t + x.l.length, 0)), D.semCasar.size + ' lotações sem correspondência', "abaSv('unidades')")}</div>
     ${al.length ? `<div class="cartao bl" style="--c:#dc2626"><h3><i class="fa-solid fa-bell"></i>Pontos de atenção</h3><p class="s">O que a planilha de lotação mostra sobre a nova estrutura</p><div class="pend">${al.map(([c, t, on]) => `<button onclick="${on}"><i class="fa-solid fa-circle" style="color:${c};font-size:8px"></i><span>${t}</span><i class="fa-solid fa-chevron-right" style="margin-left:auto;color:var(--mut2)"></i></button>`).join('')}</div></div>` : ''}
-    <div class="grade2"><div class="cartao bl" style="--c:#1e3a8a"><h3><i class="fa-solid fa-building-columns"></i>Onde estão os servidores</h3><p class="s">Por secretaria adjunta e DRE · <span class="sv-leg"><i style="background:#16a34a"></i>efetivos <i style="background:#f59e0b"></i>temporários</span></p>${svBarras(U.map(([u, n, e, t]) => [svNomeUnid(u), n, [[e, '#16a34a'], [t, '#f59e0b'], [n - e - t, '#cbd5e1']], svIrLista({ unid:u })]), D.n)}</div>
+    <div class="grade2"><div class="cartao bl" style="--c:#1e3a8a"><h3><i class="fa-solid fa-building-columns"></i>Onde estão os servidores</h3><p class="s">Por secretaria adjunta e DRE · ${SV_LEG}</p>${svBarras(U.map(([u, n]) => [svNomeUnid(u), n, svPartes(D.porUnid.get(u)), svIrLista({ unid:u })]), D.n)}</div>
       <div><div class="cartao bl" style="--c:#2563eb"><h3><i class="fa-solid fa-id-badge"></i>Por cargo</h3><p class="s">Agrupado pela carreira</p>${svBarras(C.map(([g, n]) => [g, n, [[n, svCorCargo(g)]], svIrLista({ cargo:g })]), D.n)}</div>
-      <div class="cartao bl" style="--c:#0e7490"><h3><i class="fa-solid fa-scale-balanced"></i>Órgão Central × DREs</h3><p class="s">Composição dos vínculos</p>${svBarras([['Órgão Central', ocE.length, [[ocE.filter(svEfet).length, '#16a34a'], [ocE.filter(svTemp).length, '#f59e0b']], svIrLista({ tipo:'oc' })], ['DREs', drE.length, [[drE.filter(svEfet).length, '#16a34a'], [drE.filter(svTemp).length, '#f59e0b']], svIrLista({ tipo:'dre' })]], D.n)}
+      <div class="cartao bl" style="--c:#0e7490"><h3><i class="fa-solid fa-scale-balanced"></i>Órgão Central × DREs</h3><p class="s">Composição dos vínculos</p>${svBarras([['Órgão Central', ocE.length, svPartes(ocE), svIrLista({ tipo:'oc' })], ['DREs', drE.length, svPartes(drE), svIrLista({ tipo:'dre' })]], D.n)}
         <p class="s" style="margin-top:8px">Temporários: ${pct(ocE.filter(svTemp).length, ocE.length)}% no Órgão Central e ${pct(drE.filter(svTemp).length, drE.length)}% nas DREs.</p></div>
       <div class="cartao bl" style="--c:#d97706"><h3><i class="fa-solid fa-calendar-xmark"></i>Fim dos vínculos (próximos 12 meses)</h3><p class="s">Quantos vínculos terminam em cada mês</p>${Object.keys(meses).length ? svBarras(Object.keys(meses).sort().map(m => [nomeMes(m), meses[m], [[meses[m], '#f59e0b']]])) : '<p class="vazio">Nenhum vínculo termina nos próximos 12 meses.</p>'}</div></div></div>`;
 }
@@ -4201,7 +4204,7 @@ function svDREs(D){
   return `<div class="kpis">${kpiG('#0e7490', 'fa-users', 'Servidores nas DREs', fmtN(Ld.length), dres.length + ' diretorias regionais')}${kpiG('#16a34a', 'fa-school', 'Servidores por escola', med.toFixed(1).replace('.', ','), 'média da rede (servidores da DRE ÷ escolas)')}
       ${kpiG('#d97706', 'fa-user-clock', 'Temporários nas DREs', pct(Ld.filter(svTemp).length, Ld.length) + '%', fmtN(Ld.filter(svTemp).length) + ' servidores')}${kpiG('#2563eb', 'fa-chalkboard-user', 'Professores nas DREs', fmtN(Ld.filter(r => svGrupoCargo(r.cargo) === 'Professor').length), 'em funções administrativas')}</div>
     <div class="grade2"><div class="cartao bl" style="--c:#0e7490"><h3><i class="fa-solid fa-scale-unbalanced"></i>Servidores por escola em cada DRE</h3><p class="s">Quanto maior, mais equipe para apoiar cada escola</p>${svBarras(linhas.slice().sort((a, b) => b.n / Math.max(1, b.es) - a.n / Math.max(1, a.es)).map(x => [nomeDRE(x.d), +(x.n / Math.max(1, x.es)).toFixed(1), [[x.n / Math.max(1, x.es), corDRE(dres, x.d)]], svIrLista({ unid:x.l[0] ? x.l[0].unidade : x.d })])).replace(/<b>([\d.]+)<\/b>/g, (m, v) => `<b>${String(v).replace('.', ',')}</b>`)}</div>
-      <div class="cartao bl" style="--c:#16a34a"><h3><i class="fa-solid fa-users-between-lines"></i>Tamanho das equipes</h3><p class="s"><span class="sv-leg"><i style="background:#16a34a"></i>efetivos <i style="background:#f59e0b"></i>temporários</span></p>${svBarras(linhas.slice().sort((a, b) => b.n - a.n).map(x => [nomeDRE(x.d), x.n, [[x.ef, '#16a34a'], [x.te, '#f59e0b'], [x.n - x.ef - x.te, '#cbd5e1']], svIrLista({ unid:x.l[0] ? x.l[0].unidade : x.d })]))}</div></div>
+      <div class="cartao bl" style="--c:#16a34a"><h3><i class="fa-solid fa-users-between-lines"></i>Tamanho das equipes</h3><p class="s">${SV_LEG}</p>${svBarras(linhas.slice().sort((a, b) => b.n - a.n).map(x => [nomeDRE(x.d), x.n, svPartes(x.l), svIrLista({ unid:x.l[0] ? x.l[0].unidade : x.d })]))}</div></div>
     <div class="tab-wrap"><table class="tab sv-tab"><thead><tr><th>DRE</th><th class="dir">Servidores</th><th class="dir">Efetivos</th><th class="dir">Temporários</th><th class="dir">% temp.</th><th class="dir">Professores</th><th class="dir">Escolas</th><th class="dir">Alunos</th><th class="dir">Municípios</th><th class="dir">Serv./escola</th><th class="dir">Alunos/serv.</th></tr></thead><tbody>
     ${linhas.map(x => `<tr onclick="${svIrLista({ unid:x.l[0] ? x.l[0].unidade : x.d })}"><td><i class="fa-solid fa-circle" style="color:${corDRE(dres, x.d)};font-size:9px;margin-right:6px"></i><b>${esc(nomeDRE(x.d))}</b></td><td class="dir"><b>${fmtN(x.n)}</b></td><td class="dir">${fmtN(x.ef)}</td><td class="dir">${fmtN(x.te)}</td><td class="dir">${pct(x.te, x.n)}%</td><td class="dir">${fmtN(x.pr)}</td><td class="dir">${fmtN(x.es)}</td><td class="dir">${fmtN(x.al)}</td><td class="dir">${fmtN(x.mun)}</td><td class="dir"><b>${(x.n / Math.max(1, x.es)).toFixed(1).replace('.', ',')}</b></td><td class="dir">${x.n ? fmtN(Math.round(x.al / x.n)) : '—'}</td></tr>`).join('')}</tbody></table></div>`;
 }
@@ -4216,7 +4219,7 @@ function svListaTela(D){
   const unids = [...D.porUnid.keys()].sort((a, b) => (/^DRE/.test(a) - /^DRE/.test(b)) || a.localeCompare(b, 'pt-BR')), cargos = Object.keys(D.porCargo).sort();
   const sel = (k, rot, ops) => `<select class="campo" onchange="svFil.${k}=this.value;svLim=100;renderServidores()"><option value="">${rot}</option>${ops.map(([v, n]) => `<option value="${esc(v)}" ${svFil[k] === v ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>`;
   return `<div class="filtros"><div class="busca"><i class="fa-solid fa-magnifying-glass"></i><input class="campo" placeholder="${nomes ? 'Buscar nome, matrícula, cargo ou lotação' : 'Buscar cargo ou lotação'}" value="${esc(svFil.q)}" oninput="svFil.q=this.value;svLim=100;clearTimeout(window.tSv);window.tSv=setTimeout(()=>{renderServidores();const i=document.querySelector('#sv-corpo .busca input');i.focus();i.setSelectionRange(i.value.length,i.value.length)},300)"></div>
-      ${sel('tipo', 'Órgão Central e DREs', [['oc', 'Órgão Central'], ['dre', 'DREs']])}${sel('unid', 'Todas as unidades', unids.map(u => [u, svNomeUnid(u)]))}${sel('cargo', 'Todos os cargos', cargos.map(c => [c, c]))}${sel('vinc', 'Todos os vínculos', [['EFETIVO', 'Efetivos'], ['TEMPOR', 'Temporários']])}
+      ${sel('tipo', 'Órgão Central e DREs', [['oc', 'Órgão Central'], ['dre', 'DREs']])}${sel('unid', 'Todas as unidades', unids.map(u => [u, svNomeUnid(u)]))}${sel('cargo', 'Todos os cargos', cargos.map(c => [c, c]))}${sel('vinc', 'Todos os vínculos', [['EFETIVO', 'Efetivos'], ['TEMPOR', 'Temporários'], ['COMISSION', 'Exclusivamente comissionados']])}
       ${sel('sit', 'Qualquer situação', [['vence90', 'Vínculo termina em 90 dias'], ['venceAno', 'Vínculo termina este ano'], ['semSetor', 'Fora da nova estrutura'], ['sugerido', 'Marcados como sugeridos']])}
       ${podeGestao() ? `<button class="btn btn-s btn-sm" onclick="svExportar()"><i class="fa-solid fa-file-csv"></i>Exportar</button>` : ''}</div>
     <p class="s" style="margin:-4px 0 8px;color:var(--mut)">${fmtN(L.length)} servidor(es)${L.length !== D.n ? ' de ' + fmtN(D.n) : ''}${nomes ? '' : ' · <i class="fa-solid fa-lock"></i> nomes e matrículas visíveis só para Editores e Administradores'}</p>
@@ -4272,7 +4275,7 @@ async function svLerArquivo(f){
     linhas.slice(hi + 1).forEach(l => {
       const g = k => col[k] == null ? '' : l[col[k]], lot = String(g('lotacao') || '').trim(); if (!lot && !String(g('nome') || '').trim()) { ign++; return; }
       const cod = (lot.match(/^\s*(\d+)\s*-/) || [])[1] || '', unidade = String(g('unidade') || g('tipoLotacao') || '').trim().toUpperCase(), mat = String(g('matricula') || '').trim().replace(/\.0$/, '');
-      let id = 'sv' + (mat || (regs.length + 1)); const n = (usados.get(id) || 0) + 1; usados.set(id, n); if (n > 1) id += '-' + n;
+      let id = 'sv' + (mat || 'x' + svHash([g('nome'), g('cargo'), lot].join('|'))); const n = (usados.get(id) || 0) + 1; usados.set(id, n); if (n > 1) id += '-' + n;
       const sg = String(g('sugerido') || '').trim();
       regs.push(novoReg('servidores', { id, matricula:mat, nome:String(g('nome') || '').trim(), cargo:String(g('cargo') || '').trim(), vinculo:String(g('vinculo') || '').trim().toUpperCase(), tipoLotacao:String(g('tipoLotacao') || '').trim(), unidade, lotacaoCod:cod, lotacao:lot,
         setorId:svCasar(unidade, { cod:cod || lot, nome:lot }, R, mapa), dataInicio:svDataISO(g('dataInicio')), dataFinal:svDataISO(g('dataFinal')), sugerido:sg === '1' || /^sim$/i.test(sg) ? '1' : '0' }));
@@ -4282,6 +4285,7 @@ async function svLerArquivo(f){
     svAba = 'importar'; renderServidores(); toast(`${fmtN(regs.length)} servidores lidos. Confira o resumo e grave.`);
   } catch (e) { console.error(e); toast('Não foi possível ler a planilha: ' + e.message, 'erro'); }
 }
+function svHash(t){ let h = 2166136261; for (const ch of norm(t)) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; } return h.toString(36); }
 function svEnfileirarLote(ops){
   salvarLocal(); if (!online() || !ops.length) return statusSync();
   fila.push(...ops); store.set('gaborg_fila', fila); clearTimeout(tFila); tFila = setTimeout(enviarFila, 300); statusSync();
