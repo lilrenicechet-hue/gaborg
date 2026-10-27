@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.31.0';
+const VERSAO = '1.31.1';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -3969,7 +3969,7 @@ const METAS_PADRAO = { tetoCusto:'', variacaoMax:'0', maxNiveis:'6', ampMax:'8',
 function abaRe(a){ reAba = a; store.set('gaborg_re_aba2', a); renderReestruturacao(); const r = $('#v-reestruturacao .rolagem'); if (r) r.scrollTop = 0; }
 function renderReestruturacao(){
   const el = $('#re-corpo'); if (!el) return;
-  el.innerHTML = avisoGestao() + guiaRe() + abasG(RE_ABAS, reAba, 'abaRe') + `<div class="ind-corpo">${reAba === 'competencias' ? reCompetencias() : reAba === 'minuta' ? reMinuta() : reAba === 'simulador' ? reSimulador() : reDiagnostico()}</div>`;
+  el.innerHTML = avisoGestao() + guiaRe() + `<div class="ind-corpo re-corpo-${reAba}">${reAba === 'competencias' ? reCompetencias() : reAba === 'minuta' ? reMinuta() : reAba === 'simulador' ? reSimulador() : reDiagnostico()}</div>`;
   if (reAba === 'minuta') atualizarMinuta();
 }
 /* ---------- (1) Diagnóstico inteligente da estrutura ---------- */
@@ -4074,24 +4074,6 @@ function resumoDiagRe(G){
   if (falta.length) fr.push(`Para um diagnóstico mais preciso, complete: ${falta.join(', ')}.`);
   return fr.join(' ');
 }
-function reDiagnostico(){
-  const G = diagnosticoRe(reDiagCen), cor = n => n === null ? '#94a3b8' : n >= 80 ? '#16a34a' : n >= 60 ? '#65a30d' : n >= 40 ? '#d97706' : '#dc2626', rot = n => n === null ? 'sem dados' : n >= 80 ? 'Saudável' : n >= 60 ? 'Atenção leve' : n >= 40 ? 'Atenção' : 'Crítico';
-  const pode = podeGestao(), acionaveis = G.A.filter(a => a.fusao && a.fusao.length);
-  const card = a => { const [sn, sc] = SEV[a.sev], ab = reDiagAbertos.has(a.id), ev = ab ? a.evid : a.evid.slice(0, 6);
-    return `<div class="dg-ach" style="--c:${sc}"><div class="dg-ach-h"><span class="dg-sev">${a.semDados ? 'Falta informação' : 'Prioridade ' + sn.toLowerCase()}</span><b>${esc(a.titulo)}</b>${a.impacto ? `<span class="dg-imp"><i class="fa-solid fa-bullseye"></i>${esc(a.impacto)}</span>` : ''}</div>
-      <div class="dg-ach-c"><div><small>Por que importa</small><p>${esc(a.porque)}</p></div><div><small>O que fazer</small><p>${esc(a.acao)}</p></div></div>
-      ${a.evid.length ? `<div class="dg-ev">${ev.map(e => e.id && porId.has(e.id) ? `<button onclick="irPara(${arg(e.id)})" title="Abrir no mapa"><span>${esc(e.nome)}</span>${e.extra ? `<small>${esc(e.extra)}</small>` : ''}</button>` : `<div><span>${esc(e.nome)}</span>${e.extra ? `<small>${esc(e.extra)}</small>` : ''}</div>`).join('')}${a.evid.length > 6 ? `<button class="dg-mais" onclick="reDiagAbertos.${ab ? 'delete' : 'add'}('${a.id}');renderReestruturacao()">${ab ? 'mostrar menos' : `ver todos (${a.evid.length})`}</button>` : ''}</div>` : ''}
-      ${a.fusao && a.fusao.length && pode ? `<div class="dg-acao"><label class="lg-lembrar" style="margin:0"><input type="checkbox" ${reDiagMarc.has(a.id) ? 'checked' : ''} onchange="reDiagMarc[this.checked?'add':'delete']('${a.id}');renderReestruturacao()">Incluir estas ${a.fusao.length} fusões numa proposta</label></div>` : ''}</div>`; };
-  const dims = Object.entries(DIMS_RE);
-  return `<div class="dg-topo"><div class="dg-sel"><span class="rot">O que diagnosticar</span><select class="campo" onchange="reDiagCen=this.value;renderReestruturacao()">${G.C.map(c => `<option value="${esc(c.id)}" ${c.id === G.c.id ? 'selected' : ''}>${esc(c.nome)}${c.id ? ' · proposta' : ''}</option>`).join('')}</select></div></div>
-    <div class="dg-hero"><div class="dg-nota" style="--c:${cor(G.geral)}"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15.9" class="f"/><circle cx="18" cy="18" r="15.9" class="v" stroke-dasharray="${G.geral || 0} 100"/></svg><div><b>${G.geral ?? '—'}</b><small>de 100</small></div><span>${rot(G.geral)}</span></div>
-      <div class="dg-resumo"><h3><i class="fa-solid fa-wand-magic-sparkles"></i>Resumo do diagnóstico</h3><p>${resumoDiagRe(G)}</p></div>
-      <div class="dg-conf"><h4>Confiabilidade dos dados</h4>${G.conf.map(([t, p, on]) => `<button onclick="${on}" title="Completar"><span>${t}</span><i style="--p:${p}%;--c:${p >= 80 ? '#16a34a' : p >= 40 ? '#d97706' : '#dc2626'}"></i><b>${p}%</b></button>`).join('')}</div></div>
-    <div class="dg-dims">${dims.map(([k, [n, ic, c, d]]) => { const l = G.A.filter(a => a.dim === k && !a.semDados); return `<a class="dg-dim" href="#dg-${k}" onclick="event.preventDefault();document.getElementById('dg-${k}').scrollIntoView({behavior:'smooth',block:'start'})" style="--c:${cor(G.nota[k])}"><i class="fa-solid ${ic}"></i><b>${n}</b><span class="dg-n">${G.nota[k] ?? '—'}</span><small>${l.length ? l.length + ' ponto(s) de atenção' : G.nota[k] === null ? 'faltam dados' : 'sem problemas'}</small></a>`; }).join('')}</div>
-    ${acionaveis.length && pode ? `<div class="dg-plano"><i class="fa-solid fa-route"></i><div><b>Transformar o diagnóstico em proposta</b><small>Marque as sugestões com fusões abaixo e crie uma proposta com elas já montadas. Você revisa tudo no mapa da proposta antes de decidir.</small></div><button class="btn btn-p" ${reDiagMarc.size ? '' : 'disabled'} onclick="reCriarPropostaDiag()"><i class="fa-solid fa-lightbulb"></i>Criar proposta (${[...reDiagMarc].map(id => (G.A.find(a => a.id === id) || {}).fusao || []).flat().length} mudanças)</button></div>` : ''}
-    ${dims.map(([k, [n, ic, c, d]]) => { const l = G.A.filter(a => a.dim === k).sort((a, b) => SEV[b.sev][2] - SEV[a.sev][2]); return `<section class="dg-sec" id="dg-${k}"><div class="dg-sec-h" style="--c:${c}"><i class="fa-solid ${ic}"></i><div><h3>${n} <span class="chip" style="--c:${cor(G.nota[k])}">${G.nota[k] ?? '—'} · ${rot(G.nota[k])}</span></h3><p>${d}</p></div></div>${l.length ? l.map(card).join('') : '<div class="dg-ok"><i class="fa-solid fa-circle-check"></i>Nenhum problema encontrado nesta dimensão.</div>'}</section>`; }).join('')}
-    <details class="dg-gloss"><summary><i class="fa-solid fa-book-open"></i>Como o diagnóstico é calculado</summary><p>Cada dimensão começa com 100 pontos e perde 26 por ponto de atenção de prioridade alta, 13 por média e 5 por baixa. Os limites (níveis, amplitude, custo) vêm da aba <b>Metas e cenários</b>. Duplicidades usam a semelhança entre os textos das competências; pessoas usam a planilha de lotação; a rede regional usa escolas, alunos e servidores das DREs. Itens "Falta informação" não tiram pontos, mas reduzem a confiabilidade.</p></details>`;
-}
 function reCriarPropostaDiag(){
   if (!podeGestao()) return;
   const G = diagnosticoRe(reDiagCen), F = [...reDiagMarc].map(id => (G.A.find(a => a.id === id) || {}).fusao || []).flat(); if (!F.length) return;
@@ -4103,10 +4085,47 @@ function reCriarPropostaDiag(){
       DB.propostas.push(p); enfileirar('propostas', p); salvarLocal(); reDiagMarc.clear(); reDiagCen = p.id; reSel = p.id;
       toast('Proposta criada. O diagnóstico agora mostra o resultado dela.'); renderReestruturacao(); return true; } });
 }
+let reDiagDim = '', reDiagSev = '';
+const corNotaRe = n => n === null ? '#94a3b8' : n >= 80 ? '#16a34a' : n >= 60 ? '#65a30d' : n >= 40 ? '#d97706' : '#dc2626';
+const rotNotaRe = n => n === null ? 'Sem dados' : n >= 80 ? 'Saudável' : n >= 60 ? 'Atenção leve' : n >= 40 ? 'Atenção' : 'Crítico';
+function reDiagnostico(){
+  const G = diagnosticoRe(reDiagCen), pode = podeGestao(), dims = Object.entries(DIMS_RE);
+  const nMud = [...reDiagMarc].map(id => (G.A.find(a => a.id === id) || {}).fusao || []).flat().length;
+  const filtro = G.A.filter(a => (!reDiagDim || a.dim === reDiagDim) && (!reDiagSev || (reDiagSev === 'dados' ? a.semDados : !a.semDados && a.sev === reDiagSev))).sort((a, b) => (!!a.semDados - !!b.semDados) || SEV[b.sev][2] - SEV[a.sev][2] || b.evid.length - a.evid.length);
+  const cont = k => G.A.filter(a => (!reDiagDim || a.dim === reDiagDim) && (k === 'dados' ? a.semDados : !a.semDados && a.sev === k)).length;
+  const card = a => { const [sn, sc] = SEV[a.sev], ab = reDiagAbertos.has(a.id), [dn, dic, dc] = DIMS_RE[a.dim], cor = a.semDados ? '#64748b' : sc;
+    return `<article class="rd-card ${ab ? 'ab' : ''}" style="--c:${cor}">
+      <button class="rd-card-h" onclick="reDiagAbertos.${ab ? 'delete' : 'add'}('${a.id}');renderReestruturacao()">
+        <span class="rd-sev">${a.semDados ? '<i class="fa-solid fa-circle-info"></i>Falta informação' : `<i class="fa-solid fa-circle-exclamation"></i>${sn}`}</span>
+        <span class="rd-tit"><b>${esc(a.titulo)}</b><small><i class="fa-solid ${dic}" style="color:${dc}"></i>${dn}${a.evid.length ? ` · ${a.evid.length} item(ns)` : ''}${a.impacto ? ` · <span class="rd-imp">${esc(a.impacto)}</span>` : ''}</small></span>
+        <i class="fa-solid fa-chevron-down rd-chev"></i></button>
+      ${ab ? `<div class="rd-card-c"><div class="rd-2"><div class="rd-bloco"><span><i class="fa-solid fa-lightbulb"></i>Por que importa</span><p>${esc(a.porque)}</p></div><div class="rd-bloco ok"><span><i class="fa-solid fa-wrench"></i>O que fazer</span><p>${esc(a.acao)}</p></div></div>
+        ${a.evid.length ? `<div class="rd-ev"><span class="rd-ev-t">Onde acontece</span><div>${a.evid.slice(0, 40).map(e => e.id && porId.has(e.id) ? `<button onclick="irPara(${arg(e.id)})" title="Abrir no mapa"><b>${esc(e.nome)}</b>${e.extra ? `<small>${esc(e.extra)}</small>` : ''}<i class="fa-solid fa-arrow-up-right-from-square"></i></button>` : `<div><b>${esc(e.nome)}</b>${e.extra ? `<small>${esc(e.extra)}</small>` : ''}</div>`).join('')}${a.evid.length > 40 ? `<div class="rd-mais">e mais ${a.evid.length - 40}</div>` : ''}</div></div>` : ''}
+        ${a.fusao && a.fusao.length && pode ? `<label class="rd-marca"><input type="checkbox" ${reDiagMarc.has(a.id) ? 'checked' : ''} onchange="reDiagMarc[this.checked?'add':'delete']('${a.id}');renderReestruturacao()"><span><b>Usar na proposta</b><small>Incluir estas ${a.fusao.length} fusões numa proposta nova</small></span></label>` : ''}</div>` : ''}</article>`; };
+  return `<section class="rd-hero">
+      <div class="rd-ring" style="--c:${corNotaRe(G.geral)}"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15.9" class="f"/><circle cx="18" cy="18" r="15.9" class="v" stroke-dasharray="${G.geral || 0} 100"/></svg><div><b>${G.geral ?? '—'}</b><small>de 100</small></div></div>
+      <div class="rd-hero-t"><div class="rd-hero-top"><span class="rd-tag" style="--c:${corNotaRe(G.geral)}">${rotNotaRe(G.geral)}</span>
+        <label class="rd-cen"><i class="fa-solid fa-layer-group"></i><select onchange="reDiagCen=this.value;reDiagAbertos.clear();renderReestruturacao()">${G.C.map(c => `<option value="${esc(c.id)}" ${c.id === G.c.id ? 'selected' : ''}>${c.id ? 'Proposta: ' : ''}${esc(c.nome)}</option>`).join('')}</select></label></div>
+        <h2>Saúde da estrutura${G.c.id ? ' na proposta' : ''}</h2><p>${resumoDiagRe(G)}</p></div></section>
+    <div class="rd-grid">
+      <aside class="rd-lado">
+        <div class="rd-box"><h4>Dimensões</h4>
+          <button class="rd-dim ${!reDiagDim ? 'on' : ''}" onclick="reDiagDim='';renderReestruturacao()"><i class="fa-solid fa-border-all"></i><span>Todas</span><b>${G.A.length}</b></button>
+          ${dims.map(([k, [n, ic]]) => { const v = G.nota[k], l = G.A.filter(a => a.dim === k && !a.semDados).length; return `<button class="rd-dim ${reDiagDim === k ? 'on' : ''}" onclick="reDiagDim=reDiagDim==='${k}'?'':'${k}';renderReestruturacao()" style="--c:${corNotaRe(v)}" title="${esc(DIMS_RE[k][3])}"><i class="fa-solid ${ic}"></i><span>${n}<em><i style="width:${v ?? 0}%"></i></em></span><b>${v ?? '—'}</b></button>`; }).join('')}</div>
+        <div class="rd-box"><h4>Dados que sustentam o diagnóstico</h4>${G.conf.map(([t, p, on]) => `<button class="rd-conf" onclick="${on}"><i class="fa-solid ${p >= 80 ? 'fa-circle-check' : p > 0 ? 'fa-circle-half-stroke' : 'fa-circle'}" style="color:${p >= 80 ? '#16a34a' : p >= 40 ? '#d97706' : '#cbd5e1'}"></i><span>${t}</span><b>${p}%</b></button>`).join('')}<small class="rd-nota">Clique para completar o que falta.</small></div>
+      </aside>
+      <div class="rd-main">
+        <div class="rd-filtros"><b>${reDiagDim ? esc(DIMS_RE[reDiagDim][0]) : 'Todos os pontos de atenção'}</b>${reDiagDim ? `<span class="s">${esc(DIMS_RE[reDiagDim][3])}</span>` : ''}<span style="flex:1"></span>
+          ${[['', 'Todos', G.A.filter(a => !reDiagDim || a.dim === reDiagDim).length], ['alta', 'Alta', cont('alta')], ['media', 'Média', cont('media')], ['baixa', 'Baixa', cont('baixa')], ['dados', 'Faltam dados', cont('dados')]].map(([k, t, n]) => `<button class="rd-chip ${reDiagSev === k ? 'on' : ''}" ${n || !k ? '' : 'disabled'} onclick="reDiagSev='${k}';renderReestruturacao()" style="--c:${k ? (k === 'dados' ? '#64748b' : SEV[k][1]) : 'var(--marca)'}">${t}<b>${n}</b></button>`).join('')}</div>
+        ${filtro.length ? filtro.map(card).join('') : `<div class="rd-vazio"><i class="fa-solid fa-circle-check"></i><b>Nenhum ponto de atenção ${reDiagDim ? 'nesta dimensão' : 'com esse filtro'}</b><small>${reDiagDim && G.nota[reDiagDim] === null ? 'Faltam dados para avaliar esta dimensão.' : 'Esta parte da estrutura está dentro do esperado.'}</small></div>`}
+        <details class="rd-gloss"><summary><i class="fa-solid fa-book-open"></i>Como o diagnóstico é calculado</summary><p>Cada dimensão começa com 100 pontos e perde 26 por ponto de prioridade alta, 13 por média e 5 por baixa; a nota geral é a média das dimensões com dados. Os limites de níveis, amplitude e custo vêm da etapa <b>Metas e cenários</b>. Duplicidades comparam os textos das competências; pessoas usam a planilha de lotação; a rede regional usa escolas, alunos e servidores das DREs. Itens "Falta informação" não tiram pontos.</p></details>
+      </div></div>
+    ${pode && nMud ? `<div class="rd-flutua"><i class="fa-solid fa-wand-magic-sparkles"></i><span><b>${nMud} mudança(s) selecionada(s)</b><small>serão montadas numa proposta nova para você revisar</small></span><button class="btn btn-g btn-sm" onclick="reDiagMarc.clear();renderReestruturacao()">Limpar</button><button class="btn btn-p" onclick="reCriarPropostaDiag()"><i class="fa-solid fa-lightbulb"></i>Criar proposta</button></div>` : ''}`;
+}
 function guiaRe(){
-  const P = [['diagnostico', '1', 'Diagnóstico', 'Veja onde a estrutura tem problemas, em linguagem simples', 'fa-stethoscope'], ['simulador', '2', 'Metas e cenários', 'Defina limites e compare as propostas', 'fa-bullseye'], ['propostas', '3', 'Propostas', 'Monte as mudanças no mapa da proposta', 'fa-lightbulb'], ['competencias', '4', 'Competências', 'Evite duplicidades e lacunas', 'fa-list-check'], ['minuta', '5', 'Minuta', 'Gere o texto do decreto', 'fa-file-signature']];
-  return reGuia ? `<div class="re-guia"><div class="re-guia-h"><b><i class="fa-solid fa-signs-post"></i>Como fazer uma reestruturação, passo a passo</b><button class="btn btn-g btn-sm" onclick="reGuia=false;store.set('gaborg_re_guia',false);renderReestruturacao()">ocultar guia</button></div>
-    <div class="re-passos">${P.map(([k, n, t, d, ic]) => `<button class="${reAba === k ? 'on' : ''}" onclick="${k === 'propostas' ? "trocarVista('propostas')" : `abaRe('${k}')`}"><span class="n">${n}</span><i class="fa-solid ${ic}"></i><b>${t}</b><small>${d}</small></button>`).join('<i class="fa-solid fa-chevron-right re-seta"></i>')}</div></div>` : `<div style="text-align:right;margin:-4px 0 6px"><button class="btn btn-g btn-sm" onclick="reGuia=true;store.set('gaborg_re_guia',true);renderReestruturacao()"><i class="fa-solid fa-signs-post"></i>mostrar o passo a passo</button></div>`;
+  const P = [['diagnostico', 'Diagnóstico', 'Onde a estrutura tem problemas', 'fa-stethoscope'], ['simulador', 'Metas e cenários', 'Limites e comparação das propostas', 'fa-bullseye'], ['propostas', 'Propostas', 'Monte as mudanças no mapa', 'fa-lightbulb'], ['competencias', 'Competências', 'Duplicidades e lacunas', 'fa-list-check'], ['minuta', 'Minuta', 'O texto do decreto', 'fa-file-signature']];
+  const at = P.findIndex(x => x[0] === reAba);
+  return `<nav class="re-step">${P.map(([k, t, d, ic], i) => `<button class="${i === at ? 'on' : ''} ${i < at ? 'feito' : ''}" onclick="${k === 'propostas' ? "trocarVista('propostas')" : `abaRe('${k}')`}"><span class="re-step-n">${i < at ? '<i class="fa-solid fa-check"></i>' : i + 1}</span><span class="re-step-t"><b>${t}${k === 'propostas' ? ' <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:9px;opacity:.6"></i>' : ''}</b><small>${d}</small></span></button>`).join('')}</nav>`;
 }
 
 /* ---------- (4) Metas e simulador ---------- */
