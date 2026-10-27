@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.28.1';
+const VERSAO = '1.30.0';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -371,8 +371,155 @@ const sessao = {
   lembrado(){ try { return !!localStorage.getItem('gaborg_token'); } catch (e) { return false; } }
 };
 cfg.token = sessao.get();
-const ehAdmin = () => cfg.perfil === 'Administrador';
-const somenteLeitura = () => cfg.perfil !== 'Administrador' && cfg.perfil !== 'Editor';
+const ehAdmin = () => !!acesso().administrar;
+const somenteLeitura = () => { const k = VISTA_SECAO[typeof vistaAtual !== 'undefined' ? vistaAtual : 'mapa']; if (k && SEM_EDICAO.has(k)) return k === 'relatorios' ? !podeExtra('documentos') : !editaAlgo(acesso()); return k ? !podeEditarSec(k) : !editaAlgo(acesso()); };
+/* ===================== PERFIS DE ACESSO =====================
+   Cada perfil define, seção por seção, se ela fica oculta, só para ver ou para editar, e quatro permissões extras.
+   O Codigo.gs (1.13.0) aplica as mesmas regras no servidor: não envia dados de seções ocultas e recusa gravações indevidas. */
+const SECOES_ACESSO = [
+  ['Estrutura', [['estrutura', 'Mapa e lista de setores', 'fa-diagram-project', ['mapa', 'lista'], 'Organograma, lista, painel do setor, valores, vínculos'], ['escolas', 'Mapa de MT (escolas)', 'fa-map-location-dot', ['escolas'], 'Mapa das escolas e DREs; editar escolas e alunos']]],
+  ['Análise', [['painel', 'Indicadores', 'fa-chart-line', ['painel'], 'Indicadores estratégicos (só leitura)', true], ['relatorios', 'Relatórios e minutas', 'fa-file-pdf', ['relatorios'], 'Montar relatórios, portarias e decretos', true], ['financeiro', 'Financeiro', 'fa-coins', ['financeiro'], 'Rubricas, despesas e custos'],
+    ['propostas', 'Propostas', 'fa-lightbulb', ['propostas'], 'Cenários de reestruturação'], ['validacoes', 'Validações', 'fa-stamp', ['validacoes'], 'Pedidos e respostas de validação'], ['tv', 'Modo TV', 'fa-tv', [], 'Apresentação em tela cheia', true]]],
+  ['Gestão', [['reestruturacao', 'Reestruturação', 'fa-compass-drafting', ['reestruturacao'], 'Metas, atribuições e minuta'], ['implantacao', 'Implantação', 'fa-list-check', ['implantacao'], 'Etapas, prazos e responsáveis'], ['chefias', 'Chefias', 'fa-user-tie', ['chefias'], 'Titulares, substitutos e atos'],
+    ['servidores', 'Servidores', 'fa-id-card-clip', ['servidores'], 'Lotação, vínculos e importação'], ['resultados', 'Resultados', 'fa-bullseye', ['resultados'], 'Pacto de metas'], ['regional', 'Gestão regional', 'fa-route', ['regional'], 'Análise das DREs e sugestões'], ['reunioes', 'Reuniões', 'fa-people-group', ['reunioes'], 'Pautas, decisões e encaminhamentos']]]
+];
+const SECOES_LISTA = SECOES_ACESSO.flatMap(g => g[1]);
+const SEM_EDICAO = new Set(SECOES_LISTA.filter(x => x[5]).map(x => x[0]));
+const EXTRAS_ACESSO = [['administrar', 'Administrar usuários e perfis', 'fa-user-shield', 'Criar logins, redefinir senhas, criar perfis, restaurar a estrutura'], ['nomesServidores', 'Ver nomes e matrículas de servidores', 'fa-id-card', 'Sem isso a seção Servidores mostra só números'],
+  ['exportar', 'Exportar planilhas e cópias', 'fa-file-csv', 'Baixar CSV das listas e a cópia completa (JSON)'], ['documentos', 'Emitir relatórios e minutas', 'fa-file-signature', 'Gerar PDF, Word e impressão com código de verificação']];
+const NIVEIS = { oculto:['Oculto', 'fa-eye-slash', '#94a3b8'], ver:['Ver', 'fa-eye', '#2563eb'], editar:['Editar', 'fa-pen', '#16a34a'] };
+const VISTA_SECAO = {}; SECOES_LISTA.forEach(([k, , , vs]) => vs.forEach(v => { VISTA_SECAO[v] = k; }));
+function perfilSistema(nome){
+  const tudo = v => SECOES_LISTA.reduce((o, [k]) => (o[k] = v, o), {});
+  if (nome === 'Administrador') return { id:'Administrador', nome, sistema:true, cor:'#dc2626', descricao:'Tudo, inclusive usuários, perfis e restauração da estrutura.', administrar:true, secoes:tudo('editar'), extras:{ nomesServidores:true, exportar:true, documentos:true } };
+  if (nome === 'Editor') return { id:'Editor', nome, sistema:true, cor:'#2563eb', descricao:'Vê e altera todas as seções; não gerencia usuários.', administrar:false, secoes:tudo('editar'), extras:{ nomesServidores:true, exportar:true, documentos:true } };
+  return { id:'Leitor', nome:'Leitor', sistema:true, cor:'#64748b', descricao:'Consulta todas as seções, sem alterar nada; não vê nomes de servidores.', administrar:false, secoes:tudo('ver'), extras:{ nomesServidores:false, exportar:true, documentos:true } };
+}
+let perfisLista = [];
+const acesso = () => cfg.simulado || cfg.acesso || perfilSistema(cfg.perfil);
+const nivelSec = k => { const a = acesso(); return a.administrar ? 'editar' : ((a.secoes || {})[k] || 'oculto'); };
+const podeVerSec = k => nivelSec(k) !== 'oculto';
+const podeEditarSec = k => !SEM_EDICAO.has(k) && nivelSec(k) === 'editar';
+const podeExtra = k => { const a = acesso(); return !!(a.administrar || (a.extras || {})[k]); };
+const editaAlgo = a => !!(a.administrar || SECOES_LISTA.some(([k]) => !SEM_EDICAO.has(k) && (a.secoes || {})[k] === 'editar'));
+const podeVerVista = v => !VISTA_SECAO[v] || podeVerSec(VISTA_SECAO[v]) || (v === 'usuarios' && ehAdmin());
+const primeiraVista = () => { const b = [...document.querySelectorAll('.lado .nav-b[data-vista]')].find(b => podeVerVista(b.dataset.vista)); return b ? b.dataset.vista : 'config'; };
+function aplicarAcessoUI(){
+  document.querySelectorAll('.lado .nav-b[data-vista]').forEach(b => b.classList.toggle('sem-acesso', !podeVerVista(b.dataset.vista) || (b.dataset.vista === 'usuarios' && !ehAdmin())));
+  const tv = document.querySelector('.nav-b.nav-tv'); if (tv) tv.classList.toggle('sem-acesso', !podeVerSec('tv'));
+  document.querySelectorAll('.lado nav h6').forEach(h => { let n = h.nextElementSibling, vis = false; while (n && n.tagName !== 'H6') { if (n.classList.contains('nav-b') && !n.classList.contains('sem-acesso') && !(n.classList.contains('so-adm') && !ehAdmin())) vis = true; n = n.nextElementSibling; } h.classList.toggle('sem-acesso', !vis); });
+  document.body.classList.toggle('adm', ehAdmin()); document.body.classList.toggle('ro', somenteLeitura());
+  const sim = $('#acesso-sim'); if (sim) sim.remove();
+  if (cfg.simulado) document.body.insertAdjacentHTML('beforeend', `<div id="acesso-sim" style="--c:${esc(cfg.simulado.cor || '#7c3aed')}"><i class="fa-solid fa-user-secret"></i><span>Visualizando como <b>${esc(cfg.simulado.nome)}</b> — a tela mostra só o que este perfil vê</span><button class="btn btn-sm" onclick="sairSimulacao()">Voltar ao meu perfil</button></div>`);
+  if (typeof vistaAtual !== 'undefined' && !podeVerVista(vistaAtual) && document.querySelector('#app:not(.hidden)')) trocarVista(primeiraVista());
+}
+function simularPerfil(id){
+  const p = perfisLista.find(x => x.id === id) || perfilSistema(id); if (!p || !ehAdmin()) return;
+  cfg.simulado = JSON.parse(JSON.stringify(p)); aplicarAcessoUI(); trocarVista(primeiraVista()); toast('Visualizando como ' + p.nome + '. Os dados continuam os seus; só a tela muda.');
+}
+function sairSimulacao(){ delete cfg.simulado; aplicarAcessoUI(); trocarVista('usuarios'); abaAdm('perfis'); }
+/* exportações e documentos respeitam as permissões extras */
+['exportarCSV', 'exportarJSON', 'exportarEscolasMT', 'svExportar', 'exportarChefias', 'csvBaixar'].forEach(n => { const f = window[n]; if (typeof f !== 'function') return; window[n] = function(){ if (!podeExtra('exportar')) return toast('Seu perfil não pode exportar planilhas.', 'aviso'); return f.apply(this, arguments); }; });
+['emitirDoc', 'exportarMinuta'].forEach(n => { const f = window[n]; if (typeof f !== 'function') return; window[n] = function(){ if (!podeExtra('documentos')) return toast('Seu perfil não pode emitir documentos.', 'aviso'); return f.apply(this, arguments); }; });
+['abrirModoTV'].forEach(n => { const f = window[n]; if (typeof f !== 'function') return; window[n] = function(){ if (!podeVerSec('tv')) return toast('Seu perfil não tem acesso ao Modo TV.', 'aviso'); return f.apply(this, arguments); }; });
+
+/* ---------- tela de perfis ---------- */
+async function carregarPerfis(){
+  try { const r = await chamar({ action:'profiles_list' }, 30000); if (r.status !== 'success') throw new Error(r.message); perfisLista = r.perfis || []; }
+  catch (e) { if (!perfisLista.length) perfisLista = ['Administrador', 'Editor', 'Leitor'].map(perfilSistema); }
+  return perfisLista;
+}
+const backendSemPerfis = () => online() && backendVersao && svVerMaior('1.13.0', backendVersao);
+const corPerfil = nome => (perfisLista.find(p => p.nome === nome) || {}).cor || COR_PERFIL[nome] || '#7c3aed';
+function contagemNiveis(p){ const c = { oculto:0, ver:0, editar:0 }; SECOES_LISTA.forEach(([k]) => { const v = p.administrar ? (SEM_EDICAO.has(k) ? 'ver' : 'editar') : (p.secoes[k] || 'oculto'); c[SEM_EDICAO.has(k) && v === 'editar' ? 'ver' : v]++; }); return c; }
+async function renderPerfis(){
+  const el = $('#u-corpo'); if (!el) return;
+  if (!perfisLista.length || !usuarios.length) { el.innerHTML = '<div class="cartao vazio"><i class="fa-solid fa-circle-notch fa-spin"></i>Carregando perfis...</div>'; await carregarPerfis(); if (!usuarios.length) { try { const r = await chamar({ action:'users_list' }, 30000); if (r.status === 'success') usuarios = r.usuarios || []; } catch (e) {} } }
+  if (abaAdmAtual !== 'perfis') return;
+  const n = nome => usuarios.filter(u => u.perfil === nome && u.ativo === 'Sim').length;
+  const card = p => { const c = contagemNiveis(p), ex = EXTRAS_ACESSO.filter(([k]) => k === 'administrar' ? p.administrar : p.extras && p.extras[k]);
+    return `<div class="pf-card" style="--c:${esc(p.cor)}"><div class="pf-top"><span class="pf-ic"><i class="fa-solid ${p.administrar ? 'fa-user-shield' : p.sistema ? 'fa-user-lock' : 'fa-user-gear'}"></i></span><div><b>${esc(p.nome)}</b>${p.sistema ? ' <span class="chip" style="--c:#64748b">do sistema</span>' : ''}<small>${esc(p.descricao || 'Sem descrição')}</small></div><span class="pf-n" title="usuários ativos com este perfil">${n(p.nome)}<small>usuário(s)</small></span></div>
+      <div class="pf-barra"><span style="flex:${c.editar};background:#16a34a" title="${c.editar} para editar"></span><span style="flex:${c.ver};background:#2563eb" title="${c.ver} só para ver"></span><span style="flex:${c.oculto};background:#cbd5e1" title="${c.oculto} ocultas"></span></div>
+      <div class="pf-cont"><span><i class="fa-solid fa-pen" style="color:#16a34a"></i>${c.editar} editar</span><span><i class="fa-solid fa-eye" style="color:#2563eb"></i>${c.ver} ver</span><span><i class="fa-solid fa-eye-slash" style="color:#94a3b8"></i>${c.oculto} ocultas</span></div>
+      <div class="pf-ex">${ex.map(([, t, ic]) => `<span title="${esc(t)}"><i class="fa-solid ${ic}"></i>${esc(t)}</span>`).join('') || '<span class="s">Sem permissões extras</span>'}</div>
+      <div class="pf-ac">${p.sistema ? `<button class="btn btn-s btn-sm" onclick="formPerfil(${arg(p.id)},true)"><i class="fa-solid fa-eye"></i>Ver detalhes</button>` : `<button class="btn btn-p btn-sm" onclick="formPerfil(${arg(p.id)})"><i class="fa-solid fa-pen"></i>Editar</button>`}
+        <button class="btn btn-s btn-sm" onclick="formPerfil(${arg(p.id)},false,true)" title="Criar um perfil novo a partir deste"><i class="fa-regular fa-copy"></i>Duplicar</button>
+        <button class="btn btn-s btn-sm" onclick="simularPerfil(${arg(p.id)})" title="Ver a tela como este perfil vê"><i class="fa-solid fa-user-secret"></i>Ver como</button>
+        ${p.sistema ? '' : `<button class="btn btn-g btn-sm btn-i" title="Excluir perfil" onclick="apagarPerfil(${arg(p.id)})"><i class="fa-solid fa-trash"></i></button>`}</div></div>`; };
+  const cel = (p, k) => { const v = p.administrar ? 'editar' : p.secoes[k] || 'oculto', w = SEM_EDICAO.has(k) && v === 'editar' ? 'ver' : v; return `<td class="pf-cel"><span class="pf-niv ${w}" style="--c:${NIVEIS[w][2]}"><i class="fa-solid ${NIVEIS[w][1]}"></i>${w === 'oculto' ? '—' : NIVEIS[w][0]}</span></td>`; };
+  el.innerHTML = `${backendSemPerfis() ? `<div class="cartao bl" style="--c:#dc2626"><h3><i class="fa-solid fa-triangle-exclamation"></i>Atualize o Codigo.gs para a versão 1.13.0</h3><p class="s">A planilha está com o backend ${esc(backendVersao)}, que só conhece os perfis Administrador, Editor e Leitor. Cole o novo Codigo.gs e publique uma nova versão para criar perfis personalizados.</p></div>` : ''}
+    <div class="pf-cab"><div><h3 style="margin:0">Perfis de acesso</h3><p class="s" style="margin:2px 0 0">Defina, seção por seção, o que cada perfil <b>vê</b> e o que pode <b>editar</b>. As regras valem também na planilha: o servidor não envia dados de seções ocultas.</p></div>
+      <div class="pf-novo"><button class="btn btn-p" onclick="novoPerfil()" ${backendSemPerfis() ? 'disabled' : ''}><i class="fa-solid fa-plus"></i>Novo perfil</button></div></div>
+    <div class="pf-grade">${perfisLista.map(card).join('')}</div>
+    <div class="cartao bl" style="--c:#7c3aed;margin-top:16px"><h3><i class="fa-solid fa-table-cells"></i>O que cada perfil vê e acessa</h3><p class="s"><span class="pf-leg"><i class="fa-solid fa-pen" style="color:#16a34a"></i>editar <i class="fa-solid fa-eye" style="color:#2563eb"></i>só ver <i class="fa-solid fa-eye-slash" style="color:#94a3b8"></i>oculto</span></p>
+      <div class="tab-wrap"><table class="tab pf-mat"><thead><tr><th>Seção</th>${perfisLista.map(p => `<th style="--c:${esc(p.cor)}"><span>${esc(p.nome)}</span></th>`).join('')}</tr></thead><tbody>
+      ${SECOES_ACESSO.map(([g, l]) => `<tr class="pf-g"><td colspan="${perfisLista.length + 1}">${g}</td></tr>` + l.map(([k, t, ic]) => `<tr><td><i class="fa-solid ${ic}" style="color:var(--mut);width:18px"></i>${t}</td>${perfisLista.map(p => cel(p, k)).join('')}</tr>`).join('')).join('')}
+      <tr class="pf-g"><td colspan="${perfisLista.length + 1}">Permissões extras</td></tr>
+      ${EXTRAS_ACESSO.map(([k, t, ic]) => `<tr><td><i class="fa-solid ${ic}" style="color:var(--mut);width:18px"></i>${t}</td>${perfisLista.map(p => { const v = k === 'administrar' ? p.administrar : p.administrar || (p.extras || {})[k]; return `<td class="pf-cel">${v ? '<span class="pf-niv" style="--c:#16a34a"><i class="fa-solid fa-check"></i>Sim</span>' : '<span class="pf-niv oculto" style="--c:#94a3b8">—</span>'}</td>`; }).join('')}</tr>`).join('')}
+      <tr><td><b>Usuários ativos</b></td>${perfisLista.map(p => `<td class="pf-cel"><b>${n(p.nome)}</b></td>`).join('')}</tr></tbody></table></div></div>
+    <div class="cartao bl" style="margin-top:14px"><h3><i class="fa-solid fa-shield-halved"></i>Regras de segurança</h3>
+      <p class="s" style="line-height:1.7">• As permissões são conferidas no servidor (Apps Script): uma seção oculta não tem seus dados enviados, e gravações fora do perfil são recusadas.<br>• Os perfis Administrador, Editor e Leitor são do sistema e não podem ser alterados; duplique-os para criar variações.<br>• Sempre fica pelo menos um usuário ativo com permissão de administrar.<br>• Senhas com no mínimo 8 caracteres, letras e números, guardadas só de forma cifrada; 5 senhas erradas bloqueiam o login por 15 minutos.<br>• Mudanças de perfil valem no próximo carregamento da pessoa (ou ao recarregar a página).</p></div>`;
+}
+const MODELOS_PERFIL = [
+  ['branco', 'Em branco', 'fa-file', 'Tudo oculto; você escolhe seção por seção', {}, {}],
+  ['consulta', 'Consulta total', 'fa-eye', 'Vê todas as seções, sem editar', { '*':'ver' }, { exportar:true, documentos:true }],
+  ['gabinete', 'Gabinete — análise e documentos', 'fa-landmark', 'Indicadores, relatórios, mapas e Modo TV', { estrutura:'ver', escolas:'ver', painel:'ver', relatorios:'ver', tv:'ver', propostas:'ver', reestruturacao:'ver', resultados:'ver', regional:'ver', chefias:'ver' }, { documentos:true, exportar:true }],
+  ['pessoas', 'Gestão de pessoas', 'fa-id-card-clip', 'Edita servidores e chefias; consulta a estrutura', { estrutura:'ver', painel:'ver', servidores:'editar', chefias:'editar', implantacao:'ver', relatorios:'ver' }, { nomesServidores:true, exportar:true, documentos:true }],
+  ['regional', 'DRE / Gestão regional', 'fa-map-location-dot', 'Edita escolas e alunos; vê DREs, servidores e indicadores', { estrutura:'ver', escolas:'editar', regional:'ver', painel:'ver', servidores:'ver', relatorios:'ver', tv:'ver' }, { documentos:true }],
+  ['financeiro', 'Financeiro', 'fa-coins', 'Edita custos; vê estrutura e propostas', { estrutura:'ver', financeiro:'editar', propostas:'ver', painel:'ver', relatorios:'ver' }, { exportar:true, documentos:true }],
+  ['indicadores', 'Somente indicadores', 'fa-chart-line', 'Indicadores e Modo TV, nada mais', { painel:'ver', tv:'ver' }, {}]
+];
+function novoPerfil(){
+  abrirModal({ titulo:'Novo perfil: comece por um modelo', rotulo:'Fechar', semCancelar:true, largura:760, html:`<p class="s" style="margin:0 0 10px">Escolha um ponto de partida. Depois você ajusta cada seção.</p><div class="pf-modelos">${MODELOS_PERFIL.map(([k, t, ic, d]) => `<button type="button" onclick="this.closest('.modal').remove();formPerfil('',false,false,${arg(k)})"><i class="fa-solid ${ic}"></i><b>${t}</b><small>${d}</small></button>`).join('')}</div>` });
+}
+let pfEd = null;
+function formPerfil(id, soVer, duplicar, modelo){
+  const base = perfisLista.find(p => p.id === id);
+  let p;
+  if (modelo) { const m = MODELOS_PERFIL.find(x => x[0] === modelo); p = { id:'', nome:m[0] === 'branco' ? '' : m[1], descricao:m[3], cor:'#7c3aed', administrar:false, secoes:{}, extras:Object.assign({ nomesServidores:false, exportar:false, documentos:false }, m[5]) }; SECOES_LISTA.forEach(([k]) => { p.secoes[k] = m[4][k] || m[4]['*'] || 'oculto'; }); }
+  else { p = JSON.parse(JSON.stringify(base || perfilSistema('Leitor'))); if (duplicar) { p.id = ''; p.nome = 'Cópia de ' + p.nome; p.sistema = false; } }
+  pfEd = p; const ro = !!soVer;
+  abrirModal({ titulo:ro ? 'Perfil ' + p.nome : (p.id ? 'Editar perfil' : 'Novo perfil'), rotulo:ro ? 'Fechar' : 'Salvar perfil', semCancelar:ro, largura:1040, html:`<div class="pf-ed ${ro ? 'ro' : ''}">
+    <div class="pf-ed-l">
+      <div class="g2"><label><span class="rot">Nome do perfil</span><input class="campo" id="pf-nome" value="${esc(p.nome)}" placeholder="ex.: Coordenação de Pessoas" ${ro ? 'disabled' : 'required'} oninput="pfEd.nome=this.value;pfPrevia()"></label>
+        <label><span class="rot">Cor</span><div class="pf-cores">${['#7c3aed', '#0e7490', '#16a34a', '#d97706', '#db2777', '#0f766e', '#4f46e5', '#b45309'].map(c => `<button type="button" style="background:${c}" class="${c === p.cor ? 'on' : ''}" onclick="pfEd.cor='${c}';this.parentNode.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b===this));pfPrevia()" ${ro ? 'disabled' : ''}></button>`).join('')}</div></label></div>
+      <label><span class="rot">Descrição <small>para quem é este perfil</small></span><input class="campo" id="pf-desc" value="${esc(p.descricao || '')}" ${ro ? 'disabled' : ''}></label>
+      <div class="pf-rap">${ro ? '' : `<span class="s">Aplicar a todas:</span>${Object.entries(NIVEIS).map(([v, [t, ic]]) => `<button type="button" class="btn btn-s btn-sm" onclick="pfTodas('${v}')"><i class="fa-solid ${ic}"></i>${t}</button>`).join('')}`}</div>
+      <div class="pf-secs">${SECOES_ACESSO.map(([g, l]) => `<div class="pf-gr"><h4>${g}</h4>${l.map(([k, t, ic, , d]) => `<div class="pf-lin"><i class="fa-solid ${ic} pf-li"></i><div class="pf-lt"><b>${t}</b><small>${d}</small></div>
+          <div class="pf-seg" data-k="${k}">${Object.entries(NIVEIS).map(([v, [tt, ic2, c]]) => `<button type="button" data-v="${v}" style="--c:${c}" class="${(p.administrar ? (SEM_EDICAO.has(k) ? 'ver' : 'editar') : p.secoes[k]) === v ? 'on' : ''}" ${ro || (v === 'editar' && SEM_EDICAO.has(k)) ? 'disabled' : ''} onclick="pfNivel('${k}','${v}')" title="${v === 'editar' && SEM_EDICAO.has(k) ? 'Esta seção não tem edição' : tt}"><i class="fa-solid ${ic2}"></i>${tt}</button>`).join('')}</div></div>`).join('')}</div>`).join('')}</div>
+      <div class="pf-gr"><h4>Permissões extras</h4>${EXTRAS_ACESSO.map(([k, t, ic, d]) => `<div class="pf-lin pf-x" onclick="if(event.target.tagName!=='INPUT'){const c=this.querySelector('input');if(!c.disabled){c.checked=!c.checked;c.dispatchEvent(new Event('change'))}}"><i class="fa-solid ${ic} pf-li"></i><div class="pf-lt"><b>${t}</b><small>${d}</small></div><input type="checkbox" class="pf-sw" data-x="${k}" ${(k === 'administrar' ? p.administrar : p.extras[k]) ? 'checked' : ''} ${ro ? 'disabled' : ''} onchange="pfExtra('${k}',this.checked)"></div>`).join('')}</div>
+    </div>
+    <div class="pf-ed-r"><div class="pf-prev-t">Como a pessoa verá o menu</div><div id="pf-prev"></div></div></div>`,
+    aoConfirmar:ro ? undefined : async m => {
+      pfEd.nome = m.querySelector('#pf-nome').value.trim(); pfEd.descricao = m.querySelector('#pf-desc').value.trim();
+      if (pfEd.nome.length < 3) throw new Error('Dê um nome ao perfil (mínimo 3 letras).');
+      if (!pfEd.administrar && !SECOES_LISTA.some(([k]) => pfEd.secoes[k] !== 'oculto')) throw new Error('O perfil precisa ver ao menos uma seção.');
+      const r = await chamar({ action:'profile_save', perfil:pfEd }, 30000); if (r.status !== 'success') throw new Error(r.message);
+      perfisLista = r.perfis || perfisLista; toast('Perfil salvo.'); return true;
+    } }).then(ok => { if (ok) renderPerfis(); });
+  pfPrevia();
+}
+function pfNivel(k, v){ if (!pfEd) return; pfEd.secoes[k] = v; if (pfEd.administrar && v !== 'editar') { pfEd.administrar = false; const x = document.querySelector('.pf-sw[data-x=administrar]'); if (x) x.checked = false; } const s = document.querySelector(`.pf-seg[data-k="${k}"]`); if (s) s.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === v)); pfPrevia(); }
+function pfTodas(v){ SECOES_LISTA.forEach(([k]) => pfNivel(k, v === 'editar' && SEM_EDICAO.has(k) ? 'ver' : v)); }
+function pfExtra(k, on){ if (!pfEd) return; if (k === 'administrar') { pfEd.administrar = on; if (on) { pfTodas('editar'); EXTRAS_ACESSO.forEach(([x]) => { if (x !== 'administrar') { pfEd.extras[x] = true; const c = document.querySelector(`.pf-sw[data-x=${x}]`); if (c) c.checked = true; } }); } } else pfEd.extras[k] = on; pfPrevia(); }
+function pfPrevia(){
+  const el = $('#pf-prev'); if (!el || !pfEd) return; const p = pfEd, niv = k => p.administrar ? (SEM_EDICAO.has(k) ? 'ver' : 'editar') : (p.secoes[k] || 'oculto');
+  const vis = SECOES_LISTA.filter(([k]) => niv(k) !== 'oculto'), c = { editar:vis.filter(([k]) => niv(k) === 'editar').length, ver:vis.filter(([k]) => niv(k) === 'ver').length };
+  el.innerHTML = `<div class="pf-menu" style="--c:${esc(p.cor)}"><div class="pf-menu-u"><span class="u-av" style="background:${esc(p.cor)}">${esc(iniciais(p.nome || 'Novo'))}</span><div><b>${esc(p.nome || 'Novo perfil')}</b><small>${c.editar} para editar · ${c.ver} só para ver</small></div></div>
+    ${SECOES_ACESSO.map(([g, l]) => { const it = l.filter(([k]) => niv(k) !== 'oculto'); return it.length ? `<h6>${g}</h6>` + it.map(([k, t, ic]) => `<div class="pf-mi"><i class="fa-solid ${ic}"></i><span>${t}</span><i class="fa-solid ${niv(k) === 'editar' ? 'fa-pen' : 'fa-eye'} pf-mi-n" style="color:${niv(k) === 'editar' ? '#16a34a' : '#93c5fd'}"></i></div>`).join('') : ''; }).join('') || '<p class="pf-vz">Nenhuma seção visível</p>'}
+    ${p.administrar ? '<h6>Sistema</h6><div class="pf-mi"><i class="fa-solid fa-user-shield"></i><span>Administração</span></div>' : ''}<div class="pf-mi"><i class="fa-solid fa-gear"></i><span>Configurações</span></div></div>
+    <ul class="pf-res">${[p.extras.nomesServidores || p.administrar ? (podeVerAlgum(p, 'servidores') ? '<li><i class="fa-solid fa-id-card" style="color:#16a34a"></i>Vê nomes e matrículas dos servidores</li>' : '') : (podeVerAlgum(p, 'servidores') ? '<li><i class="fa-solid fa-lock" style="color:#d97706"></i>Servidores só em números (sem nomes)</li>' : ''),
+      p.extras.exportar || p.administrar ? '<li><i class="fa-solid fa-file-csv" style="color:#16a34a"></i>Pode exportar planilhas</li>' : '<li><i class="fa-solid fa-ban" style="color:#94a3b8"></i>Não exporta planilhas</li>',
+      p.extras.documentos || p.administrar ? '<li><i class="fa-solid fa-file-signature" style="color:#16a34a"></i>Emite relatórios e minutas</li>' : '<li><i class="fa-solid fa-ban" style="color:#94a3b8"></i>Não emite documentos</li>',
+      p.administrar ? '<li><i class="fa-solid fa-user-shield" style="color:#dc2626"></i>Administra usuários e perfis</li>' : ''].join('')}</ul>`;
+}
+const podeVerAlgum = (p, k) => p.administrar || (p.secoes[k] && p.secoes[k] !== 'oculto');
+async function apagarPerfil(id){
+  const p = perfisLista.find(x => x.id === id); if (!p) return;
+  if (!await confirmar('Excluir perfil', `Excluir o perfil <b>${esc(p.nome)}</b>? Só é possível se nenhum usuário estiver com ele.`, 'Excluir', true)) return;
+  try { const r = await chamar({ action:'profile_delete', id }, 30000); if (r.status !== 'success') throw new Error(r.message); perfisLista = r.perfis || []; toast('Perfil excluído.'); renderPerfis(); } catch (e) { toast(e.message, 'erro'); }
+}
+
 let porId = new Map(), filhos = new Map(), prof = new Map(), areaDe = new Map(), areas = [], valPorSetor = new Map();
 let abertos = new Set(store.get('gaborg_abertos', []));
 let listaAbertos = new Set(store.get('gaborg_lista_abertos', []));
@@ -1250,7 +1397,8 @@ function rmVinculo(vid){ const v = DB.vinculos.find(x => x.id === vid); if (!v) 
 /* ===================== VISTAS ===================== */
 document.querySelectorAll('.nav-b').forEach(b => { b.title = b.querySelector('span').textContent; b.addEventListener('click', () => b.dataset.acao === 'tv' ? abrirModoTV() : trocarVista(b.dataset.vista)); });
 function trocarVista(v){
-  vistaAtual = v;
+  if (!podeVerVista(v)) { if (document.querySelector('#app:not(.hidden)')) toast('Seu perfil não tem acesso a esta seção.', 'aviso'); v = primeiraVista(); }
+  vistaAtual = v; document.body.classList.toggle('ro', somenteLeitura());
   if (cenMapa) { if (VISTAS_CEN.includes(v)) { if (!cenSwap) aplicarCenario(); } else if (cenSwap) desaplicarCenario(); }
   if (typeof atualizarBarraCen === 'function') atualizarBarraCen();
   document.querySelectorAll('.nav-b').forEach(b => b.classList.toggle('on', b.dataset.vista === v));
@@ -1704,11 +1852,10 @@ function alternarTema(){ setTimeout(() => { if (mt.mapa && ['claro','escuro'].in
 function preencherUsuario(){
   $('#u-nome').textContent = cfg.usuario || cfg.login || 'Usuário'; $('#u-av').textContent = iniciais(cfg.usuario || cfg.login);
   $('#u-perfil').textContent = cfg.perfil || '';
-  document.body.classList.toggle('ro', somenteLeitura());
-  document.body.classList.toggle('adm', ehAdmin());
+  aplicarAcessoUI();
 }
-function salvarCfg(){ const c = Object.assign({}, cfg); delete c.token; store.set('gaborg_cfg', c); }
-function aplicarUsuario(u){ Object.assign(cfg, { usuario:u.nome || u.login, login:u.login, perfil:u.perfil, modo:'nuvem' }); salvarCfg(); preencherUsuario(); }
+function salvarCfg(){ const c = Object.assign({}, cfg); delete c.token; delete c.simulado; store.set('gaborg_cfg', c); }
+function aplicarUsuario(u){ Object.assign(cfg, { usuario:u.nome || u.login, login:u.login, perfil:u.perfil, acesso:u.acesso || null, modo:'nuvem' }); if (!u.acesso) delete cfg.acesso; salvarCfg(); preencherUsuario(); }
 function verSenha(b){ const i = b.parentNode.querySelector('input'); const v = i.type === 'password'; i.type = v ? 'text' : 'password'; b.innerHTML = `<i class="fa-solid ${v ? 'fa-eye-slash' : 'fa-eye'}"></i>`; b.title = v ? 'Ocultar senha' : 'Mostrar senha'; }
 function mostrarLogin(msg){
   $('#app').classList.add('hidden'); $('#login').classList.remove('hidden');
@@ -1837,7 +1984,7 @@ async function renderUsuarios(recarregar){
   if (abaAdmAtual === 'perfis') return renderPerfis();
   if (abaAdmAtual === 'acessos') return renderAcessos(recarregar);
   if (!usuarios.length) c.innerHTML = '<div class="cartao vazio"><i class="fa-solid fa-circle-notch fa-spin"></i>Carregando usuários...</div>';
-  try { const r = await chamar({ action:'users_list' }, 30000); if (r.status !== 'success') throw new Error(r.message); usuarios = r.usuarios || []; }
+  try { const [r] = await Promise.all([chamar({ action:'users_list' }, 30000), carregarPerfis()]); if (r.status !== 'success') throw new Error(r.message); usuarios = r.usuarios || []; }
   catch (e) { c.innerHTML = `<div class="cartao vazio" style="color:var(--perigo)">${esc(e.message)}</div>`; return; }
   if (abaAdmAtual !== 'usuarios') return;
   const ativos = usuarios.filter(u => u.ativo === 'Sim');
@@ -1845,13 +1992,14 @@ async function renderUsuarios(recarregar){
   const f = { q:($('#ua-q') || {}).value || '', perfil:($('#ua-perfil') || {}).value || '', sit:($('#ua-sit') || {}).value || '' };
   c.innerHTML = `<div class="kpis">
       ${kpi('#2563eb', 'fa-users', 'Usuários', usuarios.length, `${ativos.length} ativo(s)`)}
-      ${kpi('#dc2626', 'fa-user-shield', 'Administradores', ativos.filter(u => u.perfil === 'Administrador').length, 'ativos')}
+      ${kpi('#dc2626', 'fa-user-shield', 'Administradores', ativos.filter(u => (perfisLista.find(p => p.nome === u.perfil) || perfilSistema(u.perfil)).administrar).length, 'ativos')}
+      ${kpi('#7c3aed', 'fa-id-badge', 'Perfis de acesso', perfisLista.length, perfisLista.filter(p => !p.sistema).length + ' personalizado(s)')}
       ${kpi('#d97706', 'fa-hourglass-half', 'Aguardando senha', ativos.filter(u => u.trocarSenha === 'Sim').length, 'precisam definir a senha')}
       ${kpi('#7f1d1d', 'fa-lock', 'Bloqueados', usuarios.filter(u => u.bloqueado).length, 'por senhas erradas')}
     </div>
     <div class="adm-filtros">
       <div class="busca"><i class="fa-solid fa-magnifying-glass"></i><input id="ua-q" class="campo" placeholder="Buscar nome, login ou e-mail" value="${esc(f.q)}" oninput="filtrarUsuarios()"></div>
-      <select id="ua-perfil" class="campo" onchange="filtrarUsuarios()"><option value="">Todos os perfis</option>${['Administrador','Editor','Leitor'].map(p => `<option ${f.perfil === p ? 'selected' : ''}>${p}</option>`).join('')}</select>
+      <select id="ua-perfil" class="campo" onchange="filtrarUsuarios()"><option value="">Todos os perfis</option>${perfisLista.map(p => p.nome).map(p => `<option ${f.perfil === p ? 'selected' : ''}>${esc(p)}</option>`).join('')}</select>
       <select id="ua-sit" class="campo" onchange="filtrarUsuarios()"><option value="">Todas as situações</option>${['Ativo','Aguardando 1º acesso','Deve trocar a senha','Bloqueado','Desativado'].map(s => `<option ${f.sit === s ? 'selected' : ''}>${s}</option>`).join('')}</select>
     </div>
     <div id="ua-lista"></div>
@@ -1865,9 +2013,9 @@ function filtrarUsuarios(){
     .sort((a, b) => (a.ativo === b.ativo ? 0 : a.ativo === 'Sim' ? -1 : 1) || a.nome.localeCompare(b.nome, 'pt-BR'));
   if (!lista.length) { el.innerHTML = '<div class="cartao vazio">Nenhum usuário com esses filtros.</div>'; return; }
   el.innerHTML = `<div class="tab-wrap"><table class="tab"><thead><tr><th>Nome</th><th>Login</th><th>E-mail</th><th>Perfil</th><th>Situação</th><th>Último acesso</th><th></th></tr></thead><tbody>${lista.map(u => { const [s, cs] = situacaoUsuario(u); return `<tr>
-    <td><span class="u-nome"><span class="u-av" style="background:${COR_PERFIL[u.perfil] || '#64748b'}">${esc(iniciais(u.nome))}</span><span><b>${esc(u.nome)}</b>${u.login === cfg.login ? ' <span class="chip" style="--c:#2563eb">você</span>' : ''}<small>criado ${u.criadoEm ? fmtData(u.criadoEm) : '—'}${u.criadoPor ? ' por ' + esc(u.criadoPor) : ''}</small></span></span></td>
+    <td><span class="u-nome"><span class="u-av" style="background:${corPerfil(u.perfil)}">${esc(iniciais(u.nome))}</span><span><b>${esc(u.nome)}</b>${u.login === cfg.login ? ' <span class="chip" style="--c:#2563eb">você</span>' : ''}<small>criado ${u.criadoEm ? fmtData(u.criadoEm) : '—'}${u.criadoPor ? ' por ' + esc(u.criadoPor) : ''}</small></span></span></td>
     <td><code>${esc(u.login)}</code></td><td>${esc(u.email || '—')}</td>
-    <td><span class="chip" style="--c:${COR_PERFIL[u.perfil] || '#64748b'}">${esc(u.perfil)}</span></td>
+    <td><span class="chip" style="--c:${corPerfil(u.perfil)}">${esc(u.perfil)}</span></td>
     <td><span class="chip" style="--c:${cs}">${s}</span>${Number(u.tentativas) && !u.bloqueado ? `<small style="display:block;color:var(--alerta);font-size:11px;margin-top:3px">${u.tentativas} senha(s) errada(s)</small>` : ''}</td>
     <td>${u.ultimoAcesso ? fmtData(u.ultimoAcesso) : '<span style="color:var(--mut)">nunca</span>'}</td>
     <td><div class="u-acoes"><button class="btn btn-s btn-sm" onclick="formUsuario(${arg(u.id)})"><i class="fa-solid fa-pen"></i>Editar</button><button class="btn btn-p btn-sm" onclick="acoesUsuario(${arg(u.id)})"><i class="fa-solid fa-key"></i>Senha e acesso</button></div></td></tr>`; }).join('')}</tbody></table></div>`;
@@ -1880,7 +2028,7 @@ function acoesUsuario(id){
   const it = (a, ic, t, d, cls) => `<button type="button" data-a="${a}" class="${cls || ''}"><i class="fa-solid ${ic}"></i><span><b>${t}</b><small>${d}</small></span></button>`;
   const m = document.createElement('div'); m.className = 'modal';
   m.innerHTML = `<div class="cx" role="dialog" aria-modal="true" style="max-width:460px">
-    <div class="u-nome" style="margin-bottom:4px"><span class="u-av" style="width:42px;height:42px;font-size:14px;background:${COR_PERFIL[u.perfil] || '#64748b'}">${esc(iniciais(u.nome))}</span><span><b style="font-size:15px">${esc(u.nome)}</b><small><code>${esc(u.login)}</code> · ${esc(u.perfil)} · <span style="color:${cs};font-weight:700">${s}</span></small></span></div>
+    <div class="u-nome" style="margin-bottom:4px"><span class="u-av" style="width:42px;height:42px;font-size:14px;background:${corPerfil(u.perfil)}">${esc(iniciais(u.nome))}</span><span><b style="font-size:15px">${esc(u.nome)}</b><small><code>${esc(u.login)}</code> · ${esc(u.perfil)} · <span style="color:${cs};font-weight:700">${s}</span></small></span></div>
     <div class="sheet-acoes">
       ${it('definir', 'fa-key', 'Definir nova senha', 'Você escolhe a senha e informa à pessoa. Pode exigir que ela troque no próximo acesso.')}
       ${it('provisoria', 'fa-wand-magic-sparkles', 'Gerar senha provisória', 'O sistema cria uma senha aleatória; a pessoa define a própria ao entrar.')}
@@ -2010,25 +2158,17 @@ function exportarAcessos(){
 }
 
 /* Perfis */
-function renderPerfis(){
-  const linhas = [
-    ['Ver o mapa, a lista e os indicadores', 1, 1, 1], ['Exportar CSV e cópia JSON', 1, 1, 1],
-    ['Criar, alterar, mover e excluir setores', 0, 1, 1], ['Valores, análise, validações e vínculos', 0, 1, 1], ['Alinhar e organizar o mapa', 0, 1, 1],
-    ['Restaurar a estrutura do decreto / importar cópia', 0, 0, 1], ['Gerenciar usuários, senhas e acessos', 0, 0, 1]
-  ];
-  const ok = v => v ? '<i class="fa-solid fa-check" style="color:var(--ok)"></i>' : '<span style="color:var(--mut2)">—</span>';
-  const n = p => usuarios.filter(u => u.perfil === p && u.ativo === 'Sim').length;
-  $('#u-corpo').innerHTML = `<div class="tab-wrap"><table class="tab"><thead><tr><th>Permissão</th><th style="text-align:center">Leitor (${n('Leitor')})</th><th style="text-align:center">Editor (${n('Editor')})</th><th style="text-align:center">Administrador (${n('Administrador')})</th></tr></thead>
-    <tbody>${linhas.map(([t, a, b, c]) => `<tr><td>${t}</td><td style="text-align:center">${ok(a)}</td><td style="text-align:center">${ok(b)}</td><td style="text-align:center">${ok(c)}</td></tr>`).join('')}</tbody></table></div>
-    <div class="cartao bl" style="margin-top:14px"><h3><i class="fa-solid fa-shield-halved"></i>Regras de segurança</h3>
-      <p class="s" style="line-height:1.7">• Senhas com no mínimo 8 caracteres, letras e números, guardadas só de forma cifrada.<br>• 5 senhas erradas seguidas bloqueiam o login por 15 minutos (o administrador pode desbloquear antes).<br>• Sessão de 12 horas, ou 30 dias com "Manter conectado".<br>• Trocar, definir ou redefinir a senha encerra as sessões abertas da pessoa.<br>• Sempre fica pelo menos um administrador ativo.<br>• Perdeu o acesso de administrador? Na planilha: menu 🏛️ GABOrg › Redefinir senha de um usuário.</p></div>`;
-}
 function mostrarSenhaProvisoria(u, senha, nova){
   return abrirModal({ titulo: nova ? 'Usuário criado' : 'Senha redefinida', rotulo:'Pronto', semCancelar:true,
     html:`<p>Passe estes dados a <b>${esc(u.nome)}</b>. A senha provisória aparece só agora; no primeiro acesso o GABOrg pede uma senha pessoal.</p>
       <p><span class="rot">Usuário</span><code style="font-size:14px">${esc(u.login)}</code></p>
       <div><span class="rot">Senha provisória</span><div class="senha-prov">${esc(senha)}</div></div>
       <button type="button" class="btn btn-s" onclick="navigator.clipboard && navigator.clipboard.writeText(${arg('Endereço: ' + location.href.split('#')[0] + '\nUsuário: ' + u.login + '\nSenha provisória: ' + senha)}).then(() => toast('Copiado.'))"><i class="fa-regular fa-copy"></i>Copiar usuário e senha</button>` });
+}
+function resumoPerfilHTML(nome){
+  const p = perfisLista.find(x => x.nome === nome) || perfilSistema(nome), niv = k => p.administrar ? 'editar' : p.secoes[k] || 'oculto';
+  const ed = SECOES_LISTA.filter(([k]) => !SEM_EDICAO.has(k) && niv(k) === 'editar').map(x => x[1]), ve = SECOES_LISTA.filter(([k]) => niv(k) !== 'oculto' && !(niv(k) === 'editar' && !SEM_EDICAO.has(k))).map(x => x[1]), oc = SECOES_LISTA.filter(([k]) => niv(k) === 'oculto').length;
+  return `<b style="color:${esc(p.cor)}">${esc(p.nome)}</b>: ${esc(p.descricao || '')}<br>${ed.length ? `<i class="fa-solid fa-pen" style="color:#16a34a"></i> edita ${ed.length === SECOES_LISTA.length - SEM_EDICAO.size ? 'todas as seções' : esc(ed.join(', '))}<br>` : ''}${ve.length ? `<i class="fa-solid fa-eye" style="color:#2563eb"></i> só vê ${esc(ve.join(', '))}<br>` : ''}${oc ? `<i class="fa-solid fa-eye-slash" style="color:#94a3b8"></i> ${oc} seção(ões) oculta(s)` : ''}${p.administrar ? '<br><i class="fa-solid fa-user-shield" style="color:#dc2626"></i> administra usuários e perfis' : ''}`;
 }
 function formUsuario(id){
   const u = usuarios.find(x => x.id === id) || { login:'', nome:'', email:'', perfil:'Editor', ativo:'Sim' };
@@ -2037,8 +2177,9 @@ function formUsuario(id){
     html:`<label><span class="rot">Nome completo</span><input id="fu-nome" class="campo" required value="${esc(u.nome)}" placeholder="Como aparecerá no histórico"></label>
       <div class="g2"><label><span class="rot">Login</span><input id="fu-login" class="campo" required autocapitalize="none" spellcheck="false" value="${esc(u.login)}" placeholder="maria.silva"></label>
       <label><span class="rot">E-mail <span style="font-weight:500;color:var(--mut)">(opcional, também serve para entrar)</span></span><input id="fu-email" class="campo" type="email" value="${esc(u.email)}"></label></div>
-      <div class="g2"><label><span class="rot">Perfil</span><select id="fu-perfil" class="campo" ${proprio ? 'disabled' : ''}>${['Administrador','Editor','Leitor'].map(p => `<option ${p === u.perfil ? 'selected' : ''}>${p}</option>`).join('')}</select></label>
+      <div class="g2"><label><span class="rot">Perfil</span><select id="fu-perfil" class="campo" ${proprio ? 'disabled' : ''} onchange="document.getElementById('fu-pres').innerHTML=resumoPerfilHTML(this.value)">${(perfisLista.length ? perfisLista : ['Administrador','Editor','Leitor'].map(perfilSistema)).map(p => `<option ${p.nome === u.perfil ? 'selected' : ''}>${esc(p.nome)}</option>`).join('')}</select></label>
       <label><span class="rot">Situação</span><select id="fu-ativo" class="campo" ${proprio ? 'disabled' : ''}><option value="Sim" ${u.ativo === 'Sim' ? 'selected' : ''}>Ativo</option><option value="Não" ${u.ativo !== 'Sim' ? 'selected' : ''}>Desativado</option></select></label></div>
+      <div id="fu-pres" class="fu-pres">${resumoPerfilHTML(u.perfil)}</div>
       ${id ? '' : '<p style="font-size:12.5px">O sistema gera uma <b>senha provisória</b> e a mostra na próxima tela.</p>'}`,
     aoConfirmar: async m => {
       const dados = { id: id || '', nome:m.querySelector('#fu-nome').value.trim(), login:m.querySelector('#fu-login').value.trim().toLowerCase(), email:m.querySelector('#fu-email').value.trim(), perfil:m.querySelector('#fu-perfil').value, ativo:m.querySelector('#fu-ativo').value };
@@ -4031,7 +4172,7 @@ function exportarMinuta(modo){
    A planilha de lotação é importada pelo próprio sistema e gravada na aba "Servidores" da planilha Google.
    O CPF nunca é importado. Usuários com perfil Leitor recebem os dados sem nome e sem matrícula. */
 let svAba = store.get('gaborg_sv_aba', 'geral'), svFil = { q:'', tipo:'', unid:'', cargo:'', vinc:'', sit:'' }, svLim = 100, svPrev = null, svUniArea = '', svUniVazios = false;
-const SV_ABAS = [['geral', 'Visão geral', 'fa-chart-pie'], ['unidades', 'Por unidade', 'fa-sitemap'], ['dres', 'DREs', 'fa-map-location-dot'], ['lista', 'Lista', 'fa-list'], ['importar', 'Importar planilha', 'fa-file-import']];
+const SV_ABAS = [['geral', 'Visão geral', 'fa-chart-pie'], ['estatisticas', 'Estatísticas', 'fa-chart-column'], ['unidades', 'Por unidade', 'fa-sitemap'], ['dres', 'DREs', 'fa-map-location-dot'], ['lista', 'Lista e edição', 'fa-list'], ['movimentos', 'Movimentações', 'fa-clock-rotate-left'], ['importar', 'Importar planilha', 'fa-file-import']];
 const SV_CARGOS = [['Professor', '#2563eb', /^PROFESSOR(ES)?\b/], ['ADES', '#0e7490', /^ADES$/], ['TAE', '#7c3aed', /^TAE$/], ['AAE', '#0891b2', /^AAE$/], ['TDES', '#4f46e5', /^TDES$/], ['Estagiário', '#65a30d', /ESTAGI/], ['Residente técnico', '#84cc16', /RESIDENTE/], ['Exclusivamente comissionado', '#d97706', /COMISSIONADO/], ['Militar', '#334155', /MILITAR|POLICIAL/]];
 const SV_COR_OUTROS = '#94a3b8';
 const svGrupoCargo = c => { const t = String(c || '').trim().toUpperCase(); if (!t) return 'Não informado'; const g = SV_CARGOS.find(x => x[2].test(t)); return g ? g[0] : 'Outros cargos'; };
@@ -4084,7 +4225,7 @@ const svMapa = () => { const m = param('mapaLotacao', {}); return m && typeof m 
 
 /* ---------- indicadores ---------- */
 function svDados(lista){
-  const L = lista || svLista(), cont = f => L.filter(f).length;
+  const L = lista || svAtivos(), cont = f => L.filter(f).length;
   const porUnid = new Map(); L.forEach(r => { const u = r.unidade || '—'; if (!porUnid.has(u)) porUnid.set(u, []); porUnid.get(u).push(r); });
   const porCargo = {}; L.forEach(r => { const g = svGrupoCargo(r.cargo); porCargo[g] = (porCargo[g] || 0) + 1; });
   const porSetor = new Map(); L.forEach(r => { if (!r.setorId) return; if (!porSetor.has(r.setorId)) porSetor.set(r.setorId, []); porSetor.get(r.setorId).push(r); });
@@ -4094,17 +4235,17 @@ function svDados(lista){
     com:cont(r => svComV(r) || svGrupoCargo(r.cargo) === 'Exclusivamente comissionado'), semCargo:cont(r => !r.cargo), sug:cont(r => r.sugerido === '1' || /^sim$/i.test(r.sugerido)), porUnid, porCargo, porSetor, semCasar, vence90, venceAno };
 }
 function svBarras(it, total){ const mx = Math.max(1, ...it.map(x => x[1])); return it.map(([n, v, partes, on, ic]) => `<div class="barra-l sv-b" ${on ? `style="cursor:pointer" onclick="${on}"` : ''}><span class="n" title="${esc(n)}">${ic || ''}${esc(n)}</span><span class="t">${(partes || [[v, '#2563eb']]).map(([q, c]) => `<span style="width:${(q / mx * 100).toFixed(2)}%;background:${c}" title="${fmtN(q)}"></span>`).join('')}</span><b>${fmtN(v)}${total ? `<small>${pct(v, total)}%</small>` : ''}</b></div>`).join(''); }
-const svIrLista = o => `svFil=Object.assign({q:'',tipo:'',unid:'',cargo:'',vinc:'',sit:''},${esc(JSON.stringify(o))});svLim=100;abaSv('lista')`;
+const svIrLista = o => `svFil=Object.assign({q:'',tipo:'',unid:'',cargo:'',vinc:'',sit:'',area:''},${esc(JSON.stringify(o))});svLim=100;abaSv('lista')`;
 
 /* ---------- tela ---------- */
 function abaSv(k){ svAba = k; store.set('gaborg_sv_aba', k); renderServidores(); const r = $('#v-servidores .rolagem'); if (r) r.scrollTop = 0; }
 function renderServidores(){
   const el = $('#sv-corpo'); if (!el) return;
   const D = svDados(), imp = param('servidoresImport', null);
-  const aviso = !svBackendOk() ? `<div class="cartao bl" style="--c:#dc2626"><h3><i class="fa-solid fa-triangle-exclamation"></i>Atualize o Codigo.gs para a versão 1.11.0</h3><p class="s">A planilha Google ainda não tem a aba "Servidores" (backend ${esc(backendVersao)}). Cole o novo Codigo.gs no Apps Script e publique uma nova versão; sem isso os servidores ficam só neste navegador.</p></div>` : '';
+  const aviso = (svBackendOk() && !svBackendFicha() && svPodeEditar() ? `<div class="cartao bl" style="--c:#d97706"><h3><i class="fa-solid fa-triangle-exclamation"></i>Atualize o Codigo.gs para a versão 1.14.0</h3><p class="s">A planilha está com o backend ${esc(backendVersao)}. A consulta funciona, mas para editar servidores (ficha, situação, função, observação e ações em lote) cole o novo Codigo.gs e publique uma nova versão.</p></div>` : '') + (!svBackendOk() ? `<div class="cartao bl" style="--c:#dc2626"><h3><i class="fa-solid fa-triangle-exclamation"></i>Atualize o Codigo.gs para a versão 1.11.0</h3><p class="s">A planilha Google ainda não tem a aba "Servidores" (backend ${esc(backendVersao)}). Cole o novo Codigo.gs no Apps Script e publique uma nova versão; sem isso os servidores ficam só neste navegador.</p></div>` : '');
   const topo = abasG(SV_ABAS.filter(a => a[0] !== 'importar' || ehAdmin()), svAba, 'abaSv') + (imp && imp.em ? `<p class="sv-orig"><i class="fa-solid fa-file-excel"></i>Base: <b>${esc(imp.arquivo || 'planilha')}</b> · importada em ${fmtData(imp.em)} por ${esc(imp.por || '—')} · ${fmtN(D.n)} servidores</p>` : '');
   if (!D.n && svAba !== 'importar') { el.innerHTML = aviso + topo + `<div class="cartao vazio"><i class="fa-solid fa-id-card-clip" style="font-size:34px;color:var(--marca);margin-bottom:10px"></i><h3 style="margin:0 0 6px">Nenhum servidor importado ainda</h3><p>${ehAdmin() ? 'Importe a planilha de lotação (Órgão Central e DREs) para ver quem está em cada unidade.' : 'Peça a um administrador para importar a planilha de lotação.'}</p>${ehAdmin() ? `<button class="btn btn-p" onclick="abaSv('importar')"><i class="fa-solid fa-file-import"></i>Importar planilha</button>` : ''}</div>`; return; }
-  const corpo = { geral:svGeral, unidades:svUnidades, dres:svDREs, lista:svListaTela, importar:svImportarTela }[svAba] || svGeral;
+  const corpo = { geral:svGeral, estatisticas:svEstatisticas, unidades:svUnidades, dres:svDREs, lista:svListaTela, movimentos:svMovimentos, importar:svImportarTela }[svAba] || svGeral;
   el.innerHTML = aviso + topo + corpo(D);
 }
 function svGeral(D){
@@ -4181,7 +4322,7 @@ function svVerSetor(id){
   const s = porId.get(id); if (!s) return; const l = (svDados().porSetor.get(id) || []).slice().sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR'));
   const nomes = svComNome();
   abrirModal({ titulo:(s.sigla ? s.sigla + ' · ' : '') + s.nome, rotulo:'Fechar', semCancelar:true, largura:760, html:`<p class="s" style="margin:0 0 10px">${fmtN(l.length)} servidor(es) lotado(s) nesta unidade segundo a planilha · ${fmtN(l.filter(svEfet).length)} efetivos · ${fmtN(l.filter(svTemp).length)} temporários</p>
-    ${l.length ? `<div class="tab-wrap" style="max-height:52vh"><table class="tab"><thead><tr>${nomes ? '<th>Nome</th><th>Matrícula</th>' : ''}<th>Cargo</th><th>Vínculo</th><th>Início</th><th>Fim</th></tr></thead><tbody>${l.map(r => `<tr>${nomes ? `<td>${esc(r.nome || '—')}</td><td>${esc(r.matricula || '—')}</td>` : ''}<td>${esc(r.cargo || '—')}</td><td>${chipG(esc(r.vinculo || '—'), svTemp(r) ? '#d97706' : '#16a34a')}</td><td>${r.dataInicio ? fmtDia(r.dataInicio) : '—'}</td><td>${r.dataFinal ? fmtDia(r.dataFinal) : '—'}</td></tr>`).join('')}</tbody></table></div>` : '<p class="vazio">Nenhum servidor lotado nesta unidade na planilha importada.</p>'}
+    ${l.length ? `<div class="tab-wrap" style="max-height:52vh"><table class="tab"><thead><tr>${nomes ? '<th>Nome</th><th>Matrícula</th>' : ''}<th>Cargo</th><th>Vínculo</th><th>Início</th><th>Fim</th></tr></thead><tbody>${l.map(r => `<tr style="cursor:pointer" onclick="this.closest('.modal').remove();svFicha(${arg(r.id)})">${nomes ? `<td>${esc(r.nome || '—')}</td><td>${esc(r.matricula || '—')}</td>` : ''}<td>${esc(r.cargo || '—')}</td><td>${chipG(esc(r.vinculo || '—'), svTemp(r) ? '#d97706' : '#16a34a')}</td><td>${r.dataInicio ? fmtDia(r.dataInicio) : '—'}</td><td>${r.dataFinal ? fmtDia(r.dataFinal) : '—'}</td></tr>`).join('')}</tbody></table></div>` : '<p class="vazio">Nenhum servidor lotado nesta unidade na planilha importada.</p>'}
     ${nomes ? '' : '<p class="s" style="margin-top:8px"><i class="fa-solid fa-lock"></i> Nomes e matrículas aparecem só para Editores e Administradores.</p>'}` });
 }
 function svLigar(k, setorId){
@@ -4209,29 +4350,35 @@ function svDREs(D){
     ${linhas.map(x => `<tr onclick="${svIrLista({ unid:x.l[0] ? x.l[0].unidade : x.d })}"><td><i class="fa-solid fa-circle" style="color:${corDRE(dres, x.d)};font-size:9px;margin-right:6px"></i><b>${esc(nomeDRE(x.d))}</b></td><td class="dir"><b>${fmtN(x.n)}</b></td><td class="dir">${fmtN(x.ef)}</td><td class="dir">${fmtN(x.te)}</td><td class="dir">${pct(x.te, x.n)}%</td><td class="dir">${fmtN(x.pr)}</td><td class="dir">${fmtN(x.es)}</td><td class="dir">${fmtN(x.al)}</td><td class="dir">${fmtN(x.mun)}</td><td class="dir"><b>${(x.n / Math.max(1, x.es)).toFixed(1).replace('.', ',')}</b></td><td class="dir">${x.n ? fmtN(Math.round(x.al / x.n)) : '—'}</td></tr>`).join('')}</tbody></table></div>`;
 }
 function svFiltrar(D){
-  const q = norm(svFil.q), f = svFil;
-  return D.L.filter(r => (!f.tipo || (f.tipo === 'dre') === svEhDRE(r)) && (!f.unid || r.unidade === f.unid) && (!f.cargo || svGrupoCargo(r.cargo) === f.cargo) && (!f.vinc || String(r.vinculo || '').toUpperCase().includes(f.vinc))
-    && (!f.sit || (f.sit === 'vence90' ? (d => d !== null && d >= 0 && d <= 90)(svDiasFim(r)) : f.sit === 'venceAno' ? (r.dataFinal && r.dataFinal.slice(0, 4) === hojeISO().slice(0, 4) && (svDiasFim(r) ?? -1) >= 0) : f.sit === 'semSetor' ? !r.setorId || !porId.has(r.setorId) : f.sit === 'sugerido' ? r.sugerido === '1' : true))
-    && (!q || norm([r.nome, r.matricula, r.cargo, r.lotacao, nomeSetor(r.setorId)].join(' ')).includes(q)));
+  const q = norm(svFil.q), f = svFil, base = /^(desligados|s:Desligado)$/.test(f.sit || '') ? svLista() : D.L;
+  return base.filter(r => (!f.area || (r.setorId && areaDe.get(r.setorId) === f.area)) && (!f.tipo || (f.tipo === 'dre') === svEhDRE(r)) && (!f.unid || r.unidade === f.unid) && (!f.cargo || svGrupoCargo(r.cargo) === f.cargo) && (!f.vinc || String(r.vinculo || '').toUpperCase().includes(f.vinc))
+    && (!f.sit || (f.sit === 'vence90' ? (d => d !== null && d >= 0 && d <= 90)(svDiasFim(r)) : f.sit === 'venceAno' ? (r.dataFinal && r.dataFinal.slice(0, 4) === hojeISO().slice(0, 4) && (svDiasFim(r) ?? -1) >= 0) : f.sit === 'semSetor' ? !r.setorId || !porId.has(r.setorId) : f.sit === 'sugerido' ? r.sugerido === '1' : f.sit === 'foraExercicio' ? svSit(r) !== 'Em exercício' : f.sit === 'desligados' ? svSit(r) === 'Desligado' : f.sit === 'editados' ? !!r.atualizadoEm : f.sit === 'manual' ? r.origem === 'manual' : /^s:/.test(f.sit) ? svSit(r) === f.sit.slice(2) : true))
+    && (!q || norm([r.nome, r.matricula, r.cargo, r.funcao, r.lotacao, r.observacao, nomeSetor(r.setorId)].join(' ')).includes(q)));
 }
+let svOrd = 'nome';
 function svListaTela(D){
-  const L = svFiltrar(D).sort((a, b) => (a.nome || a.lotacao || '').localeCompare(b.nome || b.lotacao || '', 'pt-BR')), nomes = svComNome(), V = L.slice(0, svLim);
+  const ORD = { nome:(a, b) => (a.nome || a.cargo || '').localeCompare(b.nome || b.cargo || '', 'pt-BR'), cargo:(a, b) => (a.cargo || '').localeCompare(b.cargo || '', 'pt-BR'), unidade:(a, b) => (nomeSetor(a.setorId) || 'zz').localeCompare(nomeSetor(b.setorId) || 'zz', 'pt-BR'), fim:(a, b) => (a.dataFinal || '9999').localeCompare(b.dataFinal || '9999'), editado:(a, b) => (b.atualizadoEm || '').localeCompare(a.atualizadoEm || '') };
+  const L = svFiltrar(D).sort(ORD[svOrd] || ORD.nome), nomes = svComNome(), V = L.slice(0, svLim), pode = svPodeEditar();
   const unids = [...D.porUnid.keys()].sort((a, b) => (/^DRE/.test(a) - /^DRE/.test(b)) || a.localeCompare(b, 'pt-BR')), cargos = Object.keys(D.porCargo).sort();
   const sel = (k, rot, ops) => `<select class="campo" onchange="svFil.${k}=this.value;svLim=100;renderServidores()"><option value="">${rot}</option>${ops.map(([v, n]) => `<option value="${esc(v)}" ${svFil[k] === v ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>`;
-  return `<div class="filtros"><div class="busca"><i class="fa-solid fa-magnifying-glass"></i><input class="campo" placeholder="${nomes ? 'Buscar nome, matrícula, cargo ou lotação' : 'Buscar cargo ou lotação'}" value="${esc(svFil.q)}" oninput="svFil.q=this.value;svLim=100;clearTimeout(window.tSv);window.tSv=setTimeout(()=>{renderServidores();const i=document.querySelector('#sv-corpo .busca input');i.focus();i.setSelectionRange(i.value.length,i.value.length)},300)"></div>
-      ${sel('tipo', 'Órgão Central e DREs', [['oc', 'Órgão Central'], ['dre', 'DREs']])}${sel('unid', 'Todas as unidades', unids.map(u => [u, svNomeUnid(u)]))}${sel('cargo', 'Todos os cargos', cargos.map(c => [c, c]))}${sel('vinc', 'Todos os vínculos', [['EFETIVO', 'Efetivos'], ['TEMPOR', 'Temporários'], ['COMISSION', 'Exclusivamente comissionados']])}
-      ${sel('sit', 'Qualquer situação', [['vence90', 'Vínculo termina em 90 dias'], ['venceAno', 'Vínculo termina este ano'], ['semSetor', 'Fora da nova estrutura'], ['sugerido', 'Marcados como sugeridos']])}
-      ${podeGestao() ? `<button class="btn btn-s btn-sm" onclick="svExportar()"><i class="fa-solid fa-file-csv"></i>Exportar</button>` : ''}</div>
-    <p class="s" style="margin:-4px 0 8px;color:var(--mut)">${fmtN(L.length)} servidor(es)${L.length !== D.n ? ' de ' + fmtN(D.n) : ''}${nomes ? '' : ' · <i class="fa-solid fa-lock"></i> nomes e matrículas visíveis só para Editores e Administradores'}</p>
-    <div class="tab-wrap"><table class="tab sv-tab"><thead><tr>${nomes ? '<th>Nome</th><th>Matrícula</th>' : ''}<th>Cargo</th><th>Vínculo</th><th>Unidade</th><th>Lotação (planilha)</th><th>Na nova estrutura</th><th>Início</th><th>Fim</th></tr></thead><tbody>
-    ${V.map(r => { const d = svDiasFim(r); return `<tr>${nomes ? `<td><b>${esc(r.nome || '—')}</b></td><td>${esc(r.matricula || '—')}</td>` : ''}<td>${esc(r.cargo || '—')}</td><td>${chipG(esc(r.vinculo || '—'), svTemp(r) ? '#d97706' : '#16a34a')}</td><td>${esc(svNomeUnid(r.unidade))}</td><td style="white-space:normal;min-width:200px">${esc(svLimparLotacao(r.lotacao, ''))}</td>
-      <td style="white-space:normal;min-width:180px">${r.setorId && porId.has(r.setorId) ? `<a href="#" onclick="event.preventDefault();irPara(${arg(r.setorId)})">${esc(nomeSetor(r.setorId))}</a>` : chipG('sem correspondência', '#7c3aed')}</td><td>${r.dataInicio ? fmtDia(r.dataInicio) : '—'}</td><td>${r.dataFinal ? fmtDia(r.dataFinal) + (d !== null && d >= 0 && d <= 90 ? ' ' + chipG(d + ' dias', '#dc2626') : '') : '—'}</td></tr>`; }).join('') || `<tr><td colspan="${nomes ? 9 : 7}" class="vazio">Nenhum servidor com esses filtros.</td></tr>`}</tbody></table></div>
-    ${L.length > svLim ? `<div style="text-align:center;margin:12px 0"><button class="btn btn-s" onclick="svLim+=200;renderServidores()"><i class="fa-solid fa-angles-down"></i>Mostrar mais (${fmtN(L.length - svLim)} restantes)</button></div>` : ''}`;
+  const todosMarc = V.length && V.every(r => svSel.has(r.id));
+  return `<div class="filtros"><div class="busca"><i class="fa-solid fa-magnifying-glass"></i><input class="campo" placeholder="${nomes ? 'Buscar nome, matrícula, cargo, função ou lotação' : 'Buscar cargo, função ou lotação'}" value="${esc(svFil.q)}" oninput="svFil.q=this.value;svLim=100;clearTimeout(window.tSv);window.tSv=setTimeout(()=>{renderServidores();const i=document.querySelector('#sv-corpo .busca input');i.focus();i.setSelectionRange(i.value.length,i.value.length)},300)"></div>
+      ${sel('tipo', 'Órgão Central e DREs', [['oc', 'Órgão Central'], ['dre', 'DREs']])}${sel('area', 'Todas as áreas', areas.map(a => [a, nomeCurto(porId.get(a))]))}${sel('unid', 'Todas as ADJ/DRE', unids.map(u => [u, svNomeUnid(u)]))}${sel('cargo', 'Todos os cargos', cargos.map(c => [c, c]))}${sel('vinc', 'Todos os vínculos', [['EFETIVO', 'Efetivos'], ['TEMPOR', 'Temporários'], ['COMISSION', 'Exclusivamente comissionados']])}
+      ${sel('sit', 'Qualquer situação', [['vence90', 'Vínculo termina em 90 dias'], ['venceAno', 'Vínculo termina este ano'], ['semSetor', 'Fora da nova estrutura'], ['foraExercicio', 'Fora de exercício'], ...SV_SITUACOES.filter(x => x[0] !== 'Desligado').map(([x]) => ['s:' + x, 'Situação: ' + x]), ['desligados', 'Desligados'], ['editados', 'Editados no sistema'], ['manual', 'Cadastrados à mão'], ['sugerido', 'Marcados como sugeridos']])}</div>
+    <div class="sv-lista-cab"><span class="s">${fmtN(L.length)} servidor(es)${L.length !== D.n ? ' de ' + fmtN(D.n) : ''}${nomes ? '' : ' · <i class="fa-solid fa-lock"></i> nomes e matrículas visíveis só para perfis com essa permissão'}</span><span style="flex:1"></span>
+      <label class="s">Ordenar por <select class="campo" style="height:32px;width:auto" onchange="svOrd=this.value;renderServidores()">${[['nome', 'nome'], ['cargo', 'cargo'], ['unidade', 'unidade'], ['fim', 'fim do vínculo'], ['editado', 'edição mais recente']].map(([k, t]) => `<option value="${k}" ${svOrd === k ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+      ${podeExtra('exportar') ? `<button class="btn btn-s btn-sm" onclick="svExportar()"><i class="fa-solid fa-file-csv"></i>Exportar</button>` : ''}${pode && podeExtra('nomesServidores') ? `<button class="btn btn-p btn-sm" onclick="svNovo()"><i class="fa-solid fa-user-plus"></i>Novo servidor</button>` : ''}</div>
+    ${svBarraLote()}
+    <div class="tab-wrap"><table class="tab sv-tab sv-lst"><thead><tr><th class="sv-ck"><input type="checkbox" ${todosMarc ? 'checked' : ''} onclick="event.stopPropagation()" onchange="svMarcarTodos(this.checked)" title="Selecionar os exibidos"></th>${nomes ? '<th>Nome</th><th>Matrícula</th>' : ''}<th>Cargo / função</th><th>Vínculo</th><th>Situação</th><th>Unidade na nova estrutura</th><th>ADJ/DRE</th><th>Início</th><th>Fim</th></tr></thead><tbody>
+    ${V.map(r => { const d = svDiasFim(r), st = svSit(r); return `<tr onclick="svFicha(${arg(r.id)})" class="${svSel.has(r.id) ? 'sel' : ''} ${st === 'Desligado' ? 'sv-vazio' : ''}"><td class="sv-ck" onclick="event.stopPropagation()"><input type="checkbox" ${svSel.has(r.id) ? 'checked' : ''} onchange="svMarcar(${arg(r.id)},this.checked);this.closest('tr').classList.toggle('sel',this.checked)"></td>${nomes ? `<td><b>${esc(r.nome || '—')}</b>${r.atualizadoEm ? ' <i class="fa-solid fa-pen sv-ed" title="editado em ' + esc(fmtData(r.atualizadoEm)) + '"></i>' : ''}</td><td>${esc(r.matricula || '—')}</td>` : ''}<td>${esc(r.cargo || '—')}${r.funcao ? `<small class="sv-sub">${esc(r.funcao)}</small>` : ''}</td><td>${chipG(esc(r.vinculo || '—'), svTemp(r) ? '#d97706' : svComV(r) ? '#b45309' : '#16a34a')}</td><td>${st === 'Em exercício' ? '<span class="sv-z">em exercício</span>' : chipG(esc(st), svCorSit(st))}</td>
+      <td style="white-space:normal;min-width:180px">${r.setorId && porId.has(r.setorId) ? esc(nomeSetor(r.setorId)) + `<small class="sv-sub">${esc(nomeCurto(porId.get(areaDe.get(r.setorId))) || '')}</small>` : chipG('sem correspondência', '#7c3aed')}</td><td>${esc(svNomeUnid(r.unidade))}</td><td>${r.dataInicio ? fmtDia(r.dataInicio) : '—'}</td><td>${r.dataFinal ? fmtDia(r.dataFinal) + (d !== null && d >= 0 && d <= 90 ? ' ' + chipG(d + ' dias', '#dc2626') : '') : '—'}</td></tr>`; }).join('') || `<tr><td colspan="${nomes ? 10 : 8}" class="vazio">Nenhum servidor com esses filtros.</td></tr>`}</tbody></table></div>
+    ${L.length > svLim ? `<div style="text-align:center;margin:12px 0"><button class="btn btn-s" onclick="svLim+=200;renderServidores()"><i class="fa-solid fa-angles-down"></i>Mostrar mais (${fmtN(L.length - svLim)} restantes)</button></div>` : ''}
+    <p class="s" style="margin-top:8px"><i class="fa-solid fa-hand-pointer"></i> Clique numa linha para abrir a ficha${pode ? ' e editar' : ''}${pode ? '; marque várias para mover de unidade, mudar a situação, o vínculo ou o fim do vínculo de uma vez' : ''}.</p>`;
 }
 function svExportar(){
   const L = svFiltrar(svDados()), nomes = svComNome();
-  csvBaixar('gaborg-servidores', [(nomes ? ['Nome', 'Matrícula'] : []).concat(['Cargo', 'Grupo do cargo', 'Vínculo', 'Tipo de lotação', 'Unidade', 'Código da lotação', 'Lotação', 'Unidade na nova estrutura', 'Área', 'Início', 'Fim'])]
-    .concat(L.map(r => (nomes ? [r.nome, r.matricula] : []).concat([r.cargo, svGrupoCargo(r.cargo), r.vinculo, r.tipoLotacao, svNomeUnid(r.unidade), r.lotacaoCod, svLimparLotacao(r.lotacao, ''), nomeSetor(r.setorId) || 'sem correspondência', nomeCurto(porId.get(areaDe.get(r.setorId))) || '', r.dataInicio ? fmtDia(r.dataInicio) : '', r.dataFinal ? fmtDia(r.dataFinal) : '']))));
+  csvBaixar('gaborg-servidores', [(nomes ? ['Nome', 'Matrícula'] : []).concat(['Cargo', 'Função', 'Situação', 'Observação', 'Grupo do cargo', 'Vínculo', 'Tipo de lotação', 'Unidade', 'Código da lotação', 'Lotação', 'Unidade na nova estrutura', 'Área', 'Início', 'Fim'])]
+    .concat(L.map(r => (nomes ? [r.nome, r.matricula] : []).concat([r.cargo, r.funcao, svSit(r), r.observacao, svGrupoCargo(r.cargo), r.vinculo, r.tipoLotacao, svNomeUnid(r.unidade), r.lotacaoCod, svLimparLotacao(r.lotacao, ''), nomeSetor(r.setorId) || 'sem correspondência', nomeCurto(porId.get(areaDe.get(r.setorId))) || '', r.dataInicio ? fmtDia(r.dataInicio) : '', r.dataFinal ? fmtDia(r.dataFinal) : '']))));
 }
 
 /* ---------- importação ---------- */
@@ -4293,16 +4440,167 @@ function svEnfileirarLote(ops){
 async function svConfirmar(){
   const P = svPrev; if (!P || !ehAdmin()) return;
   if (!svBackendOk()) return toast('Atualize o Codigo.gs para a versão 1.11.0 antes de importar.', 'aviso');
-  const ant = svLista(), novos = new Set(P.regs.map(r => r.id));
-  if (!await confirmar('Gravar servidores', `A lista atual (${fmtN(ant.length)}) será substituída por <b>${fmtN(P.regs.length)}</b> servidores do arquivo <b>${esc(P.arquivo)}</b>. O CPF não é gravado. Continuar?`, 'Gravar')) return;
+  const ant = svLista(), antPor = new Map(ant.map(r => [r.id, r])), novos = new Set(P.regs.map(r => r.id)), manuais = ant.filter(r => r.origem === 'manual' && !novos.has(r.id));
+  const preserv = P.regs.filter(r => { const a = antPor.get(r.id); return a && (a.funcao || a.observacao || (a.situacao && a.situacao !== 'Em exercício') || a.setorFixo === '1'); }).length;
+  if (!await confirmar('Gravar servidores', `A lista atual (${fmtN(ant.length)}) será atualizada com <b>${fmtN(P.regs.length)}</b> servidores do arquivo <b>${esc(P.arquivo)}</b>.<br>${preserv ? `• ${fmtN(preserv)} servidor(es) mantêm função, situação, observação e unidade definidas no sistema.<br>` : ''}${manuais.length ? `• ${fmtN(manuais.length)} servidor(es) cadastrados à mão continuam na lista.<br>` : ''}• Quem não está no arquivo sai da lista (o histórico fica). O CPF não é gravado. Continuar?`, 'Gravar')) return;
   const quando = agora(), por = cfg.usuario || cfg.login || '';
-  P.regs.forEach(r => { r.importadoEm = quando; r.importadoPor = por; });
-  const ops = ant.filter(r => !novos.has(r.id)).map(r => ({ op:'delete', table:'servidores', record:{ id:r.id } })).concat(P.regs.map(r => ({ op:'upsert', table:'servidores', record:Object.assign({}, r) })));
-  DB.servidores = P.regs; svPrev = null;
+  P.regs.forEach(r => { r.importadoEm = quando; r.importadoPor = por; r.origem = 'planilha'; const a = antPor.get(r.id); if (a) { ['funcao', 'situacao', 'observacao', 'atualizadoEm', 'atualizadoPor'].forEach(k => { if (a[k]) r[k] = a[k]; }); if (a.setorFixo === '1') { r.setorId = a.setorId; r.setorFixo = '1'; } } });
+  const ops = ant.filter(r => !novos.has(r.id) && r.origem !== 'manual').map(r => ({ op:'delete', table:'servidores', record:{ id:r.id } })).concat(P.regs.map(r => ({ op:'upsert', table:'servidores', record:Object.assign({}, r) })));
+  DB.servidores = P.regs.concat(manuais); svPrev = null;
   salvarParam('servidoresImport', { em:quando, por, arquivo:P.arquivo, n:P.regs.length, ligados:P.regs.filter(r => r.setorId).length });
   svEnfileirarLote(ops); svAba = 'geral'; store.set('gaborg_sv_aba', 'geral'); renderServidores();
   toast(`${fmtN(P.regs.length)} servidores gravados${online() ? '; enviando para a planilha em lotes de 500' : ''}.`);
 }
+/* ---------- servidores: situação, ficha, edição, ações em lote, movimentações e estatísticas ---------- */
+const SV_SITUACOES = [['Em exercício', '#16a34a'], ['Em férias', '#0891b2'], ['Licença', '#7c3aed'], ['Afastado', '#d97706'], ['Cedido', '#4f46e5'], ['Desligado', '#64748b']];
+const SV_VINCULOS = ['EFETIVO', 'TEMPORÁRIO', 'EXCLUSIVAMENTE COMISSIONADO'];
+const svSit = r => r.situacao || 'Em exercício';
+const svCorSit = s => (SV_SITUACOES.find(x => x[0] === s) || [0, '#94a3b8'])[1];
+const svAtivos = () => svLista().filter(r => svSit(r) !== 'Desligado');
+const svBackendFicha = () => !online() || !backendVersao || !svVerMaior('1.14.0', backendVersao);
+const svPodeEditar = () => podeEditarSec('servidores');
+const svRotulo = r => r.nome ? `${r.nome}${r.matricula ? ' (' + r.matricula + ')' : ''}` : `${r.cargo || 'Servidor'} · ${svNomeUnid(r.unidade)}`;
+let svSel = new Set();
+/* grava só os campos alterados (quem não vê nomes nunca apaga nome/matrícula) e registra no histórico */
+function svGravar(r, mud, motivo){
+  const ch = Object.keys(mud).filter(k => String(r[k] ?? '') !== String(mud[k] ?? '')); if (!ch.length) return 0;
+  const ROT = { nome:'nome', matricula:'matrícula', cargo:'cargo', vinculo:'vínculo', funcao:'função', situacao:'situação', setorId:'unidade', unidade:'ADJ/DRE', dataInicio:'início', dataFinal:'fim', observacao:'observação' };
+  const fmt = (k, v) => k === 'situacao' ? (v || 'Em exercício') : k === 'setorId' ? (nomeSetor(v) || 'sem correspondência') : /^data/.test(k) ? (v ? fmtDia(v) : '—') : (v || '—');
+  const desc = ch.filter(k => ROT[k]).map(k => `${ROT[k]}: ${fmt(k, r[k])} → ${fmt(k, mud[k])}`).join(' · ');
+  const quando = agora(), por = cfg.usuario || cfg.login || '';
+  const rec = { id:r.id, atualizadoEm:quando, atualizadoPor:por }; ch.forEach(k => { rec[k] = mud[k] ?? ''; r[k] = mud[k] ?? ''; });
+  if (ch.includes('setorId')) { rec.setorFixo = '1'; r.setorFixo = '1'; }
+  r.atualizadoEm = quando; r.atualizadoPor = por;
+  const h = novoReg('historico', { id:'h' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), setorId:mud.setorId || r.setorId || '', data:quando, usuario:por, acao:`Servidores: ${motivo || 'alteração'} — ${svRotulo(r)}${desc ? ' — ' + desc : ''} [sv:${r.id}]` });
+  DB.historico.unshift(h);
+  svEnfileirarLote([{ op:'upsert', table:'servidores', record:rec }, { op:'upsert', table:'historico', record:Object.assign({}, h) }]);
+  return ch.length;
+}
+function svUnidadesConhecidas(){ return [...new Set(svLista().map(r => r.unidade).filter(Boolean))].sort((a, b) => (/^DRE/.test(a) - /^DRE/.test(b)) || a.localeCompare(b, 'pt-BR')); }
+function svOpcoesSetor(sel){ return '<option value="">— sem correspondência —</option>' + setoresOficiais().filter(s => s.status !== 'Extinto').slice().sort((a, b) => ordemArvore(a.id) - ordemArvore(b.id)).map(s => `<option value="${esc(s.id)}" ${s.id === sel ? 'selected' : ''}>${'  '.repeat(Math.min(prof.get(s.id) || 0, 6))}${esc(s.nome)}${s.sigla ? ' (' + esc(s.sigla) + ')' : ''}${caminho(s.id).length > 1 ? ' — ' + esc(caminho(s.id).slice(1).map(nomeCurto).slice(-2).join(' › ')) : ''}</option>`).join(''); }
+function svHistorico(id){ const tag = `[sv:${id}]`; return (DB.historico || []).filter(h => String(h.acao || '').includes(tag)).sort((a, b) => String(b.data).localeCompare(String(a.data))); }
+const svLimparAcao = a => String(a || '').replace(/^Servidores:\s*/, '').replace(/\s*\[sv:[^\]]+\]\s*$/, '');
+function svFicha(id, editar){
+  const r = svLista().find(x => x.id === id); if (!r) return;
+  const pode = svPodeEditar() && svBackendFicha(), nomes = svComNome(), d = svDiasFim(r), H = svHistorico(id), ed = editar && pode;
+  const linha = (rot, v) => `<div class="svf-l"><small>${rot}</small><b>${v}</b></div>`;
+  const ver = `<div class="svf-cab"><span class="svf-av" style="background:${svCorCargo(svGrupoCargo(r.cargo))}">${esc(iniciais(r.nome || r.cargo || 'S'))}</span><div><h3>${esc(r.nome || 'Nome restrito')}</h3><p>${esc(r.cargo || 'Cargo não informado')}${r.funcao ? ' · ' + esc(r.funcao) : ''}</p>
+      <div class="svf-chips">${chipG(esc(r.vinculo || '—'), svTemp(r) ? '#d97706' : svComV(r) ? '#b45309' : '#16a34a')}${chipG(esc(svSit(r)), svCorSit(svSit(r)))}${r.origem === 'manual' ? chipG('cadastro manual', '#7c3aed') : ''}${d !== null && d >= 0 && d <= 90 ? chipG('vínculo termina em ' + d + ' dia(s)', '#dc2626') : ''}${d !== null && d < 0 ? chipG('vínculo encerrado', '#64748b') : ''}</div></div></div>
+    <div class="svf-g">${nomes ? linha('Matrícula', esc(r.matricula || '—')) : ''}${linha('Unidade na nova estrutura', r.setorId && porId.has(r.setorId) ? `<a href="#" onclick="event.preventDefault();document.querySelector('.modal').remove();irPara(${arg(r.setorId)})">${esc(nomeSetor(r.setorId))}</a><small class="svf-cam">${esc(caminho(r.setorId).slice(1).map(nomeCurto).join(' › '))}</small>` : chipG('sem correspondência', '#7c3aed'))}
+      ${linha('Secretaria adjunta / DRE', esc(svNomeUnid(r.unidade)))}${linha('Lotação na planilha', esc(svLimparLotacao(r.lotacao, '') || '—'))}${linha('Início do vínculo', r.dataInicio ? fmtDia(r.dataInicio) : '—')}${linha('Fim do vínculo', r.dataFinal ? fmtDia(r.dataFinal) : 'sem data')}
+      ${linha('Grupo do cargo', esc(svGrupoCargo(r.cargo)))}${linha('Origem', r.origem === 'manual' ? 'Cadastro manual' : 'Planilha de lotação' + (r.importadoEm ? ' · ' + fmtData(r.importadoEm) : ''))}${r.atualizadoEm ? linha('Última edição', `${fmtData(r.atualizadoEm)} · ${esc(r.atualizadoPor || '')}`) : ''}</div>
+    ${r.observacao ? `<div class="svf-obs"><i class="fa-solid fa-note-sticky"></i>${esc(r.observacao)}</div>` : ''}
+    <h4 class="svf-h">Histórico</h4>${H.length ? `<div class="svf-hist">${H.slice(0, 30).map(h => `<div><small>${fmtData(h.data)} · ${esc(h.usuario || '')}</small><span>${esc(svLimparAcao(h.acao))}</span></div>`).join('')}</div>` : '<p class="s">Nenhuma alteração registrada desde a importação.</p>'}`;
+  const sel = (n, ops, v) => `<select class="campo" name="${n}">${ops.map(o => { const [val, rot] = Array.isArray(o) ? o : [o, o]; return `<option value="${esc(val)}" ${val === v ? 'selected' : ''}>${esc(rot)}</option>`; }).join('')}</select>`;
+  const form = `<div class="svf-form">${nomes ? `<div class="g2"><label><span class="rot">Nome</span><input class="campo" name="nome" value="${esc(r.nome)}" required></label><label><span class="rot">Matrícula</span><input class="campo" name="matricula" value="${esc(r.matricula)}"></label></div>` : '<p class="s"><i class="fa-solid fa-lock"></i> Nome e matrícula visíveis só para perfis com essa permissão; os demais dados podem ser editados.</p>'}
+    <div class="g2"><label><span class="rot">Cargo</span><input class="campo" name="cargo" list="sv-cargos" value="${esc(r.cargo)}"><datalist id="sv-cargos">${[...new Set(svLista().map(x => x.cargo).filter(Boolean))].sort().map(c => `<option value="${esc(c)}">`).join('')}</datalist></label>
+      <label><span class="rot">Função <small>opcional</small></span><input class="campo" name="funcao" value="${esc(r.funcao)}" placeholder="ex.: Coordenador, Assessor"></label></div>
+    <div class="g2"><label><span class="rot">Vínculo</span>${sel('vinculo', [...new Set(SV_VINCULOS.concat(r.vinculo ? [r.vinculo] : []))], r.vinculo)}</label><label><span class="rot">Situação</span>${sel('situacao', SV_SITUACOES.map(x => x[0]), svSit(r))}</label></div>
+    <label><span class="rot">Unidade na nova estrutura</span><input class="campo" placeholder="Filtrar unidades..." oninput="const s=this.nextElementSibling,q=norm(this.value);[...s.options].forEach(o=>o.hidden=q&&!norm(o.textContent).includes(q))" style="margin-bottom:4px"><select class="campo" name="setorId" size="6" style="height:auto">${svOpcoesSetor(r.setorId)}</select></label>
+    <div class="g2"><label><span class="rot">Secretaria adjunta / DRE</span><input class="campo" name="unidade" list="sv-unids" value="${esc(r.unidade)}"><datalist id="sv-unids">${svUnidadesConhecidas().map(u => `<option value="${esc(u)}">`).join('')}</datalist></label>
+      <div class="g2"><label><span class="rot">Início</span><input class="campo" type="date" name="dataInicio" value="${esc(r.dataInicio)}"></label><label><span class="rot">Fim</span><input class="campo" type="date" name="dataFinal" value="${esc(r.dataFinal)}"></label></div></div>
+    <label><span class="rot">Observação</span><textarea class="campo" name="observacao" rows="2" placeholder="ex.: cedido à SEPLAG até 12/2026">${esc(r.observacao)}</textarea></label></div>`;
+  abrirModal({ titulo:ed ? 'Editar servidor' : 'Ficha do servidor', rotulo:ed ? 'Salvar' : (pode ? 'Editar' : 'Fechar'), semCancelar:!ed && !pode, largura:760, html:ed ? form : `<div class="svf">${ver}</div>${pode ? `<div class="svf-ac"><button type="button" class="btn btn-s btn-sm" onclick="this.closest('.modal').remove();svMudarSituacao(${arg(id)})"><i class="fa-solid fa-user-clock"></i>Alterar situação</button>${svSit(r) !== 'Desligado' ? `<button type="button" class="btn btn-s btn-sm" onclick="this.closest('.modal').remove();svDesligar(${arg(id)})"><i class="fa-solid fa-user-xmark"></i>Desligar</button>` : ''}${ehAdmin() ? `<button type="button" class="btn btn-g btn-sm" onclick="this.closest('.modal').remove();svExcluir(${arg(id)})"><i class="fa-solid fa-trash"></i>Excluir registro</button>` : ''}</div>` : ''}`,
+    aoConfirmar:m => {
+      if (!ed) { if (pode) setTimeout(() => svFicha(id, true), 0); return true; }
+      const f = m.querySelector('form'), v = k => f.elements[k] ? String(f.elements[k].value || '').trim() : undefined, mud = {};
+      ['nome', 'matricula', 'cargo', 'funcao', 'vinculo', 'situacao', 'setorId', 'unidade', 'dataInicio', 'dataFinal', 'observacao'].forEach(k => { const x = v(k); if (x !== undefined) mud[k] = ['cargo', 'unidade', 'vinculo', 'nome'].includes(k) ? x.toUpperCase() : x; });
+      if (nomes && !mud.nome) throw new Error('Informe o nome.');
+      if (mud.dataInicio && mud.dataFinal && mud.dataFinal < mud.dataInicio) throw new Error('O fim do vínculo não pode ser antes do início.');
+      const n = svGravar(r, mud, 'ficha editada'); toast(n ? `Servidor atualizado (${n} campo(s)).` : 'Nada foi alterado.'); renderServidores(); setTimeout(() => svFicha(id), 50); return true; } });
+}
+function svNovo(){
+  if (!svPodeEditar() || !podeExtra('nomesServidores')) return toast('Seu perfil não pode cadastrar servidores.', 'aviso');
+  if (!svBackendFicha()) return toast('Atualize o Codigo.gs para a versão 1.14.0 para cadastrar servidores.', 'aviso');
+  const id = 'svm' + Date.now().toString(36);
+  const r = novoReg('servidores', { id, origem:'manual', situacao:'Em exercício', vinculo:'EFETIVO', tipoLotacao:'ÓRGÃO CENTRAL', dataInicio:hojeISO() });
+  abrirModal({ titulo:'Novo servidor', rotulo:'Cadastrar', largura:760, html:`<div class="svf-form">
+    <div class="g2"><label><span class="rot">Nome</span><input class="campo" name="nome" required></label><label><span class="rot">Matrícula</span><input class="campo" name="matricula"></label></div>
+    <div class="g2"><label><span class="rot">Cargo</span><input class="campo" name="cargo" list="sv-cargos2" required><datalist id="sv-cargos2">${[...new Set(svLista().map(x => x.cargo).filter(Boolean))].sort().map(c => `<option value="${esc(c)}">`).join('')}</datalist></label><label><span class="rot">Função <small>opcional</small></span><input class="campo" name="funcao"></label></div>
+    <div class="g2"><label><span class="rot">Vínculo</span><select class="campo" name="vinculo">${SV_VINCULOS.map(v => `<option>${v}</option>`).join('')}</select></label><label><span class="rot">Secretaria adjunta / DRE</span><input class="campo" name="unidade" list="sv-unids2" required><datalist id="sv-unids2">${svUnidadesConhecidas().map(u => `<option value="${esc(u)}">`).join('')}</datalist></label></div>
+    <label><span class="rot">Unidade na nova estrutura</span><input class="campo" placeholder="Filtrar unidades..." oninput="const s=this.nextElementSibling,q=norm(this.value);[...s.options].forEach(o=>o.hidden=q&&!norm(o.textContent).includes(q))" style="margin-bottom:4px"><select class="campo" name="setorId" size="6" style="height:auto">${svOpcoesSetor('')}</select></label>
+    <div class="g2"><label><span class="rot">Início</span><input class="campo" type="date" name="dataInicio" value="${hojeISO()}"></label><label><span class="rot">Fim <small>se temporário</small></span><input class="campo" type="date" name="dataFinal"></label></div>
+    <label><span class="rot">Observação</span><textarea class="campo" name="observacao" rows="2"></textarea></label></div>`,
+    aoConfirmar:m => { const f = m.querySelector('form'), v = k => String(f.elements[k].value || '').trim();
+      if (!v('nome') || !v('cargo') || !v('unidade')) throw new Error('Preencha nome, cargo e secretaria adjunta/DRE.');
+      Object.assign(r, { nome:v('nome').toUpperCase(), matricula:v('matricula'), cargo:v('cargo').toUpperCase(), funcao:v('funcao'), vinculo:v('vinculo'), unidade:v('unidade').toUpperCase(), tipoLotacao:/^DRE\s/i.test(v('unidade')) ? 'DRE' : 'ÓRGÃO CENTRAL', setorId:v('setorId'), setorFixo:v('setorId') ? '1' : '', dataInicio:v('dataInicio'), dataFinal:v('dataFinal'), observacao:v('observacao'), atualizadoEm:agora(), atualizadoPor:cfg.usuario || '' });
+      if (r.matricula && svLista().some(x => x.matricula === r.matricula)) throw new Error('Já existe um servidor com a matrícula ' + r.matricula + '.');
+      DB.servidores.push(r);
+      const h = novoReg('historico', { id:'h' + Date.now().toString(36), setorId:r.setorId, data:agora(), usuario:cfg.usuario || '', acao:`Servidores: cadastro manual — ${svRotulo(r)} — ${r.cargo} · ${nomeSetor(r.setorId) || svNomeUnid(r.unidade)} [sv:${r.id}]` }); DB.historico.unshift(h);
+      svEnfileirarLote([{ op:'upsert', table:'servidores', record:Object.assign({}, r) }, { op:'upsert', table:'historico', record:Object.assign({}, h) }]);
+      toast('Servidor cadastrado.'); renderServidores(); return true; } });
+}
+async function svMudarSituacao(id){
+  const r = svLista().find(x => x.id === id); if (!r || !svPodeEditar()) return;
+  abrirModal({ titulo:'Situação de ' + (r.nome || 'servidor'), rotulo:'Salvar', largura:460, html:`<div class="svf-sits">${SV_SITUACOES.map(([s, c]) => `<label style="--c:${c}"><input type="radio" name="sit" value="${s}" ${svSit(r) === s ? 'checked' : ''}><span>${s}</span></label>`).join('')}</div><label><span class="rot">Observação <small>motivo, período, órgão de destino...</small></span><textarea class="campo" name="obs" rows="2">${esc(r.observacao)}</textarea></label>`,
+    aoConfirmar:m => { const s = (m.querySelector('input[name=sit]:checked') || {}).value || 'Em exercício', o = m.querySelector('textarea').value.trim(); svGravar(r, { situacao:s, observacao:o }, 'situação alterada'); toast('Situação atualizada.'); renderServidores(); return true; } });
+}
+async function svDesligar(id){
+  const r = svLista().find(x => x.id === id); if (!r || !svPodeEditar()) return;
+  if (!await confirmar('Desligar servidor', `Marcar <b>${esc(svRotulo(r))}</b> como desligado? Ele sai das contagens e dos painéis, mas o registro e o histórico ficam guardados (filtro "Desligados" na Lista).`, 'Desligar')) return;
+  svGravar(r, { situacao:'Desligado', dataFinal:r.dataFinal && r.dataFinal <= hojeISO() ? r.dataFinal : hojeISO() }, 'desligamento'); toast('Servidor desligado.'); renderServidores();
+}
+async function svExcluir(id){
+  const r = svLista().find(x => x.id === id); if (!r || !ehAdmin()) return;
+  if (!await confirmar('Excluir registro', `Excluir definitivamente <b>${esc(svRotulo(r))}</b>? Prefira "Desligar" para manter o histórico. Se a pessoa estiver na planilha de lotação, ela volta na próxima importação.`, 'Excluir', true)) return;
+  DB.servidores = svLista().filter(x => x.id !== id); svSel.delete(id);
+  const h = novoReg('historico', { id:'h' + Date.now().toString(36), setorId:r.setorId, data:agora(), usuario:cfg.usuario || '', acao:`Servidores: registro excluído — ${svRotulo(r)} [sv:${r.id}]` }); DB.historico.unshift(h);
+  svEnfileirarLote([{ op:'delete', table:'servidores', record:{ id } }, { op:'upsert', table:'historico', record:Object.assign({}, h) }]); toast('Registro excluído.'); renderServidores();
+}
+/* ações em lote na Lista */
+function svMarcar(id, on){ if (on) svSel.add(id); else svSel.delete(id); const b = $('#sv-lote'); if (b) b.outerHTML = svBarraLote(); }
+function svMarcarTodos(on){ svFiltrar(svDados()).slice(0, svLim).forEach(r => on ? svSel.add(r.id) : svSel.delete(r.id)); renderServidores(); }
+function svBarraLote(){ const n = svSel.size; return `<div id="sv-lote" class="sv-lote ${n ? 'on' : ''}"><b>${fmtN(n)}</b> selecionado(s)${svPodeEditar() ? `<button class="btn btn-s btn-sm" onclick="svLote('mover')"><i class="fa-solid fa-right-left"></i>Mover para unidade</button><button class="btn btn-s btn-sm" onclick="svLote('situacao')"><i class="fa-solid fa-user-clock"></i>Situação</button><button class="btn btn-s btn-sm" onclick="svLote('fim')"><i class="fa-solid fa-calendar-day"></i>Fim do vínculo</button><button class="btn btn-s btn-sm" onclick="svLote('vinculo')"><i class="fa-solid fa-file-signature"></i>Vínculo</button>` : ''}<button class="btn btn-g btn-sm" onclick="svSel.clear();renderServidores()">Limpar seleção</button></div>`; }
+function svLote(tipo){
+  const L = svLista().filter(r => svSel.has(r.id)); if (!L.length || !svPodeEditar()) return;
+  if (!svBackendFicha()) return toast('Atualize o Codigo.gs para a versão 1.14.0 para editar servidores.', 'aviso');
+  const html = { mover:`<label><span class="rot">Nova unidade na estrutura</span><input class="campo" placeholder="Filtrar unidades..." oninput="const s=this.nextElementSibling,q=norm(this.value);[...s.options].forEach(o=>o.hidden=q&&!norm(o.textContent).includes(q))" style="margin-bottom:4px"><select class="campo" name="v" size="10" style="height:auto">${svOpcoesSetor('')}</select></label>`,
+    situacao:`<div class="svf-sits">${SV_SITUACOES.map(([s, c], i) => `<label style="--c:${c}"><input type="radio" name="v" value="${s}" ${i ? '' : 'checked'}><span>${s}</span></label>`).join('')}</div>`,
+    fim:`<label><span class="rot">Novo fim do vínculo <small>deixe vazio para "sem data"</small></span><input class="campo" type="date" name="v"></label>`,
+    vinculo:`<label><span class="rot">Vínculo</span><select class="campo" name="v">${SV_VINCULOS.map(v => `<option>${v}</option>`).join('')}</select></label>` }[tipo];
+  const campo = { mover:'setorId', situacao:'situacao', fim:'dataFinal', vinculo:'vinculo' }[tipo], rot = { mover:'movido(s) de unidade', situacao:'situação alterada', fim:'fim do vínculo alterado', vinculo:'vínculo alterado' }[tipo];
+  abrirModal({ titulo:`${L.length} servidor(es) selecionado(s)`, rotulo:'Aplicar', largura:620, html:`<p class="s" style="margin:0 0 8px">${esc(L.slice(0, 4).map(svRotulo).join(' · '))}${L.length > 4 ? ` e mais ${L.length - 4}` : ''}</p>${html}`,
+    aoConfirmar:m => { const el = m.querySelector('[name=v]:checked') || m.querySelector('[name=v]'), v = el ? el.value : '';
+      let n = 0; L.forEach(r => { n += svGravar(r, { [campo]:v }, 'em lote: ' + rot) ? 1 : 0; });
+      toast(`${n} servidor(es) atualizado(s).`); svSel.clear(); renderServidores(); return true; } });
+}
+/* movimentações (histórico das edições) */
+let svMovQ = '';
+function svMovimentos(){
+  const q = norm(svMovQ), L = (DB.historico || []).filter(h => /^Servidores:/.test(h.acao || '')).filter(h => !q || norm(h.acao + ' ' + h.usuario).includes(q)).sort((a, b) => String(b.data).localeCompare(String(a.data)));
+  const porTipo = {}; L.forEach(h => { const t = (svLimparAcao(h.acao).split(' — ')[0] || 'alteração'); porTipo[t] = (porTipo[t] || 0) + 1; });
+  const ult30 = L.filter(h => (Date.now() - tData(h.data)) / 864e5 <= 30).length;
+  return `<div class="kpis">${kpiG('#1e3a8a', 'fa-clock-rotate-left', 'Movimentações registradas', fmtN(L.length), fmtN(ult30) + ' nos últimos 30 dias')}${kpiG('#0e7490', 'fa-user-pen', 'Quem mais editou', esc(((Object.entries(L.reduce((o, h) => (o[h.usuario] = (o[h.usuario] || 0) + 1, o), {})).sort((a, b) => b[1] - a[1])[0]) || ['—'])[0]), 'responsável pelas alterações')}</div>
+    <div class="filtros"><div class="busca"><i class="fa-solid fa-magnifying-glass"></i><input class="campo" placeholder="Buscar por servidor, unidade, tipo ou usuário" value="${esc(svMovQ)}" oninput="svMovQ=this.value;clearTimeout(window.tSvm);window.tSvm=setTimeout(()=>{renderServidores();const i=document.querySelector('#sv-corpo .busca input');i.focus();i.setSelectionRange(i.value.length,i.value.length)},300)"></div>
+      ${Object.entries(porTipo).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([t, n]) => `<button class="btn btn-s btn-sm" onclick="svMovQ=${arg(t)};renderServidores()">${esc(t)} <b>${n}</b></button>`).join('')}</div>
+    ${L.length ? `<div class="cartao bl" style="--c:#1e3a8a"><div class="sv-mov">${L.slice(0, 300).map(h => { const id = ((h.acao || '').match(/\[sv:([^\]]+)\]/) || [])[1], [tipo, quem, ...resto] = svLimparAcao(h.acao).split(' — ');
+      return `<div class="sv-mov-i"><span class="sv-mov-d">${fmtData(h.data)}<small>${esc(h.usuario || '')}</small></span><span class="sv-mov-t">${chipG(esc(tipo), /deslig|exclu/.test(tipo) ? '#dc2626' : /cadastro/.test(tipo) ? '#16a34a' : /lote/.test(tipo) ? '#7c3aed' : '#2563eb')}</span><span class="sv-mov-x">${id && svLista().some(r => r.id === id) ? `<a href="#" onclick="event.preventDefault();svFicha(${arg(id)})"><b>${esc(quem || '')}</b></a>` : `<b>${esc(quem || '')}</b>`}${resto.length ? `<small>${esc(resto.join(' — '))}</small>` : ''}</span></div>`; }).join('')}</div></div>` : '<div class="cartao vazio">Nenhuma movimentação registrada ainda. As edições feitas nesta seção aparecem aqui, com data e autor.</div>'}`;
+}
+/* estatísticas */
+function svEstatisticas(D){
+  const L = D.L, porArea = new Map(), aid = {}; L.forEach(r => { const id = r.setorId && areaDe.get(r.setorId) ? areaDe.get(r.setorId) : '', a = id ? nomeCurto(porId.get(id)) : (svEhDRE(r) ? 'DREs (sem unidade ligada)' : 'Sem unidade ligada'); aid[a] = id; if (!porArea.has(a)) porArea.set(a, []); porArea.get(a).push(r); });
+  const grupos = Object.entries(D.porCargo).sort((a, b) => b[1] - a[1]).map(x => x[0]).slice(0, 8), AR = [...porArea].sort((a, b) => b[1].length - a[1].length), mx = Math.max(1, ...AR.flatMap(([, l]) => grupos.map(g => l.filter(r => svGrupoCargo(r.cargo) === g).length)));
+  const eq = [...D.porSetor.values()].map(l => l.length), faixas = [['1 servidor', 1, 1], ['2 a 5', 2, 5], ['6 a 10', 6, 10], ['11 a 20', 11, 20], ['21 a 40', 21, 40], ['mais de 40', 41, 1e9]];
+  const ord = [...D.porSetor].sort((a, b) => b[1].length - a[1].length), top10 = ord.slice(0, 10).reduce((t, x) => t + x[1].length, 0);
+  const fim = [['Já encerrados', -1e9, -1], ['Até 30 dias', 0, 30], ['31 a 90 dias', 31, 90], ['91 a 180 dias', 91, 180], ['181 dias a 1 ano', 181, 365], ['Mais de 1 ano', 366, 1e9]];
+  const ing = {}; L.forEach(r => { if (!r.dataInicio) return; const m = r.dataInicio.slice(0, 7); if (m >= String(new Date().getFullYear() - 1) + '-' + String(new Date().getMonth() + 1).padStart(2, '0')) ing[m] = (ing[m] || 0) + 1; });
+  const nomeMes = m => new Date(m + '-15T12:00:00').toLocaleDateString('pt-BR', { month:'short', year:'2-digit' }).replace('.', '');
+  const sits = SV_SITUACOES.map(([s, c]) => [s, svLista().filter(r => svSit(r) === s).length, c]).filter(x => x[1]);
+  const div = setoresOficiais().filter(s => s.status !== 'Extinto' && String(s.servidores ?? '') !== '' && num(s.servidores) !== (D.porSetor.get(s.id) || []).length).length;
+  const efArea = AR.filter(([, l]) => l.length >= 10).map(([a, l]) => [a, pct(l.filter(svEfet).length, l.length)]).sort((a, b) => a[1] - b[1]);
+  return `<div class="kpis">${kpiG('#1e3a8a', 'fa-sitemap', 'Unidades com servidores', fmtN(D.porSetor.size), 'de ' + fmtN(setoresOficiais().filter(s => s.status !== 'Extinto').length) + ' unidades da estrutura')}${kpiG('#0e7490', 'fa-people-group', 'Média por unidade', (D.porSetor.size ? (eq.reduce((a, b) => a + b, 0) / D.porSetor.size) : 0).toFixed(1).replace('.', ','), 'mediana ' + (eq.length ? eq.slice().sort((a, b) => a - b)[Math.floor(eq.length / 2)] : 0))}
+      ${kpiG('#dc2626', 'fa-user', 'Unidades com 1 servidor', fmtN(eq.filter(n => n === 1).length), 'risco de continuidade', "svUniVazios=false;abaSv('unidades')")}${kpiG('#7c3aed', 'fa-chart-pie', 'Concentração', pct(top10, D.n) + '%', 'dos servidores estão nas 10 maiores unidades')}
+      ${kpiG('#d97706', 'fa-user-clock', 'Fora de exercício', fmtN(svAtivos().filter(r => svSit(r) !== 'Em exercício').length), 'férias, licença, afastados ou cedidos', svIrLista({ sit:'foraExercicio' }))}${kpiG('#64748b', 'fa-scale-unbalanced', 'Cadastro × planilha', fmtN(div), 'setores com nº de servidores diferente do cadastro', "abaSv('unidades')")}</div>
+    <div class="cartao bl" style="--c:#2563eb"><h3><i class="fa-solid fa-table-cells"></i>Área × grupo de cargo</h3><p class="s">Quantos servidores de cada carreira em cada área (cor mais forte = mais servidores) · clique numa célula para ver a lista</p>
+      <div class="tab-wrap"><table class="tab sv-heat"><thead><tr><th>Área</th>${grupos.map(g => `<th>${esc(g)}</th>`).join('')}<th>Total</th></tr></thead><tbody>${AR.map(([a, l]) => `<tr><td><b>${esc(a)}</b></td>${grupos.map(g => { const n = l.filter(r => svGrupoCargo(r.cargo) === g).length; return `<td class="${n ? 'sv-hc' : ''}" ${n ? `onclick="${svIrLista(aid[a] ? { area:aid[a], cargo:g } : { cargo:g, sit:'semSetor' })}"` : ''} style="background:color-mix(in srgb,${svCorCargo(g)} ${Math.round(n / mx * 70)}%,transparent);${n / mx > .45 ? 'color:#fff;' : ''}">${n || '<span class="sv-z">—</span>'}</td>`; }).join('')}<td><b>${fmtN(l.length)}</b></td></tr>`).join('')}</tbody></table></div></div>
+    <div class="grade2"><div class="cartao bl" style="--c:#0e7490"><h3><i class="fa-solid fa-people-group"></i>Tamanho das equipes</h3><p class="s">Quantas unidades em cada faixa de servidores</p>${svBarras(faixas.map(([t, a, b]) => [t, eq.filter(n => n >= a && n <= b).length, [[eq.filter(n => n >= a && n <= b).length, t === '1 servidor' ? '#dc2626' : '#0e7490']]]))}</div>
+      <div class="cartao bl" style="--c:#d97706"><h3><i class="fa-solid fa-hourglass-half"></i>Tempo até o fim do vínculo</h3><p class="s">Vínculos com data de término</p>${svBarras(fim.map(([t, a, b]) => { const n = L.filter(r => { const d = svDiasFim(r); return d !== null && d >= a && d <= b; }).length; return [t, n, [[n, b <= 30 ? '#dc2626' : b <= 90 ? '#f97316' : '#f59e0b']], svIrLista(b <= 90 && a >= 0 ? { sit:'vence90' } : {})]; }).concat([['Sem data de término', L.filter(r => !r.dataFinal).length, [[L.filter(r => !r.dataFinal).length, '#cbd5e1']]]]), D.n)}</div></div>
+    <div class="grade2"><div class="cartao bl" style="--c:#16a34a"><h3><i class="fa-solid fa-user-plus"></i>Início dos vínculos (últimos 12 meses)</h3><p class="s">Entradas por mês, pela data de início</p>${Object.keys(ing).length ? svBarras(Object.keys(ing).sort().map(m => [nomeMes(m), ing[m], [[ing[m], '#16a34a']]])) : '<p class="vazio">Sem datas de início no período.</p>'}</div>
+      <div class="cartao bl" style="--c:#7c3aed"><h3><i class="fa-solid fa-user-check"></i>Situação dos servidores</h3><p class="s">Inclui desligados (fora das contagens)</p>${svBarras(sits.map(([s, n, c]) => [s, n, [[n, c]], svIrLista({ sit:'s:' + s })]), svLista().length)}
+        <h4 class="svf-h" style="margin-top:14px">Áreas com menor proporção de efetivos</h4>${svBarras(efArea.slice(0, 6).map(([a, p]) => [a, p, [[p, p < 50 ? '#d97706' : '#16a34a']]])).replace(/<b>(\d+)/g, '<b>$1%')}</div></div>
+    <div class="cartao bl" style="--c:#1e3a8a"><h3><i class="fa-solid fa-ranking-star"></i>Unidades com mais servidores</h3><p class="s">As 15 maiores · clique para ver a equipe</p>${svBarras(ord.slice(0, 15).map(([id, l]) => [nomeSetor(id) + (porId.get(areaDe.get(id)) ? ' · ' + nomeCurto(porId.get(areaDe.get(id))) : ''), l.length, svPartes(l), `svVerSetor(${arg(id)})`]), D.n)}</div>`;
+}
+
 /* realinha os servidores sem unidade quando a estrutura muda (novos setores, nomes corrigidos) */
 function svRecasar(){
   if (!podeGestao()) return; const R = svRaizes(), mapa = svMapa(), ops = [];
@@ -4311,7 +4609,7 @@ function svRecasar(){
 }
 function svResumoSetor(s){
   if (!svLista().length) return '';
-  const ids = new Set([s.id, ...descendentes(s.id)]), dir = svLista().filter(r => r.setorId === s.id), tot = svLista().filter(r => ids.has(r.setorId));
+  const ids = new Set([s.id, ...descendentes(s.id)]), dir = svAtivos().filter(r => r.setorId === s.id), tot = svAtivos().filter(r => ids.has(r.setorId));
   return `<div class="sv-pn"><i class="fa-solid fa-id-card-clip"></i><div><b>${fmtN(dir.length)}</b> servidor(es) lotado(s) aqui na planilha de lotação${tot.length > dir.length ? ` · <b>${fmtN(tot.length)}</b> somando os subordinados` : ''}<small>${fmtN(dir.filter(svEfet).length)} efetivos · ${fmtN(dir.filter(svTemp).length)} temporários${num(s.servidores) !== dir.length ? ` · o cadastro informa ${fmtN(s.servidores || 0)}` : ''}</small></div>${dir.length ? `<button class="btn btn-s btn-sm" onclick="svVerSetor(${arg(s.id)})">Ver</button>` : ''}</div>`;
 }
 
@@ -5113,7 +5411,7 @@ function montarRelatorio(F, emis){
       B.push({ t:'tab', pq:true, cab:['Semelhança', 'Setor A', 'Competência A', 'Setor B', 'Competência B'], larg:[42, 70, '*', 70, '*'], lin:C.pares.slice(0, 60).map(p => [Math.round(p.sim * 100) + '%', nomeCurto(p.a.s), p.a.t, nomeCurto(p.b.s), p.b.t]) });
       if (ref.length) { const lac = ref.map(t => ({ t, m:melhorSetorPara(t, C) })).filter(x => !x.m || x.m.sim < .3 || x.m.n < 2); B.push({ t:'h3', x:`Atribuições de referência sem setor responsável (${lac.length} de ${ref.length})` }, { t:'lista', it:lac.map(x => ['• ' + x.t, 0]) }); } }
     if (k === 'servidores') { H(k); const ids = F.area ? new Set([F.area, ...descendentes(F.area)]) : null, sigA = F.area ? String((porId.get(F.area) || {}).sigla || '').toUpperCase() : '';
-      const SL = svLista().filter(r => (!ids || ids.has(r.setorId) || (sigA && r.unidade === sigA)) && (!F.dre || norm(r.unidade) === norm(F.dre))), SD = svDados(SL), imp = param('servidoresImport', null);
+      const SL = svAtivos().filter(r => (!ids || ids.has(r.setorId) || (sigA && r.unidade === sigA)) && (!F.dre || norm(r.unidade) === norm(F.dre))), SD = svDados(SL), imp = param('servidoresImport', null);
       if (!SD.n) B.push({ t:'p', x:'Nenhum servidor importado para este recorte. Importe a planilha de lotação em Servidores › Importar planilha.' });
       else {
         B.push({ t:'kpis', it:[['Servidores', fmtN(SD.n), `${fmtN(SD.oc)} Órgão Central · ${fmtN(SD.dre)} DREs`, '#1e3a8a'], ['Efetivos', fmtN(SD.efet), pct(SD.efet, SD.n) + '% do total', '#16a34a'], ['Temporários', fmtN(SD.temp), pct(SD.temp, SD.n) + '% do total', '#d97706'], ['Professores fora da sala', fmtN(SD.prof), 'em unidades administrativas', '#2563eb'],
@@ -5484,7 +5782,7 @@ function abrirPaleta(){
 function fecharPaleta(){ const el = $('#paleta'); if (el) el.remove(); }
 function listarPaleta(txt){
   const q = norm(txt), r = [];
-  document.querySelectorAll('.lado .nav-b[data-vista]').forEach(b => r.push({ g:'Seções', ic:b.querySelector('i').className, t:b.title || b.textContent.trim(), a:() => trocarVista(b.dataset.vista) }));
+  document.querySelectorAll('.lado .nav-b[data-vista]:not(.sem-acesso)').forEach(b => r.push({ g:'Seções', ic:b.querySelector('i').className, t:b.title || b.textContent.trim(), a:() => trocarVista(b.dataset.vista) }));
   [['fa-solid fa-tv', 'Abrir o Modo TV', () => abrirModoTV()], ['fa-solid fa-file-pdf', 'Gerar um relatório em PDF', () => { trocarVista('relatorios'); abaRm('relatorio'); }], ['fa-solid fa-file-contract', 'Minuta de portaria', () => { trocarVista('relatorios'); abaRm('portaria'); }], ['fa-solid fa-shield-halved', 'Verificar o código de um documento', () => { trocarVista('relatorios'); abaRm('verificar'); }], ['fa-solid fa-people-group', 'Nova reunião', () => { trocarVista('reunioes'); setTimeout(() => formReuniao(''), 100); }], ['fa-solid fa-circle-half-stroke', 'Alternar tema claro/escuro', () => alternarTema()], ['fa-solid fa-route', 'Mapa de MT por distância até a DRE', () => { trocarVista('escolas'); setTimeout(() => modoMT('distancia'), 400); }]]
     .forEach(([ic, t, a]) => r.push({ g:'Ações', ic, t, a }));
   let L = q ? r.filter(x => norm(x.t).includes(q)) : r;
