@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.30.0';
+const VERSAO = '1.30.1';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -3484,7 +3484,8 @@ function desenharEscolasMT(){
   if (mt.camadas.cluster) { mt.mapa.removeLayer(mt.camadas.cluster); mt.camadas.cluster = null; }
   mt.camadas.escolas.clearLayers(); mt.camadas.dres.clearLayers(); mt.camadas.ligacoes.clearLayers(); mt.marcadores.clear();
   const sedes = new Map(dres.map(d => [d, sedeDRE(d, todas)]));
-  if ((mt.ligacoes && modo !== 'divisao') || modo === 'distancia' || (foco && modo !== 'sodre')) lista.filter(e => (!foco || e.dre === foco) && (!mun || chaveMun(e.municipio) === mun)).forEach(e => L.polyline([sedes.get(e.dre), [e.latitude, e.longitude]], { color:modo === 'distancia' ? faixaDist(distEscola(e))[2] : corDRE(dres, e.dre), weight:foco ? 1.6 : 1.1, opacity:foco ? .7 : .45, renderer:mt.render, interactive:false }).addTo(mt.camadas.ligacoes));
+  const centroMun = munCentroMT() && modo !== 'distancia';
+  if (!centroMun && ((mt.ligacoes && modo !== 'divisao') || modo === 'distancia' || (foco && modo !== 'sodre'))) lista.filter(e => (!foco || e.dre === foco) && (!mun || chaveMun(e.municipio) === mun)).forEach(e => L.polyline([sedes.get(e.dre), [e.latitude, e.longitude]], { color:modo === 'distancia' ? faixaDist(distEscola(e))[2] : corDRE(dres, e.dre), weight:foco ? 1.6 : 1.1, opacity:foco ? .7 : .45, renderer:mt.render, interactive:false }).addTo(mt.camadas.ligacoes));
   const pequeno = ['regioes', 'municipio', 'divisao'].includes(modo);
   let destino = mt.camadas.escolas;
   if (modo === 'cluster' && L.markerClusterGroup) {
@@ -3501,11 +3502,12 @@ function desenharEscolasMT(){
     if (destino === mt.camadas.escolas) opts.renderer = mt.render;
     prepararMarcadorEscola(); opts.forma = formaTipo(e.tipo); const m = L.escolaMarker([e.latitude, e.longitude], opts);
     if (!apagada) { m.on('mouseover', () => m.setRadius(opts.radius + 3)); m.on('mouseout', () => m.setRadius(opts.radius)); }
-    m.bindTooltip(`<b>${esc(e.nome)}</b><br>${esc(e.municipio)} · ${esc(nomeDRE(e.dre))} · ${fmtKm(distEscola(e))} da DRE${num(e.alunos) ? ' · ' + fmtN(e.alunos) + ' alunos' : ''}`, { direction:'top', offset:[0, -4], className:'mt-tip' });
+    m.bindTooltip(() => munCentroMT() && modo !== 'distancia' ? `<b>${esc(e.nome)}</b><br>${esc(e.municipio)} · ${esc(grupoTipo(e.tipo))}${num(e.alunos) ? ' · ' + fmtN(e.alunos) + ' alunos' : ''}` : `<b>${esc(e.nome)}</b><br>${esc(e.municipio)} · ${esc(nomeDRE(e.dre))} · ${fmtKm(distEscola(e))} da DRE${num(e.alunos) ? ' · ' + fmtN(e.alunos) + ' alunos' : ''}`, { direction:'top', offset:[0, -4], className:'mt-tip' });
     m.bindPopup(() => popupEscola(e, dres), { maxWidth:320, className:'mt-popup' });
     destino.addLayer(m); mt.marcadores.set(e.codigo, m);
   });
-  if (modo !== 'municipio' && (modo !== 'divisao' || foco)) dres.forEach((d, i) => {
+  const dresMun = mun ? new Set(todas.filter(e => chaveMun(e.municipio) === mun).map(e => e.dre)) : null;
+  if (!centroMun && modo !== 'municipio' && (modo !== 'divisao' || foco)) dres.forEach((d, i) => { if (dresMun && !dresMun.has(d)) return;
     const n = lista.filter(e => e.dre === d).length; if (!n && (mt.fil.dres.size && !mt.fil.dres.has(d))) return;
     const icone = L.divIcon({ className:'mt-dre-ic', html:`<div class="mt-dre ${foco === d ? 'on' : ''} ${foco && foco !== d ? 'off' : ''}" style="--c:${corDRE(dres, d)}"><i class="fa-solid fa-building-flag"></i><span>${esc(nomeDRE(d))}</span><b>${n}</b></div>`, iconSize:null, iconAnchor:[14, 14] });
     L.marker(sedes.get(d), { icon:icone, zIndexOffset:1000 + (foco === d ? 500 : 0), keyboard:false, title:'Sede da ' + d }).on('click', ev => { L.DomEvent.stopPropagation(ev); focarDREmt(foco === d && !mt.mun ? -1 : i); }).on('mouseover', () => realcarDREmt(i)).on('mouseout', () => realcarDREmt(-1)).addTo(mt.camadas.dres);
@@ -3628,8 +3630,8 @@ function construirMalhaMT(){
     onEachFeature:(f, l) => {
       const k = f.properties.chave; (mt.munL.get(k) || mt.munL.set(k, []).get(k)).push(l);
       l.bindTooltip(() => dicaMunMT(f), { sticky:true, className:'mt-tip mt-tip-mun', direction:'top', offset:[0, -10] });
-      l.on('mouseover', () => { mt.hover = k; (mt.munL.get(k) || []).forEach(x => x.setStyle(estiloMunMT(x.feature, true))); realcarDREmt(dres.indexOf(f.properties.dre), true); });
-      l.on('mouseout', () => { if (mt.hover === k) mt.hover = ''; (mt.munL.get(k) || []).forEach(x => x.setStyle(estiloMunMT(x.feature))); realcarDREmt(-1); });
+      l.on('mouseover', () => { mt.hover = k; (mt.munL.get(k) || []).forEach(x => { x.setStyle(estiloMunMT(x.feature, true)); if (munCentroMT()) x.bringToFront(); }); if (!munCentroMT()) realcarDREmt(dresDe(escolasLista()).indexOf(f.properties.dre), true); });
+      l.on('mouseout', () => { if (mt.hover === k) mt.hover = ''; (mt.munL.get(k) || []).forEach(x => x.setStyle(estiloMunMT(x.feature))); if (!munCentroMT()) realcarDREmt(-1); });
       l.on('click', ev => { L.DomEvent.stopPropagation(ev); fecharMenuMT(); selecionarMunMT(k); });
     } }).addTo(mt.camadas.malha);
   mt.malhaSig = assinaturaMT();
@@ -3652,12 +3654,18 @@ function estiloMunMT(f, hover){
   if (hover) op = Math.min(.95, op + (mt.modo === 'municipio' ? .1 : .2));
   return { stroke:hover || sel, color:escuro ? '#f8fafc' : '#0f172a', weight:sel ? 2.6 : 1.8, opacity:1, fillColor:fill, fillOpacity:op, className:'mt-mun' };
 }
+const munCentroMT = () => ['municipio', 'divisao'].includes(mt.modo) || !!mt.mun;
 function dicaMunMT(f){
   const o = f.properties.detalhe, dres = dresDe(escolasLista()), d = f.properties.dre;
   const l = escolasLista().filter(e => chaveMun(e.municipio) === f.properties.chave), u = l.filter(e => e.localidade !== 'RURAL').length;
-  return `<div class="mt-dica" style="--c:${d ? corDRE(dres, d) : '#94a3b8'}"><b>${esc(f.properties.nome)}</b>${d ? `<span class="r"><i></i>${esc(nomeDRE(d))}</span>` : ''}
-    ${l.length ? `<div class="n"><b>${l.length}</b> escola${l.length > 1 ? 's' : ''} estadua${l.length > 1 ? 'is' : 'l'}<small>${u} urbana${u === 1 ? '' : 's'} · ${l.length - u} rura${l.length - u === 1 ? 'l' : 'is'}</small></div>` : '<div class="n"><small>Nenhuma escola estadual na base</small></div>'}
-    ${o && Object.keys(o).length > 1 ? `<small class="o">${Object.entries(o).map(([x, n]) => `${esc(nomeDRE(x))}: ${n}`).join(' · ')}</small>` : ''}
+  const al = alunosDe(l), cm = munCentroMT();
+  if (cm) return `<div class="mt-dica mt-dica-mun"><b>${esc(f.properties.nome)}</b>
+    ${l.length ? `<div class="n"><b>${l.length}</b> escola${l.length > 1 ? 's' : ''} estadua${l.length > 1 ? 'is' : 'l'}${al ? ` · <b>${fmtN(al)}</b> alunos` : ''}<small>${u} urbana${u === 1 ? '' : 's'} · ${l.length - u} rura${l.length - u === 1 ? 'l' : 'is'}</small></div>` : '<div class="n"><small>Nenhuma escola estadual na base</small></div>'}
+    <small class="h">${mt.mun === f.properties.chave ? 'Clique para voltar' : 'Clique para ver as escolas do município'}</small></div>`;
+  const ld = d ? escolasLista().filter(e => e.dre === d) : [];
+  return `<div class="mt-dica" style="--c:${d ? corDRE(dres, d) : '#94a3b8'}">${d ? `<span class="r"><i></i>${esc(nomeDRE(d))}</span><small class="o">${ld.length} escolas · ${new Set(ld.map(e => e.municipio)).size} municípios na DRE</small>` : ''}<b>${esc(f.properties.nome)}</b>
+    ${l.length ? `<div class="n"><b>${l.length}</b> escola${l.length > 1 ? 's' : ''} no município${al ? ` · ${fmtN(al)} alunos` : ''}</div>` : '<div class="n"><small>Nenhuma escola estadual na base</small></div>'}
+    ${o && Object.keys(o).length > 1 ? `<small class="o">Atendido por mais de uma DRE: ${Object.entries(o).map(([x, n]) => `${esc(nomeDRE(x))} (${n})`).join(' · ')}</small>` : ''}
     <small class="h">${mt.mun === f.properties.chave ? 'Clique para voltar' : 'Clique para ver as escolas'}</small></div>`;
 }
 function realcarMunMT(k, on){
