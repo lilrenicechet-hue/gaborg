@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.33.0';
+const VERSAO = '1.34.0';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -6157,7 +6157,7 @@ function apGeo(){
   const W = 1000, s = W / (x1 - x0), H = (y1 - y0) * s, P = (lo, la) => [(lo * kx - x0) * s, (-la - y0) * s];
   const muns = fc.features.map(f => { const b = [1e9, 1e9, -1e9, -1e9];
     const d = anel(f.geometry).map(pl => pl.map(r => 'M' + r.map(([lo, la]) => { const p = P(lo, la); if (p[0] < b[0]) b[0] = p[0]; if (p[1] < b[1]) b[1] = p[1]; if (p[0] > b[2]) b[2] = p[0]; if (p[1] > b[3]) b[3] = p[1]; return p[0].toFixed(1) + ',' + p[1].toFixed(1); }).join('L') + 'Z').join('')).join('');
-    return { k:chaveMun(f.properties.nome), nome:f.properties.nome, cod:String(f.properties.codarea || ''), d, bb:b, c:[(b[0] + b[2]) / 2, (b[1] + b[3]) / 2] }; });
+    return { k:chaveMun(f.properties.nome), nome:f.properties.nome, cod:String(f.properties.codarea || ''), geo:f.geometry, d, bb:b, c:[(b[0] + b[2]) / 2, (b[1] + b[3]) / 2] }; });
   return apGeo.c = { W, H, P, muns, todo:[0, 0, W, H] };
 }
 /* Dados vivos (escolas e alunos podem ter sido editados) */
@@ -6194,25 +6194,48 @@ function renderApresentacao(){
   if (!apSel) { const top = apModo === 'mun' ? [...D.muns].sort((a, b) => b.al - a.al)[0] : null; apSel = apModo === 'mun' ? (top ? top.k : '') : D.dres[0]; }
   el.innerHTML = `<div class="apx-esc">
     <header class="apx-hero"><div class="apx-hero-ic"><i class="fa-solid fa-person-chalkboard"></i></div>
-      <div><span class="apx-k">Receber prefeitos e equipes</span><h2>Apresentação do território</h2><p>Escolha um município ou uma DRE e abra uma apresentação animada em tela cheia: mapa com zoom, escolas, estudantes, perfil da rede e a regional que atende.</p></div></header>
+      <div class="apx-hero-t"><span class="apx-k">Receber prefeitos e equipes</span><h2>Apresentação do território</h2><p>Escolha no mapa ou na lista e abra uma apresentação animada em tela cheia.</p></div>
+      <div class="apx-hero-f"><div class="seg apx-seg">${[['mun', 'Município', 'fa-city'], ['dre', 'DRE', 'fa-route']].map(([k, t, ic]) => `<button class="${apModo === k ? 'on' : ''}" onclick="apModo='${k}';apSel='';apBusca='';renderApresentacao()"><i class="fa-solid ${ic}"></i>${t}</button>`).join('')}</div>
+        <label class="apx-busca"><i class="fa-solid fa-magnifying-glass"></i><input id="apx-q" value="${esc(apBusca)}" placeholder="${apModo === 'mun' ? 'Buscar entre os ' + D.muns.length + ' municípios...' : 'Buscar DRE...'}" oninput="apBusca=this.value;apLista()"></label></div></header>
     <div class="apx-grid">
-      <div class="apx-col">
-        <div class="apx-bar"><div class="seg apx-seg">${[['mun', 'Município', 'fa-city'], ['dre', 'DRE', 'fa-route']].map(([k, t, ic]) => `<button class="${apModo === k ? 'on' : ''}" onclick="apModo='${k}';apSel='';apBusca='';renderApresentacao()"><i class="fa-solid ${ic}"></i>${t}</button>`).join('')}</div>
-          <label class="apx-busca"><i class="fa-solid fa-magnifying-glass"></i><input id="apx-q" value="${esc(apBusca)}" placeholder="${apModo === 'mun' ? 'Buscar entre os ' + D.muns.length + ' municípios...' : 'Buscar DRE...'}" oninput="apBusca=this.value;apLista()"></label></div>
-        <div class="apx-lista" id="apx-lista"></div>
-      </div>
+      <div class="apx-col"><div class="apx-col-h"><b>${apModo === 'mun' ? 'Municípios' : 'Diretorias regionais'}</b><small>${apModo === 'mun' ? D.muns.length : D.dres.length}</small></div><div class="apx-lista" id="apx-lista"></div></div>
+      <div class="apx-mesc" id="apx-mesc"></div>
       <aside class="apx-prev" id="apx-prev"></aside>
     </div></div>`;
-  apLista(); apPrevia();
+  apLista(); apMapaEscolha(); apPrevia();
+}
+/* Mapa grande para escolher: cor da DRE, intensidade pelo número de estudantes; passe o mouse para ver, clique para escolher */
+function apMapaEscolha(){
+  const el = $('#apx-mesc'); if (!el) return; const D = apDados(), G = D.G, mx = Math.max(1, ...D.muns.map(m => m.al));
+  el.innerHTML = `<svg class="apx-msvg" viewBox="-12 -12 ${(G.W + 24).toFixed(0)} ${(G.H + 24).toFixed(0)}" preserveAspectRatio="xMidYMid meet">${D.muns.map(m => `<path d="${m.d}" data-k="${m.k}" data-d="${esc(m.dre)}" style="--c:${m.dre ? apCorDre(D, m.dre) : '#64748b'};--a:${apModo === 'mun' ? (.18 + .72 * Math.sqrt(m.al / mx)).toFixed(2) : '.55'}"/>`).join('')}</svg>
+    <div class="apx-mtip" id="apx-mtip"></div>
+    <div class="apx-mleg">${apModo === 'mun' ? '<i class="fa-solid fa-hand-pointer"></i> Clique num município · cor da DRE, mais forte = mais estudantes' : '<i class="fa-solid fa-hand-pointer"></i> Clique numa região para escolher a DRE'}</div>`;
+  const svg = el.querySelector('svg'), tip = $('#apx-mtip');
+  svg.addEventListener('mousemove', e => { const p = e.target.closest('path'); if (!p) { tip.classList.remove('on'); return; }
+    const m = D.muns.find(x => x.k === p.dataset.k); if (!m) return; const r = el.getBoundingClientRect();
+    if (apModo === 'mun') tip.innerHTML = `<b>${esc(m.nome)}</b><small>${m.dre ? 'DRE ' + esc(nomeDRE(m.dre)) : 'Sem escola estadual'}</small><span>${fmtN(m.es.length)} escolas · ${fmtN(m.al)} estudantes</span>`;
+    else { const ms = D.muns.filter(x => x.dre === m.dre), es = D.E.filter(x => x.dre === m.dre); tip.innerHTML = m.dre ? `<b>DRE ${esc(nomeDRE(m.dre))}</b><small>${esc(m.nome)}</small><span>${ms.length} municípios · ${fmtN(es.length)} escolas · ${fmtN(alunosDe(es))} estudantes</span>` : `<b>${esc(m.nome)}</b><small>Sem escola estadual</small>`; }
+    tip.style.left = Math.min(r.width - 230, e.clientX - r.left + 16) + 'px'; tip.style.top = (e.clientY - r.top + 16) + 'px'; tip.classList.add('on');
+    svg.querySelectorAll('path.hov').forEach(x => x.classList.remove('hov'));
+    (apModo === 'mun' ? [p] : m.dre ? svg.querySelectorAll(`path[data-d="${CSS.escape(m.dre)}"]`) : []).forEach(x => x.classList.add('hov')); });
+  svg.addEventListener('mouseleave', () => { tip.classList.remove('on'); svg.querySelectorAll('path.hov').forEach(x => x.classList.remove('hov')); });
+  svg.addEventListener('click', e => { const p = e.target.closest('path'); if (!p) return; const v = apModo === 'mun' ? p.dataset.k : p.dataset.d; if (!v) return;
+    apSel = v; apLista(); apPrevia(); apMapaMarcar(); const it = $('#apx-lista .apx-it.on'); if (it) it.scrollIntoView({ block:'nearest', behavior:'smooth' }); });
+  apMapaMarcar();
+}
+function apMapaMarcar(){
+  const svg = $('#apx-mesc svg'); if (!svg) return; const sel = [];
+  svg.querySelectorAll('path').forEach(p => { const on = apModo === 'mun' ? p.dataset.k === apSel : p.dataset.d === apSel; p.classList.toggle('sel', on); if (on) sel.push(p); });
+  sel.forEach(p => svg.appendChild(p));
 }
 function apLista(){
   const el = $('#apx-lista'); if (!el) return; const D = apDados(), q = norm(apBusca);
   if (apModo === 'mun') {
     const L = D.muns.filter(m => !q || norm(m.nome).includes(q) || norm(nomeDRE(m.dre)).includes(q)).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
-    el.innerHTML = L.length ? L.map(m => `<button class="apx-it ${m.k === apSel ? 'on' : ''}" style="--c:${m.dre ? apCorDre(D, m.dre) : '#94a3b8'}" onclick="apSel='${m.k}';apLista();apPrevia()"><span class="apx-it-n"><b>${esc(m.nome)}</b><small>${m.dre ? 'DRE ' + esc(nomeDRE(m.dre)) : 'Sem escola estadual'}</small></span><span class="apx-it-v"><b>${fmtN(m.es.length)}</b><small>escolas</small></span><span class="apx-it-v"><b>${fmtN(m.al)}</b><small>alunos</small></span></button>`).join('') : '<div class="apx-vazio">Nenhum município encontrado.</div>';
+    el.innerHTML = L.length ? L.map(m => `<button class="apx-it ${m.k === apSel ? 'on' : ''}" style="--c:${m.dre ? apCorDre(D, m.dre) : '#94a3b8'}" onclick="apSel='${m.k}';apLista();apPrevia();apMapaMarcar()"><span class="apx-it-n"><b>${esc(m.nome)}</b><small>${m.dre ? 'DRE ' + esc(nomeDRE(m.dre)) : 'Sem escola estadual'}</small></span><span class="apx-it-v"><b>${fmtN(m.es.length)}</b><small>escolas</small></span><span class="apx-it-v"><b>${fmtN(m.al)}</b><small>alunos</small></span></button>`).join('') : '<div class="apx-vazio">Nenhum município encontrado.</div>';
   } else {
     const L = D.dres.filter(d => !q || norm(d).includes(q));
-    el.innerHTML = L.map(d => { const es = D.E.filter(e => e.dre === d), nm = D.muns.filter(m => m.dre === d).length; return `<button class="apx-it ${d === apSel ? 'on' : ''}" style="--c:${apCorDre(D, d)}" onclick="apSel=${arg(d)};apLista();apPrevia()"><span class="apx-it-n"><b>DRE ${esc(nomeDRE(d))}</b><small>${nm} municípios · sede em ${esc(apSedeNome(d))}</small></span><span class="apx-it-v"><b>${fmtN(es.length)}</b><small>escolas</small></span><span class="apx-it-v"><b>${fmtN(alunosDe(es))}</b><small>alunos</small></span></button>`; }).join('');
+    el.innerHTML = L.map(d => { const es = D.E.filter(e => e.dre === d), nm = D.muns.filter(m => m.dre === d).length; return `<button class="apx-it ${d === apSel ? 'on' : ''}" style="--c:${apCorDre(D, d)}" onclick="apSel=${arg(d)};apLista();apPrevia();apMapaMarcar()"><span class="apx-it-n"><b>DRE ${esc(nomeDRE(d))}</b><small>${nm} municípios · sede em ${esc(apSedeNome(d))}</small></span><span class="apx-it-v"><b>${fmtN(es.length)}</b><small>escolas</small></span><span class="apx-it-v"><b>${fmtN(alunosDe(es))}</b><small>alunos</small></span></button>`; }).join('');
   }
 }
 function apPrevia(){
@@ -6270,10 +6293,12 @@ function apTela(D, A, k){
       <p class="apx-sub apx-in" style="--i:3">${A.tipo === 'mun' ? `A rede estadual de ensino no município${A.dre ? ` · Diretoria Regional de ${esc(nomeDRE(A.dre))}` : ''}` : `Diretoria Regional de Educação · ${A.ms.length} municípios · sede em ${esc(apSedeNome(A.d))}`}</p>
       <div class="apx-chips apx-in" style="--i:4"><span><i class="fa-solid fa-school"></i><b>${fmtN(A.es.length)}</b> escolas</span><span><i class="fa-solid fa-children"></i><b>${fmtN(A.al)}</b> estudantes</span><span><i class="fa-regular fa-calendar"></i>${esc(dataL.charAt(0).toUpperCase() + dataL.slice(1))}</span></div></div>`;
   if (k === 'territorio') { const tp = apTipos(A.es);
-    return `<div class="apx-card apx-flut apx-in" style="--i:0"><span class="apx-k">${A.tipo === 'mun' ? 'Território' : 'Região atendida'}</span><h2>${esc(A.nome)}</h2>
+    return `<div class="apx-sat apx-ter" id="apx-ter"></div><div class="apx-sat-vel"></div>
+      <div class="apx-card apx-flut apx-ter-c apx-in" style="--i:0"><span class="apx-k"><i class="fa-solid fa-satellite"></i> ${A.tipo === 'mun' ? 'Território' : 'Região atendida'}</span><h2>${esc(A.nome)}</h2>
       <p class="apx-big">${apCont(A.es.length)}<span>${A.es.length === 1 ? 'escola estadual' : 'escolas estaduais'}${A.tipo === 'dre' ? ` em ${A.ms.length} municípios` : ''}</span></p>
       ${tp.length ? `<div class="apx-leg">${tp.map(([g, n]) => `<span>${iconeTipoSVG(g, CORES_TIPO[g], 18)}${esc(g)} <b>${n}</b></span>`).join('')}</div>` : '<p class="apx-sub">Não há escolas estaduais neste município.</p>'}
-      ${A.dre ? `<div class="apx-leg"><span><i class="fa-solid fa-star" style="color:#fbbf24"></i>Sede da DRE em ${esc(apSedeNome(A.dre))}</span></div>` : ''}</div>`; }
+      ${A.dre ? `<div class="apx-leg"><span><i class="fa-solid fa-star" style="color:#f59e0b"></i>Sede da DRE em ${esc(apSedeNome(A.dre))}</span></div>` : ''}</div>
+      <div class="apx-ter-dica apx-in" style="--i:3"><i class="fa-solid fa-hand-pointer"></i> Arraste para explorar · role para aproximar · clique numa escola</div>`; }
   if (k === 'numeros') { const it = A.tipo === 'mun'
       ? [['fa-school', A.es.length, A.es.length === 1 ? 'escola estadual' : 'escolas estaduais', ''], ['fa-chart-simple', media, 'alunos por escola, em média', ''], ['fa-city', urb.length, 'escolas urbanas', ''], ['fa-tractor', rur, 'escolas rurais', ''], ['fa-ranking-star', A.m.pos, `lugar em número de estudantes entre os ${D.muns.length} municípios de Mato Grosso`, 'º', 1]]
       : (() => { const km = D.X.lista.filter(o => o.e.dre === A.d), sv = apSv(D, A.d); return [['fa-city', A.ms.length, 'municípios atendidos', ''], ['fa-school', A.es.length, 'escolas estaduais', ''], sv ? ['fa-id-card-clip', sv, 'servidores na DRE', ''] : ['fa-tractor', rur, 'escolas rurais', ''], ['fa-route', km.length ? km.reduce((t, o) => t + o.km, 0) / km.length : 0, 'km, em média, das escolas até a sede', ''], ['fa-road', km.filter(o => o.km > 200).length, 'escolas a mais de 200 km da sede da DRE', '', 1]]; })();
@@ -6311,7 +6336,7 @@ function apTela(D, A, k){
 function apQuadro(D, A, k){
   const G = D.G, alvo = apFoco(D, A), sede = A.dre && D.X.sedes.get(A.dre);
   if (k === 'capa' || k === 'fim') return { box:G.todo, pos:'dir', cls:'pulsa' };
-  if (k === 'territorio') return { box:alvo, pos:'cheio', cls:'pins rots' };
+  if (k === 'territorio') return { box:alvo, pos:'oculto', cls:'' };
   if (k === 'dre' && sede) return { box:apCaixa([A.m.bb, apPt(G, sede[0], sede[1]), ...D.muns.filter(m => m.dre === A.dre).map(m => m.bb)], .06), pos:'dir', cls:'liga dre' };
   if (k === 'municipios' || k === 'noticias') return { box:alvo, pos:'fundo', cls:'' };
   if (k === 'satelite') return { box:alvo, pos:'oculto', cls:'' };
@@ -6330,7 +6355,7 @@ function apAbrir(){
       <span class="apx-cnt" id="apx-cnt"></span><span style="flex:1"></span><button onclick="event.stopPropagation();apTelaCheia()" title="Tela cheia (F)"><i class="fa-solid fa-expand"></i></button><button onclick="event.stopPropagation();apFechar()" title="Sair (Esc)"><i class="fa-solid fa-xmark"></i></button></div></footer>`;
   document.body.appendChild(el);
   apEstado = { el, D, A, R, i:-1, svg:el.querySelector('.apx-svg'), box:D.G.todo.slice(), raf:0, auto:apAuto, t:0, ocioso:0, fs:false };
-  el.addEventListener('click', e => { if (e.target.closest('button,a,input,select')) return; apIr(apEstado.i + (e.clientX < innerWidth * .25 ? -1 : 1)); });
+  el.addEventListener('click', e => { if (e.target.closest('button,a,input,select,#apx-ter')) return; apIr(apEstado.i + (e.clientX < innerWidth * .25 ? -1 : 1)); });
   el.addEventListener('mousemove', apAcordar);
   document.addEventListener('keydown', apTecla, true);
   document.addEventListener('fullscreenchange', apFsMudou);
@@ -6375,6 +6400,7 @@ function apIr(i){
   $('#apx-cnt').textContent = (i + 1) + ' / ' + S.R.length + ' · ' + S.R[i][1];
   S.i = i; apAgendar();
   if (k === 'satelite') setTimeout(apSatIniciar, 80); else apSatParar();
+  if (k === 'territorio') setTimeout(apTerIniciar, 80); else apTerParar();
 }
 function apZoom(b, ms){
   const S = apEstado, a = S.box.slice(), ease = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2, set = c => { S.svg.setAttribute('viewBox', `${c[0].toFixed(2)} ${c[1].toFixed(2)} ${(c[2] - c[0]).toFixed(2)} ${(c[3] - c[1]).toFixed(2)}`); S.box = c; };
@@ -6394,7 +6420,7 @@ function apContar(tela, reduz){
 function apFechar(semSair){
   const S = apEstado; if (!S) return; apEstado = null;
   clearTimeout(S.t); clearTimeout(S.ocioso); clearInterval(S.relogio); cancelAnimationFrame(S.raf); clearTimeout(S.satT);
-  if (S.lf) { try { S.lf.m.stop(); S.lf.m.remove(); } catch (e) {} }
+  clearTimeout(S.terT); [S.lf, S.lt].forEach(F => { if (F) { try { F.m.stop(); F.m.remove(); } catch (e) {} } });
   document.removeEventListener('keydown', apTecla, true); document.removeEventListener('fullscreenchange', apFsMudou);
   if (!semSair && document.fullscreenElement) document.exitFullscreen().catch(() => {});
   S.el.classList.add('sai'); setTimeout(() => S.el.remove(), 350);
@@ -6529,16 +6555,65 @@ function apSatAtivo(cod){
   apSatRotulos();
 }
 /* Mostra só os nomes que não se sobrepõem (prioridade: escola em destaque, depois as maiores) */
-function apSatRotulos(){
-  const S = apEstado; if (!S || !S.lf) return; const F = S.lf, m = F.m, z = m.getZoom(), ok = [];
+function apSatRotulos(){ if (apEstado && apEstado.lf) apRotulos(apEstado.lf, APX_ROT); }
+function apRotulos(F, nTop){
+  const m = F.m, z = m.getZoom(), ok = [];
   const ord = [...F.mk.values()].sort((a, b) => (b.e.codigo === F.ativo) - (a.e.codigo === F.ativo) || a.i - b.i);
-  ord.forEach(o => { const el = o.mk.getElement(); if (!el) return; const d = el.firstChild, cand = o.e.codigo === F.ativo || o.i < APX_ROT || z >= 15;
+  ord.forEach(o => { const el = o.mk.getElement(); if (!el) return; const d = el.firstChild, cand = o.e.codigo === F.ativo || o.i < nTop || z >= 15;
     let mostra = false;
     if (cand) { const at = o.e.codigo === F.ativo, p = m.latLngToContainerPoint([o.e.latitude, o.e.longitude]), w = Math.min(o.nome.length, at ? 52 : 46) * (at ? 10.4 : 7.4) + (at ? 70 : 44), h = at ? 34 : 22, r = [p.x - h, p.y - h, p.x + 22 + w, p.y + h];
       mostra = !ok.some(q => r[0] < q[2] && r[2] > q[0] && r[1] < q[3] && r[3] > q[1]); if (mostra) ok.push(r); }
     d.classList.toggle('esc', !mostra); });
 }
 function apSatParar(){ const S = apEstado; if (!S) return; clearTimeout(S.satT); if (S.lf) S.lf.m.stop(); }
+/* ---------- território em satélite: limites do município, máscara escura fora dele, contorno que se desenha e escolas geolocalizadas; dá para arrastar e aproximar ---------- */
+const apAneis = g => (g.type === 'Polygon' ? [g.coordinates] : g.coordinates).map(p => p.map(r => r.map(([lo, la]) => [la, lo])));
+async function apTerIniciar(){
+  const S = apEstado; if (!S) return; const el = S.el.querySelector('#apx-ter'); if (!el) return;
+  apTerParar();
+  try { await carregarLeaflet(); } catch (e) {}
+  if (apEstado !== S || S.R[S.i][0] !== 'territorio') return;
+  if (!(window.L && L.map)) { el.innerHTML = '<div class="apx-sat-erro"><i class="fa-solid fa-satellite"></i>Vista de satélite indisponível sem internet.</div>'; return; }
+  const A = S.A, D = S.D, alvo = A.tipo === 'mun' ? [A.m] : A.ms;
+  if (!S.lt) {
+    const m = L.map(el, { zoomControl:false, keyboard:false, zoomSnap:0, zoomDelta:.5, wheelPxPerZoomLevel:100, minZoom:4.5, maxZoom:18.5, inertia:true });
+    m.attributionControl.setPrefix(false); L.control.zoom({ position:'bottomright' }).addTo(m);
+    L.tileLayer(ESRI('World_Imagery'), { maxZoom:19, maxNativeZoom:18, attribution:'Imagens de satélite: Esri, Maxar, Earthstar Geographics · Limites: IBGE' }).addTo(m);
+    L.tileLayer(ESRI('Reference/World_Boundaries_and_Places'), { maxZoom:19, maxNativeZoom:18, opacity:.55 }).addTo(m);
+    D.muns.forEach(x => { if (!alvo.includes(x)) L.polygon(apAneis(x.geo), { color:'#e2e8f0', weight:.8, opacity:.35, fill:false, interactive:false, className:'apx-viz' }).addTo(m); });
+    const buracos = alvo.flatMap(x => apAneis(x.geo).map(p => p[0]));
+    L.polygon([[[-60, -120], [-60, 0], [30, 0], [30, -120]], ...buracos], { stroke:false, fillColor:'#020617', fillOpacity:.6, interactive:false, className:'apx-mask' }).addTo(m);
+    alvo.forEach(x => { const an = apAneis(x.geo);
+      L.polygon(an, { color:A.cor, weight:12, opacity:.5, fill:false, interactive:false, className:'apx-lim-g' }).addTo(m);
+      const lim = L.polygon(an, { color:'#ffffff', weight:3, fill:true, fillColor:A.cor, fillOpacity:.08, interactive:false, className:'apx-lim' }).addTo(m);
+      const pe = lim.getElement(); if (pe) pe.setAttribute('pathLength', '100'); });
+    if (A.tipo === 'dre') alvo.forEach(x => { const b = L.latLngBounds(apAneis(x.geo).flat(2)); L.marker(b.getCenter(), { interactive:false, keyboard:false, icon:L.divIcon({ className:'apx-mlab-w', iconSize:[0, 0], html:`<span class="apx-mlab">${esc(x.nome)}</span>` }) }).addTo(m); });
+    const sede = A.dre && D.X.sedes.get(A.dre);
+    if (sede) L.marker(sede, { interactive:false, keyboard:false, zIndexOffset:3000, icon:L.divIcon({ className:'apx-sede-w', iconSize:[0, 0], html:'<span class="apx-sede-m"><svg viewBox="-11 -11 22 22" width="18" height="18"><path d="M0,-10L2.9,-3.1L10,-3.1L4.3,1.2L6.5,8.1L0,3.8L-6.5,8.1L-4.3,1.2L-10,-3.1L-2.9,-3.1Z" fill="#fff"/></svg></span>' }) }).addTo(m);
+    const es = [...A.es].filter(e => e.latitude && e.longitude).sort((a, b) => num(b.alunos) - num(a.alunos)), mk = new Map();
+    es.forEach((e, i) => { const g = grupoTipo(e.tipo), cor = CORES_TIPO[g] || '#2563eb';
+      const icon = L.divIcon({ className:'apx-mk-w', iconSize:[0, 0], html:`<div class="apx-mk top" style="--i:${Math.min(i, 40)};--c:${cor}"><span class="p">${iconeTipoSVG(g, cor, 16)}</span><span class="n"><b>${esc(apNomeCurto(e.nome))}</b><small>${num(e.alunos) ? fmtN(e.alunos) + ' alunos · ' : ''}${esc(g)}${e.localidade === 'RURAL' ? ' · rural' : ''}</small></span></div>` });
+      const mm = L.marker([e.latitude, e.longitude], { icon, keyboard:false, riseOnHover:true }).addTo(m);
+      mm.on('click', () => { const F = S.lt; F.livre = true; F.ativo = F.ativo === e.codigo ? '' : e.codigo; mk.forEach((o, k) => { const x = o.mk.getElement(); if (x) x.firstChild.classList.toggle('ativo', k === F.ativo); }); if (F.ativo) m.flyTo([e.latitude, e.longitude], Math.max(m.getZoom(), 16), { duration:1.6 }); apRotulos(F, 5); });
+      mk.set(e.codigo, { e, i, nome:apNomeCurto(e.nome), mk:mm }); });
+    const b = L.latLngBounds(buracos.flat()); es.forEach(e => b.extend([e.latitude, e.longitude]));
+    S.lt = { m, mk, b, ativo:'', livre:false };
+    m.on('zoomend moveend', () => apRotulos(S.lt, 5));
+    ['mousedown', 'wheel', 'touchstart'].forEach(ev => el.addEventListener(ev, () => { if (S.lt) { S.lt.livre = true; clearTimeout(S.terT); } }, { passive:true }));
+  }
+  const F = S.lt, m = F.m, W = el.clientWidth || innerWidth; m.invalidateSize(); F.livre = false;
+  const card = S.el.querySelector('.apx-s.on .apx-ter-c'), esq = card ? card.getBoundingClientRect().right + 40 : Math.min(520, W * .36);
+  const pad = { paddingTopLeft:[esq, 100], paddingBottomRight:[70, 120] };
+  el.classList.remove('desenha', 'pins', 'vivo');
+  m.fitBounds(L.latLngBounds([[-18.1, -61.7], [-7.3, -50.2]]), { animate:false, paddingTopLeft:[esq * .6, 60] });
+  S.terT = setTimeout(() => { if (apEstado !== S) return; m.flyToBounds(F.b, Object.assign({ duration:3.4 }, pad));
+    S.terT = setTimeout(() => { el.classList.add('desenha');
+      S.terT = setTimeout(() => { el.classList.add('pins');
+        S.terT = setTimeout(() => { el.classList.add('vivo'); apRotulos(F, 5);
+          S.terT = setTimeout(() => { if (apEstado === S && !F.livre && S.R[S.i][0] === 'territorio') m.flyTo(F.b.getCenter(), m.getZoom() + .7, { duration:24, easeLinearity:1 }); }, 2500); }, 1400); }, 1700); }, 3500); }, 500);
+}
+function apTerParar(){ const S = apEstado; if (!S) return; clearTimeout(S.terT); if (S.lt) S.lt.m.stop(); }
+
 function abrirModoTV(){
   if (vistaAtual !== 'mapa') { const v = vistaAtual; vistaAtual = 'mapa'; calcularLayout(); vistaAtual = v; } else calcularLayout();
   tv.pausado = false; tv.voltas = 0; tv.det = null;
