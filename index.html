@@ -1657,13 +1657,90 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background
 .apx-ob-g .ob{display:inline-flex;gap:6px;align-items:center;font-size:12px;font-weight:700;color:#fdba74}.apx-ob-g .et{font-size:12.5px;font-weight:600;color:color-mix(in srgb,var(--c) 60%,#fff);display:inline-flex;gap:6px;align-items:center}
 @media (max-width:1100px){.apx-ob-n{grid-template-columns:1fr 1fr}}
 .ob-br .barra-l{grid-template-columns:minmax(0,170px) 1fr 150px}.ob-br .barra-l b{white-space:nowrap}.ob-br .barra-l b small{margin-left:6px;font-weight:500;color:var(--mut);font-size:11px}
+/* ===== apresentação de obras (v2) ===== */
+.apx-ob2-h{display:flex;align-items:flex-end;justify-content:space-between;gap:30px;flex-wrap:wrap;margin-bottom:14px}
+.apx-ob2-h h2{margin:6px 0 0;max-width:720px}
+.apx-ob2-tot{text-align:right;display:flex;flex-direction:column;align-items:flex-end}
+.apx-ob2-tot small{color:#bfdbfe;font-size:clamp(13px,1.05vw,17px)}
+.apx-ob2-tot b{display:flex;align-items:baseline;gap:8px;font-size:clamp(54px,6vw,104px);font-weight:900;letter-spacing:-.05em;line-height:1;background:linear-gradient(90deg,#fde68a,#fb923c);-webkit-background-clip:text;background-clip:text;color:transparent}
+.apx-ob2-tot b .pre,.apx-ob2-tot b .suf{font-size:.42em;letter-spacing:-.02em}
+.apx-ob2-tot em{font-style:normal;display:flex;gap:16px;margin-top:8px;color:#e2e8f0;font-size:clamp(13px,1.05vw,16px)}.apx-ob2-tot em i{color:#fdba74;margin-right:6px}
+.apx-ob2-t{display:grid;grid-template-columns:repeat(auto-fit,minmax(clamp(150px,13vw,220px),1fr));gap:12px}
+.apx-ob2-t>div{position:relative;padding:12px 14px 14px;border-radius:20px;background:linear-gradient(180deg,rgba(30,41,59,.75),rgba(11,18,34,.75));border:1px solid rgba(255,255,255,.12);display:flex;flex-direction:column;align-items:center;text-align:center;overflow:hidden}
+.apx-ob2-t>div::before{content:'';position:absolute;inset:auto -20% -60% -20%;height:80%;background:radial-gradient(closest-side,rgba(251,146,60,.18),transparent)}
+.apx-ob2-t .ic{width:clamp(84px,7.6vw,128px);height:clamp(84px,7.6vw,128px)}
+.apx-ob2-t b .apx-cont{font-size:clamp(30px,2.8vw,48px);font-weight:900;letter-spacing:-.04em;line-height:1}
+.apx-ob2-t span{font-weight:700;font-size:clamp(13px,1.05vw,16px);margin-top:2px}.apx-ob2-t small{color:#93c5fd;font-size:12px;margin-top:3px}
+.oa{width:100%;height:100%;overflow:visible}
+.oa *{transform-box:fill-box}
+.oa-cons .fl{transform-origin:center bottom;animation:oaAndar 5s cubic-bezier(.34,1.4,.64,1) infinite;animation-delay:calc(var(--d) * .45s)}
+@keyframes oaAndar{0%{opacity:0;transform:translateY(-34px)}10%,80%{opacity:1;transform:none}92%,100%{opacity:0;transform:none}}
+.oa-cons .jib{transform-origin:14% 50%;animation:oaGrua 5s ease-in-out infinite}
+@keyframes oaGrua{0%,100%{rotate:-4deg}50%{rotate:5deg}}
+.oa-cons .hook{transform-origin:top;animation:oaGancho 2.5s ease-in-out infinite}@keyframes oaGancho{50%{scale:1 1.5}}
+.oa-ref .tinta{transform-origin:top;animation:oaPinta 4s ease-in-out infinite;opacity:.85}
+@keyframes oaPinta{0%{scale:1 0}45%,75%{scale:1 1}100%{scale:1 1;opacity:0}}
+.oa-ref .rolo{animation:oaRolo 4s ease-in-out infinite}@keyframes oaRolo{0%{translate:0 0}45%{translate:0 66px}75%{translate:0 66px}100%{translate:0 0}}
+.oa-ref .mais{transform-origin:center;animation:oaPop 2s ease-in-out infinite}@keyframes oaPop{0%,100%{scale:.8}50%{scale:1.15}}
+.oa-qua .bola{animation:oaBola 2.2s cubic-bezier(.45,0,.55,1) infinite}
+@keyframes oaBola{0%{transform:translate(40px,95px)}22%{transform:translate(52px,40px) rotate(120deg)}45%{transform:translate(86px,30px) rotate(240deg)}55%{transform:translate(86px,48px) rotate(300deg)}78%{transform:translate(62px,95px) rotate(400deg)}100%{transform:translate(40px,95px) rotate(480deg)}}
+.oa-qua .sombra{transform-origin:center;animation:oaSombra 2.2s ease-in-out infinite}@keyframes oaSombra{0%,100%{scale:1;opacity:.5}30%,60%{scale:.4;opacity:.15}}
+.oa-qua .rede{transform-origin:top;animation:oaRede 2.2s ease-in-out infinite}@keyframes oaRede{45%,50%{scale:1 1}55%{scale:1 1.3}65%{scale:1 1}}
+.oa-ele .raio{transform-origin:center;animation:oaRaio 1.6s steps(1) infinite}@keyframes oaRaio{0%,100%{opacity:1}40%{opacity:.25}50%{opacity:1}60%{opacity:.4}}
+.oa-ele .faisca{transform-origin:center;animation:oaFaisca 1.6s ease-out infinite;animation-delay:calc(var(--d) * .4s)}@keyframes oaFaisca{0%{scale:0;opacity:0}20%{scale:1.3;opacity:1}60%,100%{scale:0;opacity:0}}
+.oa-ele .fio{animation:oaFio 3s ease-in-out infinite}@keyframes oaFio{50%{translate:0 2px}}
+.oa-por .arco{stroke-dasharray:100;stroke-dashoffset:100;animation:oaArco 4s ease-in-out infinite}@keyframes oaArco{0%{stroke-dashoffset:100}45%,85%{stroke-dashoffset:0}100%{stroke-dashoffset:0;opacity:0}}
+.oa-por .placa{opacity:0;animation:oaPlaca 4s ease infinite}@keyframes oaPlaca{0%,40%{opacity:0;translate:0 -8px}50%,85%{opacity:1;translate:0 0}100%{opacity:0}}
+.oa-por .pano{transform-origin:left center;animation:oaPano 1s ease-in-out infinite alternate}@keyframes oaPano{to{scale:.8 1.1}}
+.oa-man .eng{transform-origin:center;animation:oaGira 6s linear infinite}@keyframes oaGira{to{rotate:360deg}}
+.oa-man .chave{transform-origin:20% 80%;animation:oaChave 1.4s ease-in-out infinite}@keyframes oaChave{50%{rotate:-25deg}}
+.apx-ob2-p{position:relative;display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:20px;padding:44px 18px 16px;border-radius:22px;background:rgba(11,18,34,.6);border:1px solid rgba(255,255,255,.12)}
+.apx-ob2-p .tit{position:absolute;left:20px;top:14px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#93c5fd;font-weight:700}
+.apx-ob2-p .trilho{position:absolute;left:12.5%;right:12.5%;top:76px;height:6px;border-radius:9px;background:linear-gradient(90deg,#3b82f6,#65a30d,#a855f7,#22c55e);opacity:.55;overflow:hidden}
+.apx-ob2-p .trilho i{position:absolute;top:-1px;width:8px;height:8px;border-radius:50%;background:#fff;box-shadow:0 0 10px #fff;animation:oaTrilho 4s linear infinite}
+.apx-ob2-p .trilho i:nth-child(2){animation-delay:-.8s}.apx-ob2-p .trilho i:nth-child(3){animation-delay:-1.6s}.apx-ob2-p .trilho i:nth-child(4){animation-delay:-2.4s}.apx-ob2-p .trilho i:nth-child(5){animation-delay:-3.2s}
+@keyframes oaTrilho{from{left:-2%}to{left:100%}}
+.apx-ob2-p .et{position:relative;display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px}
+.apx-ob2-p .bo{width:62px;height:62px;border-radius:50%;display:grid;place-items:center;background:var(--c);color:#fff;font-size:24px;box-shadow:0 0 0 6px color-mix(in srgb,var(--c) 25%,transparent),0 10px 24px -8px var(--c);animation:oaBo 2.4s ease-in-out infinite;animation-delay:calc(var(--i) * .6s)}
+@keyframes oaBo{0%,100%{scale:1}15%{scale:1.12}30%{scale:1}}
+.apx-ob2-p .apx-cont{font-size:clamp(28px,2.6vw,44px);font-weight:900;letter-spacing:-.04em;line-height:1}.apx-ob2-p small{color:#bfdbfe;font-size:13px}
+.apx-ob3-g{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:18px;align-items:start}.apx-ob3-g.um{grid-template-columns:minmax(0,900px)}
+.apx-ob3-fe,.apx-ob3-pr{padding:18px 20px;border-radius:24px;background:rgba(11,18,34,.62);border:1px solid rgba(255,255,255,.12)}
+.apx-ob3-fe .cab,.apx-ob3-pr .cab{display:flex;align-items:center;gap:14px;margin-bottom:12px}
+.apx-ob3-fe .cab span,.apx-ob3-pr .cab span{display:block;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#93c5fd;font-weight:700}.apx-ob3-fe .cab b,.apx-ob3-pr .cab b{font-size:clamp(15px,1.2vw,19px)}
+.apx-ob3-pr .cab>i{font-size:30px;color:#fdba74;width:60px;text-align:center;animation:oaChave 1.4s ease-in-out infinite;transform-origin:30% 80%}
+.oa-fita{width:clamp(130px,11vw,190px);flex:none;overflow:visible}
+.oa-fita *{transform-box:fill-box}
+.oa-fita .fe{transform-origin:left center;animation:oaFe 4s ease-in-out infinite}.oa-fita .fd{transform-origin:right center;animation:oaFd 4s ease-in-out infinite}
+@keyframes oaFe{0%,40%{rotate:0deg}55%,90%{rotate:14deg;translate:-6px 0}100%{rotate:0deg}}@keyframes oaFd{0%,40%{rotate:0deg}55%,90%{rotate:-14deg;translate:6px 0}100%{rotate:0deg}}
+.oa-fita .laco{animation:oaLaco 4s ease-in infinite}@keyframes oaLaco{0%,42%{opacity:1;translate:0 0}70%,90%{opacity:0;translate:0 40px}100%{opacity:1;translate:0 0}}
+.oa-fita .tes{animation:oaTes 4s ease-in-out infinite}@keyframes oaTes{0%{translate:40px -30px}30%{translate:0 0}45%{translate:0 0}60%,100%{translate:40px -30px;opacity:0}}
+.oa-fita .la{transform-origin:0 0;animation:oaLa 4s ease-in-out infinite}.oa-fita .lb{transform-origin:0 0;animation:oaLb 4s ease-in-out infinite}
+@keyframes oaLa{0%,25%{rotate:-14deg}40%{rotate:2deg}100%{rotate:2deg}}@keyframes oaLb{0%,25%{rotate:14deg}40%{rotate:-2deg}100%{rotate:-2deg}}
+.oa-fita .cf{opacity:0;transform-origin:center;animation:oaCf 4s ease-out infinite}@keyframes oaCf{0%,42%{opacity:0;scale:0}55%{opacity:1;scale:1.4}85%,100%{opacity:0;scale:.6;translate:0 14px}}
+.apx-ob3-fe article{display:grid;grid-template-columns:62px 1fr auto;gap:14px;align-items:center;padding:10px 12px;border-radius:16px;background:rgba(255,255,255,.05);margin-top:8px}
+.apx-ob3-fe .mini{width:62px;height:62px;border-radius:16px;background:rgba(255,255,255,.06);padding:4px;box-sizing:border-box}
+.apx-ob3-fe .tx,.apx-ob3-pr .tx{min-width:0;display:flex;flex-direction:column}.apx-ob3-fe .tx b,.apx-ob3-pr .tx b{font-size:clamp(14px,1.15vw,18px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.apx-ob3-fe .tx small,.apx-ob3-pr .tx small{color:#93c5fd;font-size:12.5px}
+.apx-ob3-fe .et{font-size:13px;font-weight:700;color:color-mix(in srgb,var(--c) 55%,#fff);text-align:right;white-space:nowrap}.apx-ob3-fe .et i{margin-right:6px}
+.apx-ob3-pr .lin{position:relative;padding-left:76px}
+.apx-ob3-pr .lin::before{content:'';position:absolute;left:62px;top:8px;bottom:8px;width:3px;border-radius:3px;background:linear-gradient(#3b82f6,#22c55e)}
+.apx-ob3-pr .pt{position:relative;margin-bottom:10px}
+.apx-ob3-pr .dt{position:absolute;left:-80px;top:15px;width:54px;text-align:right;font-weight:800;font-size:14px;color:#fde68a}
+.apx-ob3-pr .no{position:absolute;left:-20px;top:17px;width:13px;height:13px;border-radius:50%;background:#0b1222;border:3px solid #60a5fa;box-shadow:0 0 0 4px rgba(96,165,250,.2)}
+.apx-ob3-pr .cd{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:center;padding:8px 12px;border-radius:14px;background:rgba(255,255,255,.05)}
+.apx-ob3-pr .pg{position:relative;width:48px;height:48px;display:grid;place-items:center}.apx-ob3-pr .pg svg{position:absolute;inset:0;transform:rotate(-90deg)}.apx-ob3-pr .pg b{font-size:12px}
+.apx-ob3-pr .pg .f{fill:none;stroke:rgba(255,255,255,.12);stroke-width:3.6}.apx-ob3-pr .pg .v{fill:none;stroke-width:3.6;stroke-linecap:round;stroke-dasharray:0 100;transition:stroke-dasharray 1.6s cubic-bezier(.16,1,.3,1) 1.2s}
+.apx-s.on .apx-ob3-pr .pg .v{stroke-dasharray:var(--p) 100}
+@media (max-width:1100px){.apx-ob3-g,.apx-ob2-p{grid-template-columns:1fr 1fr}.apx-ob2-tot{text-align:left;align-items:flex-start}}
+@media (prefers-reduced-motion:reduce){.oa *,.oa-fita *,.apx-ob2-p *{animation:none!important}}
+@media (max-width:1100px){.apx-ob2-t{grid-template-columns:repeat(3,1fr)!important}}
 </style>
 </head>
 <body>
 <!-- Vigia de inicialização: se o arquivo.js não carregar ou falhar, mostra o motivo em vez de uma tela vazia -->
 <script>
-window.GABORG_VERSAO_HTML = '1.38.0'; window.GABORG_ERROS = [];
-window.GABORG_NOVIDADES = "Nova seção Obras e inaugurações: importa a planilha de contratos e convênios, liga cada obra à escola, mostra painel, lista com filtros, mapa e o caminho até a inauguração, com ficha editável. A Apresentação ganhou a tela Obras e investimentos (município, DRE e estado).";
+window.GABORG_VERSAO_HTML = '1.39.0'; window.GABORG_ERROS = [];
+window.GABORG_NOVIDADES = "Apresentação de obras renovada: ícones animados para construção, reforma, quadra, energia, pórtico e manutenção, investimento com contagem, trilha do canteiro à inauguração e nova tela Obras em destaque, com corte de fita e linha do tempo das próximas entregas.";
 window.addEventListener('error', function (e) {
   var alvo = e.target || {};
   if (alvo.tagName === 'SCRIPT') window.GABORG_ERROS.push('Não foi possível baixar o arquivo ' + (alvo.getAttribute('src') || '') + '.');
@@ -2033,6 +2110,6 @@ window.addEventListener('load', function () { setTimeout(function () { window.GA
 
 <div id="toast"><i class="fa-solid fa-check"></i><span></span></div>
 
-<script src="arquivo.js?v=1.38.0" onerror="window.GABORG_ERROS.push('O arquivo arquivo.js não foi encontrado no servidor (erro 404).');GABORG_DIAGNOSTICO()"></script>
+<script src="arquivo.js?v=1.39.0" onerror="window.GABORG_ERROS.push('O arquivo arquivo.js não foi encontrado no servidor (erro 404).');GABORG_DIAGNOSTICO()"></script>
 </body>
 </html>

@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.38.0';
+const VERSAO = '1.39.0';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -6290,17 +6290,17 @@ function apMapaSVG(D, A, box, estatico){
   return `<svg class="apx-svg" viewBox="${vb}" preserveAspectRatio="xMidYMid meet" style="--c:${A.cor}"><g class="apx-mun">${paths}</g>${teia}${liga}<g class="apx-pins">${pins}</g>${rot}${sedeG}${sedesEst}</svg>`;
 }
 /* ---------- conteúdo das telas ---------- */
-const apCont = (v, suf) => `<b class="apx-cont" data-v="${Math.round(num(v))}" data-suf="${suf || ''}">0${suf || ''}</b>`;
+const apCont = (v, suf, dec) => `<b class="apx-cont" data-v="${Math.round(num(v) * 10 ** (dec || 0))}" data-dec="${dec || 0}" data-suf="${suf || ''}">0${suf || ''}</b>`;
 function apTipos(es){ const c = {}; es.forEach(e => { const g = grupoTipo(e.tipo); c[g] = (c[g] || 0) + 1; }); return Object.entries(c).sort((a, b) => b[1] - a[1]); }
 function apRoteiro(D, A){
   if (A.tipo === 'estado') { const R = [['capa', 'Boas-vindas'], ['territorio', 'Mato Grosso no mapa'], ['numeros', 'A rede em números'], ['dres', 'As Diretorias Regionais'], ['distancias', 'Distâncias'], ['orgao', 'O órgão central']];
     if (D.sv.length || apProf(A).tem) R.push(['pessoas', 'Pessoas']);
-    if (apObrasDe(D, A).length) R.push(['obras', 'Obras e investimentos']);
+    if (apObrasDe(D, A).length) R.push(['obras', 'Obras e investimentos']); if (apTemObrasDest(D, A)) R.push(['obrasdest', 'Obras em destaque']);
     R.push(['perfil', 'Perfil da rede'], ['satelite', 'Maiores escolas no satélite']); if (apNoticiasDe(A).length) R.push(['noticias', 'Boas notícias']); R.push(['fim', 'Encerramento']); return R; }
   const R = [['capa', 'Boas-vindas'], ['territorio', A.tipo === 'mun' ? 'O município no mapa' : 'A região no mapa'], ['numeros', 'A rede em números']];
   if (A.tipo === 'dre') R.push(['municipios', 'Municípios atendidos']);
   if (A.es.length) R.push(['perfil', 'Perfil da rede'], ['satelite', A.tipo === 'mun' ? 'Nossas escolas no satélite' : 'Maiores escolas no satélite']);
-  if (apObrasDe(D, A).length) R.push(['obras', 'Obras e investimentos']);
+  if (apObrasDe(D, A).length) R.push(['obras', 'Obras e investimentos']); if (apTemObrasDest(D, A)) R.push(['obrasdest', 'Obras em destaque']);
   if (A.tipo === 'mun' && A.dre) R.push(['dre', 'A DRE que atende']);
   if (apNoticiasDe(A).length) R.push(['noticias', 'Boas notícias']);
   R.push(['fim', 'Encerramento']); return R;
@@ -6337,6 +6337,7 @@ function apTela(D, A, k){
           <p><span><i style="background:#38bdf8"></i>Urbanas <b>${urb.length}</b></span><span><i style="background:#a3e635"></i>Rurais <b>${rur}</b></span></p></div></div></div>`; }
   if (k === 'satelite') return apSatHTML(A);
   if (k === 'obras') return apTelaObras(D, A);
+  if (k === 'obrasdest') return apTelaObrasDest(D, A);
   if (k === 'noticias') return apTelaNoticias(A);
   if (k === 'dre') return apTelaDre(D, A);
   return apTelaFim(D, A);
@@ -6422,10 +6423,10 @@ function apZoom(b, ms){
 }
 function apContar(tela, reduz){
   if (!tela) return; tela.querySelectorAll('.apx-cont').forEach((el, j) => {
-    const v = +el.dataset.v, suf = el.dataset.suf || '', fim = () => { el.textContent = v.toLocaleString('pt-BR') + suf; };
+    const v = +el.dataset.v, suf = el.dataset.suf || '', dc = +el.dataset.dec || 0, f = x => (x / 10 ** dc).toLocaleString('pt-BR', { minimumFractionDigits:dc, maximumFractionDigits:dc }), fim = () => { el.textContent = f(v) + suf; };
     if (reduz || !v) return fim(); const ms = 1400, t0 = performance.now() + 250 + j * 90;
     el.textContent = '0' + suf;
-    const step = now => { if (!apEstado) return; const t = Math.max(0, Math.min(1, (now - t0) / ms)), e = 1 - Math.pow(1 - t, 4); el.textContent = Math.round(v * e).toLocaleString('pt-BR') + suf; if (t < 1) requestAnimationFrame(step); };
+    const step = now => { if (!apEstado) return; const t = Math.max(0, Math.min(1, (now - t0) / ms)), e = 1 - Math.pow(1 - t, 4); el.textContent = f(Math.round(v * e)) + suf; if (t < 1) requestAnimationFrame(step); };
     requestAnimationFrame(step);
   });
 }
@@ -6947,7 +6948,7 @@ const OB_OBJ = [[/QUADRA/, 'Quadra poliesportiva', 'fa-basketball'], [/CEI|CONST
 const obObj = o => { const s = String(o.objeto || '').toUpperCase(), r = OB_OBJ.find(([re]) => re.test(s)); return r ? r[1] : (o.objeto ? o.objeto.charAt(0) + o.objeto.slice(1).toLowerCase() : 'Outro'); };
 const obObjIc = o => { const s = String(o.objeto || '').toUpperCase(), r = OB_OBJ.find(([re]) => re.test(s)); return r ? r[2] : 'fa-helmet-safety'; };
 const obLista = () => (DB.obras || []);
-const obNome = o => apNomeCurto(String(o.unidade || '—').replace(/^\s*COL[EÉ]GIO ESTADUAL INTEGRADO\s*-?\s*/i, 'CEI ').replace(/^CEI\s*-?\s*CEI\s*/i, 'CEI ').replace(/\s+-\s+/g, ' – ')).replace(/\bCei\b/g, 'CEI');
+const obNome = o => apNomeCurto(String(o.unidade || '—').replace(/^\s*COL[EÉ]GIO ESTADUAL INTEGRADO\s*-?\s*/i, 'CEI ').replace(/^CEI\s*-?\s*CEI\s*/i, 'CEI ').replace(/\s+-\s+/g, ' – ')).replace(/\bCei\b/g, 'CEI').replace(/^E\.?\s?E\.?\s?I\.?\s+/i, 'EEI ').replace(/^E\.\s?E\.?\s*/i, 'EE ').replace(/^E\.\s?M\.?\s*/i, 'EM ').replace(/^Emi\s/, 'EMI ');
 const obEscola = o => o.escolaCodigo ? escolasLista().find(e => e.codigo === o.escolaCodigo) || null : null;
 const obDre = o => { const e = obEscola(o); if (e) return e.dre; if (o.dre) { const d = distanciasMT().dres.find(x => norm(x) === norm(o.dre) || norm(nomeDRE(x)) === norm(String(o.dre).replace(/^DRE\s+/i, ''))); if (d) return d; } const q = dreDosMunicipios().get(chaveMun(o.municipio)); return q ? Object.entries(q).sort((a, b) => b[1] - a[1])[0][0] : ''; };
 const obValor = o => num(o.valor), obExec = o => Math.max(0, Math.min(100, num(o.execFisica)));
@@ -7150,20 +7151,67 @@ function apObrasDe(D, A){
   if (A.tipo === 'mun') return L.filter(o => chaveMun(o.municipio) === A.m.k);
   return L.filter(o => obDre(o) === A.d);
 }
+/* ---------- apresentação de obras: ícones animados (ilustração própria) ---------- */
+const OB_ANIM = {
+  'Construção nova':`<svg viewBox="0 0 120 120" class="oa oa-cons"><rect x="6" y="104" width="108" height="5" rx="2.5" fill="#475569"/>
+    ${[0, 1, 2, 3].map(i => `<g class="fl" style="--d:${i}"><rect x="52" y="${86 - i * 17}" width="46" height="16" rx="2" fill="${['#2563eb', '#3b82f6', '#60a5fa', '#93c5fd'][i]}"/><rect x="58" y="${90 - i * 17}" width="7" height="7" rx="1" fill="#e0f2fe"/><rect x="72" y="${90 - i * 17}" width="7" height="7" rx="1" fill="#e0f2fe"/><rect x="86" y="${90 - i * 17}" width="7" height="7" rx="1" fill="#e0f2fe"/></g>`).join('')}
+    <rect x="22" y="14" width="5" height="90" fill="#f59e0b"/><path d="M22,104L27,104M22,90L27,80M22,76L27,66M22,62L27,52M22,48L27,38M22,34L27,24" stroke="#b45309" stroke-width="1.5"/>
+    <g class="jib"><rect x="10" y="12" width="96" height="5" fill="#f59e0b"/><rect x="10" y="17" width="12" height="7" fill="#78350f"/><g class="hook"><path d="M84,17V40" stroke="#334155" stroke-width="1.5"/><rect x="78" y="40" width="12" height="7" rx="1.5" fill="#fbbf24"/></g></g></svg>`,
+  'Reforma e/ou ampliação':`<svg viewBox="0 0 120 120" class="oa oa-ref"><rect x="6" y="104" width="108" height="5" rx="2.5" fill="#475569"/>
+    <g>${[0, 1, 2, 3, 4, 5].map(r => [0, 1, 2, 3].map(c => `<rect x="${12 + c * 22 + (r % 2 ? 11 : 0)}" y="${36 + r * 11}" width="20" height="9" rx="1" fill="#b45309" opacity=".85"/>`).join('')).join('')}</g>
+    <rect class="tinta" x="12" y="36" width="88" height="68" fill="#22d3ee"/>
+    <g class="rolo"><rect x="30" y="20" width="52" height="12" rx="6" fill="#f8fafc"/><rect x="30" y="20" width="52" height="12" rx="6" fill="#22d3ee" opacity=".6"/><path d="M82,26H92V8H56V20" fill="none" stroke="#e2e8f0" stroke-width="4"/><rect x="52" y="0" width="8" height="10" rx="2" fill="#f97316"/></g>
+    <g class="mais"><circle cx="104" cy="28" r="10" fill="#22c55e"/><path d="M104,22V34M98,28H110" stroke="#fff" stroke-width="3" stroke-linecap="round"/></g></svg>`,
+  'Quadra poliesportiva':`<svg viewBox="0 0 120 120" class="oa oa-qua"><path d="M8,108L112,108L100,86L20,86Z" fill="#16a34a"/><path d="M60,86V108M14,97H106" stroke="#bbf7d0" stroke-width="1.5"/><ellipse cx="60" cy="97" rx="10" ry="4" fill="none" stroke="#bbf7d0" stroke-width="1.5"/>
+    <rect x="96" y="22" width="4" height="66" fill="#94a3b8"/><rect x="74" y="16" width="30" height="22" rx="2" fill="#f8fafc" stroke="#cbd5e1"/><rect x="84" y="24" width="12" height="9" fill="none" stroke="#ef4444" stroke-width="1.5"/>
+    <ellipse cx="86" cy="38" rx="9" ry="2" fill="none" stroke="#f97316" stroke-width="2.5"/><path class="rede" d="M78,39L81,50L86,52L91,50L94,39M82,39L86,51M90,39L86,51" fill="none" stroke="#e2e8f0" stroke-width="1"/>
+    <g class="bola"><circle cx="0" cy="0" r="9" fill="#f97316"/><path d="M-9,0H9M0,-9V9M-6,-6Q0,0-6,6M6,-6Q0,0 6,6" fill="none" stroke="#7c2d12" stroke-width="1.2"/></g><ellipse class="sombra" cx="40" cy="104" rx="9" ry="2.5" fill="#052e16" opacity=".5"/></svg>`,
+  'Posto transformador':`<svg viewBox="0 0 120 120" class="oa oa-ele"><rect x="6" y="104" width="108" height="5" rx="2.5" fill="#475569"/><rect x="56" y="10" width="8" height="94" fill="#94a3b8"/><rect x="34" y="18" width="52" height="5" rx="2" fill="#64748b"/>
+    <path d="M38,18V12M60,18V12M82,18V12" stroke="#cbd5e1" stroke-width="3"/><path class="fio" d="M0,14Q19,22 38,12Q49,20 60,12Q71,20 82,12Q101,22 120,14" fill="none" stroke="#1e293b" stroke-width="1.5"/>
+    <rect x="40" y="50" width="40" height="34" rx="4" fill="#475569"/><path d="M44,56H76M44,62H76M44,68H76" stroke="#334155" stroke-width="2"/><circle cx="48" cy="48" r="3" fill="#cbd5e1"/><circle cx="72" cy="48" r="3" fill="#cbd5e1"/>
+    <path class="raio" d="M66,34L52,64H62L56,88L76,54H65L72,34Z" fill="#facc15" stroke="#fef08a" stroke-width="1"/>
+    ${[[24, 56], [96, 50], [30, 80], [92, 82]].map(([x, y], i) => `<path class="faisca" style="--d:${i}" d="M${x},${y - 6}L${x + 2},${y - 2}L${x + 6},${y}L${x + 2},${y + 2}L${x},${y + 6}L${x - 2},${y + 2}L${x - 6},${y}L${x - 2},${y - 2}Z" fill="#fde047"/>`).join('')}</svg>`,
+  'Pórtico':`<svg viewBox="0 0 120 120" class="oa oa-por"><rect x="6" y="104" width="108" height="5" rx="2.5" fill="#475569"/>
+    <path class="arco" d="M20,104V44H100V104" fill="none" stroke="#60a5fa" stroke-width="10" stroke-linejoin="round" pathLength="100"/><rect class="placa" x="30" y="28" width="60" height="20" rx="4" fill="#1d4ed8" stroke="#bfdbfe" stroke-width="1.5"/><text class="placa" x="60" y="42" text-anchor="middle" font-size="11" font-weight="900" fill="#fff" font-family="Inter,system-ui,sans-serif">ESCOLA</text>
+    <g class="bandeira"><path d="M98,28V6" stroke="#cbd5e1" stroke-width="2"/><path class="pano" d="M98,7Q106,4 114,8Q106,12 98,15Z" fill="#facc15"/></g></svg>`,
+  'Manutenção':`<svg viewBox="0 0 120 120" class="oa oa-man"><g class="eng"><path d="M60,26l5,-10h10l5,10l10,3l9,-6l7,7l-6,9l3,10l10,5v10l-10,5l-3,10l6,9l-7,7l-9,-6l-10,3l-5,10h-10l-5,-10l-10,-3l-9,6l-7,-7l6,-9l-3,-10l-10,-5v-10l10,-5l3,-10l-6,-9l7,-7l9,6z" transform="translate(-10 0) scale(.95)" fill="#64748b"/><circle cx="60" cy="60" r="14" fill="#0b1222"/></g>
+    <g class="chave"><path d="M78,96L104,70a12,12 0 1 0 -8,-8L70,88Z" fill="#e2e8f0"/><circle cx="104" cy="62" r="5" fill="#0b1222"/></g></svg>`
+};
+OB_ANIM['Outro'] = OB_ANIM['Reforma e/ou ampliação'];
+/* cerimônia: fita sendo cortada */
+const OB_FITA = `<svg viewBox="0 0 200 90" class="oa-fita"><path d="M0,40Q50,52 100,40" class="fe" fill="none" stroke="#dc2626" stroke-width="9" stroke-linecap="round"/><path d="M100,40Q150,28 200,40" class="fd" fill="none" stroke="#dc2626" stroke-width="9" stroke-linecap="round"/>
+  <g class="laco" transform="translate(100 40)"><path d="M0,0L-18,-12L-18,12Z M0,0L18,-12L18,12Z" fill="#b91c1c"/><circle r="5" fill="#ef4444"/><path d="M-3,4L-10,26M3,4L10,26" stroke="#dc2626" stroke-width="5" stroke-linecap="round"/></g>
+  <g class="tes" transform="translate(100 40)"><g class="la"><path d="M0,0L34,-6L36,-2Z" fill="#e2e8f0"/><circle cx="-10" cy="-6" r="7" fill="none" stroke="#f59e0b" stroke-width="4"/></g><g class="lb"><path d="M0,0L34,6L36,2Z" fill="#cbd5e1"/><circle cx="-10" cy="6" r="7" fill="none" stroke="#f59e0b" stroke-width="4"/></g></g>
+  ${[[30, 14, '#facc15'], [170, 10, '#38bdf8'], [60, 76, '#22c55e'], [146, 72, '#f472b6'], [100, 6, '#a78bfa']].map(([x, y, c], i) => `<circle class="cf" style="--d:${i}" cx="${x}" cy="${y}" r="3.5" fill="${c}"/>`).join('')}</svg>`;
+const OB_ETAPA_IC = { 'Em obra':'fa-helmet-safety', 'Concluída':'fa-circle-check', 'Pronta':'fa-flag-checkered', 'Inaugurada':'fa-ribbon' };
+const apMoeda = v => v >= 1e9 ? [v / 1e9, ' bi', 1] : v >= 1e6 ? [v / 1e6, ' mi', 1] : [v / 1e3, ' mil', 0];
 function apTelaObras(D, A){
-  const L = apObrasDe(D, A), tot = L.reduce((t, o) => t + obValor(o), 0), cont = f => L.filter(f).length;
-  const destaque = [...L].sort((a, b) => (['Inaugurada', 'Agendada', 'Pronta para inaugurar'].includes(obEtapa(b)) - ['Inaugurada', 'Agendada', 'Pronta para inaugurar'].includes(obEtapa(a))) || obValor(b) - obValor(a)).slice(0, A.tipo === 'mun' ? 6 : 6);
-  const obj = {}; L.forEach(o => { const k = obObj(o); obj[k] = obj[k] || [0, 0, obObjIc(o)]; obj[k][0]++; obj[k][1] += obValor(o); });
-  const anel = o => { const p = obExec(o), c = OB_ST[obStatus(o)]; return `<svg viewBox="0 0 36 36" class="an"><circle cx="18" cy="18" r="15.9" class="f"/><circle cx="18" cy="18" r="15.9" class="v" style="stroke:${c};--p:${p.toFixed(1)}"/></svg><b>${Math.round(p)}%</b>`; };
-  return `<div class="apx-l apx-l-larga apx-obras"><span class="apx-k apx-in" style="--i:0"><i class="fa-solid fa-helmet-safety"></i> Obras e investimentos</span><h2 class="apx-in" style="--i:1">${A.tipo === 'mun' ? 'Investimentos nas escolas de ' + esc(A.nome) : A.tipo === 'estado' ? 'Obras nas escolas de Mato Grosso' : 'Obras nas escolas da região'}</h2>
-    <div class="apx-ob-n"><div class="apx-in" style="--i:2"><i class="fa-solid fa-sack-dollar"></i><b class="apx-rs">${fmtRc(tot)}</b><small>investidos em ${L.length} obra${L.length === 1 ? '' : 's'}</small></div>
-      <div class="apx-in" style="--i:3"><i class="fa-solid fa-circle-check"></i>${apCont(cont(o => obStatus(o) === 'Concluída'))}<small>concluídas</small></div>
-      <div class="apx-in" style="--i:4"><i class="fa-solid fa-person-digging"></i>${apCont(cont(o => obStatus(o) === 'Em execução'))}<small>em execução</small></div>
-      <div class="apx-in" style="--i:5"><i class="fa-solid fa-ribbon"></i>${apCont(cont(o => obEtapa(o) === 'Inaugurada'))}<small>inauguradas${cont(o => ['Pronta para inaugurar', 'Agendada'].includes(obEtapa(o))) ? ` · ${cont(o => ['Pronta para inaugurar', 'Agendada'].includes(obEtapa(o)))} a inaugurar` : ''}</small></div></div>
-    <div class="apx-ob-tipos apx-in" style="--i:6">${Object.entries(obj).sort((a, b) => b[1][1] - a[1][1]).map(([k, [n, v, ic]]) => `<span><i class="fa-solid ${ic}"></i>${esc(k)} <b>${n}</b></span>`).join('')}</div>
-    <div class="apx-ob-g">${destaque.map((o, i) => { const et = OB_ETAPAS.find(e => e[0] === obEtapa(o)) || OB_ETAPAS[5]; return `<article class="apx-in" style="--i:${i + 7}"><div class="pg">${anel(o)}</div><div class="tx"><span class="ob" style="--c:${OB_ST[obStatus(o)]}"><i class="fa-solid ${obObjIc(o)}"></i>${esc(obObj(o))}</span><b>${esc(obNome(o))}</b><small>${A.tipo !== 'mun' ? esc(apNomeCurto(o.municipio)) + ' · ' : ''}${fmtRc(obValor(o))}${o.salas ? ` · ${o.salas} salas` : ''}${o.alunos ? ` · ${fmtN(o.alunos)} alunos` : ''}</small><span class="et" style="--c:${et[1]}"><i class="fa-solid ${et[2]}"></i>${et[0] === 'Em obra' ? obStatus(o) + (o.previsao ? ' · previsão ' + obPrev(o) : '') : et[0]}${o.dataInauguracao ? ' · ' + fmtDia(o.dataInauguracao) : ''}</span></div></article>`; }).join('')}</div>
-    ${L.length > destaque.length ? `<p class="apx-fonte apx-in" style="--i:14">e mais ${L.length - destaque.length} obra(s) · fonte: contratos e convênios da SEDUC-MT</p>` : ''}</div>`;
+  const L = apObrasDe(D, A), tot = L.reduce((t, o) => t + obValor(o), 0), cont = f => L.filter(f).length, [mv, ms, md] = apMoeda(tot);
+  const tipos = {}; L.forEach(o => { const k = obObj(o); tipos[k] = tipos[k] || [0, 0, 0]; tipos[k][0]++; tipos[k][1] += obValor(o); if (obStatus(o) === 'Concluída') tipos[k][2]++; });
+  const T = Object.entries(tipos).sort((a, b) => b[1][1] - a[1][1]).slice(0, 6);
+  const et = [['Em obra', cont(o => obStatus(o) === 'Em execução'), '#3b82f6'], ['Concluída', cont(o => obEtapa(o) === 'Concluída' || obEtapa(o) === 'Entregue sem inauguração'), '#65a30d'], ['Pronta', cont(o => ['Pronta para inaugurar', 'Agendada'].includes(obEtapa(o))), '#a855f7'], ['Inaugurada', cont(o => obEtapa(o) === 'Inaugurada'), '#22c55e']];
+  const salas = L.filter(o => obStatus(o) !== 'Rescisão').reduce((t, o) => t + num(o.salas), 0), alunos = L.filter(o => obStatus(o) !== 'Rescisão').reduce((t, o) => t + num(o.alunos), 0);
+  return `<div class="apx-l apx-l-larga apx-ob2"><span class="apx-k apx-in" style="--i:0"><i class="fa-solid fa-helmet-safety"></i> Obras e investimentos</span>
+    <div class="apx-ob2-h"><h2 class="apx-in" style="--i:1">${A.tipo === 'mun' ? 'Investimentos nas escolas de ' + esc(A.nome) : A.tipo === 'estado' ? 'Mato Grosso em obras' : 'Obras nas escolas da região'}</h2>
+      <div class="apx-ob2-tot apx-in" style="--i:2"><small>investidos em ${L.length} obra${L.length === 1 ? '' : 's'}</small><b><span class="pre">R$</span>${apCont(mv, '', md)}<span class="suf">${ms}</span></b>${salas || alunos ? `<em>${salas ? `<i class="fa-solid fa-chalkboard"></i>${fmtN(salas)} salas de aula` : ''}${alunos ? `<i class="fa-solid fa-children"></i>${fmtN(alunos)} estudantes atendidos` : ''}</em>` : ''}</div></div>
+    <div class="apx-ob2-t" style="grid-template-columns:repeat(${Math.max(3, T.length)},1fr)">${T.map(([k, [n, v, c]], i) => `<div class="apx-in" style="--i:${i + 3}"><div class="ic">${OB_ANIM[k] || OB_ANIM.Outro}</div><b>${apCont(n)}</b><span>${esc(k)}</span><small>${fmtRc(v)}${c ? ` · ${c} concluída${c > 1 ? 's' : ''}` : ''}</small></div>`).join('')}</div>
+    <div class="apx-ob2-p apx-in" style="--i:9"><span class="tit">Do canteiro à inauguração</span><div class="trilho"><i></i><i></i><i></i><i></i><i></i></div>
+      ${et.map(([k, n, c], i) => `<div class="et" style="--c:${c};--i:${i}"><span class="bo"><i class="fa-solid ${OB_ETAPA_IC[k]}"></i></span>${apCont(n)}<small>${k === 'Pronta' ? 'prontas para inaugurar' : k === 'Em obra' ? 'em execução' : k === 'Concluída' ? 'concluídas e entregues' : 'inauguradas'}</small></div>`).join('')}</div></div>`;
 }
+/* segunda tela: obras em destaque (cerimônia + próximas entregas) */
+function apTelaObrasDest(D, A){
+  const L = apObrasDe(D, A), nIn = L.filter(o => obEtapa(o) === 'Inaugurada').length, nPr = L.filter(o => ['Agendada', 'Pronta para inaugurar'].includes(obEtapa(o))).length, porV = (a, b) => obValor(b) - obValor(a);
+  const prF = L.filter(o => ['Agendada', 'Pronta para inaugurar'].includes(obEtapa(o))).sort(porV), inF = L.filter(o => obEtapa(o) === 'Inaugurada').sort(porV), q = Math.min(prF.length, Math.max(2, 4 - inF.length)), fest = [...prF.slice(0, q), ...inF.slice(0, 4 - q)];
+  const hoje = Date.now(), prox = L.filter(o => obStatus(o) === 'Em execução').map(o => [o, /^\d{4}-\d{2}/.test(o.previsao || '') ? Date.parse(o.previsao) : NaN]).filter(([, t]) => isFinite(t) && t >= hoje - 62 * 864e5).sort((a, b) => a[1] - b[1]).slice(0, 5);
+  const anel = o => { const p = obExec(o), c = OB_ST[obStatus(o)]; return `<span class="pg"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15.9" class="f"/><circle cx="18" cy="18" r="15.9" class="v" style="stroke:${c};--p:${p.toFixed(1)}"/></svg><b>${Math.round(p)}%</b></span>`; };
+  const fe = fest.length ? `<div class="apx-ob3-fe apx-in" style="--i:2"><div class="cab">${OB_FITA}<div><span>Inaugurações</span><b>${nIn} inaugurada${nIn === 1 ? '' : 's'}${nPr ? ` · ${nPr} pronta${nPr === 1 ? '' : 's'} para inaugurar` : ''}</b></div></div>
+      ${fest.map((o, i) => { const e = OB_ETAPAS.find(x => x[0] === obEtapa(o)); return `<article class="apx-in" style="--i:${i + 3}"><span class="mini">${OB_ANIM[obObj(o)] || OB_ANIM.Outro}</span><span class="tx"><b>${esc(obNome(o))}</b><small>${esc(obObj(o))}${A.tipo !== 'mun' ? ' · ' + esc(apNomeCurto(o.municipio)) : ''} · ${fmtRc(obValor(o))}</small></span><span class="et" style="--c:${e[1]}"><i class="fa-solid ${e[2]}"></i>${e[0] === 'Pronta para inaugurar' ? 'Pronta' : e[0]}${o.dataInauguracao ? '<br>' + fmtDia(o.dataInauguracao) : ''}</span></article>`; }).join('')}</div>` : '';
+  const pr = prox.length ? `<div class="apx-ob3-pr apx-in" style="--i:3"><div class="cab"><i class="fa-solid fa-person-digging"></i><div><span>Próximas entregas</span><b>obras em execução, por previsão de término</b></div></div>
+      <div class="lin">${prox.map(([o, t], i) => `<div class="pt apx-in" style="--i:${i + 4}"><span class="dt">${(['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'][new Date(t).getUTCMonth()] + '/' + String(new Date(t).getUTCFullYear()).slice(2))}</span><span class="no"></span><div class="cd">${anel(o)}<span class="tx"><b>${esc(obNome(o))}</b><small>${esc(obObj(o))}${A.tipo !== 'mun' ? ' · ' + esc(apNomeCurto(o.municipio)) : ''} · ${fmtRc(obValor(o))}</small></span></div></div>`).join('')}</div></div>` : '';
+  return `<div class="apx-l apx-l-larga apx-ob3"><span class="apx-k apx-in" style="--i:0"><i class="fa-solid fa-star"></i> Obras em destaque</span><h2 class="apx-in" style="--i:1">${fest.length ? 'Escolas novas e renovadas' : 'O que vem por aí'}${A.tipo === 'mun' ? ' em ' + esc(A.nome) : ''}</h2>
+    <div class="apx-ob3-g ${fe && pr ? '' : 'um'}">${fe}${pr}</div></div>`;
+}
+const apTemObrasDest = (D, A) => apObrasDe(D, A).some(o => ['Inaugurada', 'Agendada', 'Pronta para inaugurar'].includes(obEtapa(o)) || (obStatus(o) === 'Em execução' && /^\d{4}-\d{2}/.test(o.previsao || '') && Date.parse(o.previsao) >= Date.now() - 62 * 864e5));
 function abrirModoTV(){
   if (vistaAtual !== 'mapa') { const v = vistaAtual; vistaAtual = 'mapa'; calcularLayout(); vistaAtual = v; } else calcularLayout();
   tv.pausado = false; tv.voltas = 0; tv.det = null;
