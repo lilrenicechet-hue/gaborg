@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.37.0';
+const VERSAO = '1.38.0';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -81,6 +81,7 @@ const CAMPOS = {
   propostas: ['id','nome','descricao','status','itens','criadoEm','criadoPor','atualizadoEm','atualizadoPor'],
   propSetores: ['id','propostaId','setorId','nome','sigla','tipo','paiId','ordem','status','responsavel','contato','competencias','entregas','orcamento','custoMensal','servidores','comissionados','impacto','impactoDescricao','positivos','negativos','layout','colunas','dx','dy','atualizadoEm','atualizadoPor','quantidade','excluido'],
   escolas: ['id','codigo','nome','dre','municipio','tipo','localidade','endereco','numero','cep','bairro','telefone','email','latitude','longitude','atualizadoEm','atualizadoPor','alunos','inclusiva','profissionais'],
+  obras: ['id','origem','instrumento','codigo','dre','municipio','unidade','escolaCodigo','vinculo','rede','objeto','salas','alunos','empresa','status','valor','execFisica','execFinanceira','situacao','previsao','inaugurar','aptaSpat','aptaSagr','atoGs','dataInauguracao','obsSuob','obsSpat','obsSagr','observacoes','latitude','longitude','atualizadoEm','atualizadoPor'],
   chefias: ['id','setorId','titular','situacao','desde','atoNomeacao','substituto','atoSubstituto','contato','observacao','atualizadoEm','atualizadoPor'],
   etapas: ['id','propostaId','titulo','fase','responsavel','setorId','inicio','prazo','status','observacao','ordem','atualizadoEm','atualizadoPor'],
   metas: ['id','setorId','objetivo','titulo','indicador','unidade','linhaBase','meta','resultado','prazo','status','observacao','atualizadoEm','atualizadoPor'],
@@ -88,7 +89,7 @@ const CAMPOS = {
   parametros: ['id','valor','atualizadoEm','atualizadoPor'],
   servidores: ['id','matricula','nome','cargo','vinculo','tipoLotacao','unidade','lotacaoCod','lotacao','setorId','dataInicio','dataFinal','sugerido','importadoEm','importadoPor'],
 };
-const TABS_DB = ['setores','validacoes','vinculos','historico','rubricas','despesas','propostas','propSetores','escolas','chefias','etapas','metas','reunioes','parametros','servidores'];
+const TABS_DB = ['setores','validacoes','vinculos','historico','rubricas','despesas','propostas','propSetores','escolas','chefias','etapas','metas','reunioes','parametros','servidores','obras'];
 
 /* ===================== ESTRUTURA DO DECRETO Nº 2.236/2026 =====================
    Hierarquia montada a partir do anexo (organograma). Cada nível = 2 espaços.
@@ -358,7 +359,7 @@ function confirmar(titulo, texto, rotulo, perigo){
 }
 
 /* ===================== ESTADO ===================== */
-let DB = { setores:[], validacoes:[], vinculos:[], historico:[], rubricas:[], despesas:[], propostas:[], propSetores:[], escolas:[], chefias:[], etapas:[], metas:[], reunioes:[], parametros:[], servidores:[] };
+let DB = { setores:[], validacoes:[], vinculos:[], historico:[], rubricas:[], despesas:[], propostas:[], propSetores:[], escolas:[], chefias:[], etapas:[], metas:[], reunioes:[], parametros:[], servidores:[], obras:[] };
 let backendVersao = '';
 const URL_PADRAO = 'https://script.google.com/macros/s/AKfycbzZsM71FJARYYoqpRcFY4tHUAVBV-EdVW2NDL6eLaMId-iXY6Z-bnhuOkxA2nyfrdUz/exec';
 let cfg = Object.assign({ url:URL_PADRAO, login:'', usuario:'', perfil:'', modo:'' }, store.get('gaborg_cfg', {}));
@@ -381,7 +382,7 @@ const SECOES_ACESSO = [
   ['Análise', [['painel', 'Indicadores', 'fa-chart-line', ['painel'], 'Indicadores estratégicos (só leitura)', true], ['relatorios', 'Relatórios e minutas', 'fa-file-pdf', ['relatorios'], 'Montar relatórios, portarias e decretos', true], ['financeiro', 'Financeiro', 'fa-coins', ['financeiro'], 'Rubricas, despesas e custos'],
     ['propostas', 'Propostas', 'fa-lightbulb', ['propostas'], 'Cenários de reestruturação'], ['validacoes', 'Validações', 'fa-stamp', ['validacoes'], 'Pedidos e respostas de validação'], ['tv', 'Modo TV', 'fa-tv', [], 'Apresentação em tela cheia', true], ['apresentacao', 'Apresentação', 'fa-person-chalkboard', ['apresentacao'], 'Apresentação animada por município ou DRE (receber prefeitos)', true]]],
   ['Gestão', [['reestruturacao', 'Reestruturação', 'fa-compass-drafting', ['reestruturacao'], 'Diagnóstico, metas, competências e minuta'], ['chefias', 'Chefias', 'fa-user-tie', ['chefias'], 'Titulares, substitutos e atos'],
-    ['servidores', 'Servidores', 'fa-id-card-clip', ['servidores'], 'Lotação, vínculos e importação'], ['regional', 'Gestão regional', 'fa-route', ['regional'], 'Análise das DREs e sugestões']]]
+    ['servidores', 'Servidores', 'fa-id-card-clip', ['servidores'], 'Lotação, vínculos e importação'], ['regional', 'Gestão regional', 'fa-route', ['regional'], 'Análise das DREs e sugestões'], ['obras', 'Obras e inaugurações', 'fa-helmet-safety', ['obras'], 'Contratos, convênios, execução e inaugurações']]]
 ];
 const SECOES_LISTA = SECOES_ACESSO.flatMap(g => g[1]);
 const SEM_EDICAO = new Set(SECOES_LISTA.filter(x => x[5]).map(x => x[0]));
@@ -397,7 +398,7 @@ function perfilSistema(nome){
 }
 let perfisLista = [];
 const acesso = () => cfg.simulado || cfg.acesso || perfilSistema(cfg.perfil);
-const nivelSec = k => { const a = acesso(), sc = a.secoes || {}; if (a.administrar) return 'editar'; if (k === 'apresentacao' && !sc[k]) return sc.escolas && sc.escolas !== 'oculto' ? 'ver' : 'oculto'; return sc[k] || 'oculto'; };
+const nivelSec = k => { const a = acesso(), sc = a.secoes || {}; if (a.administrar) return 'editar'; if (k === 'apresentacao' && !sc[k]) return sc.escolas && sc.escolas !== 'oculto' ? 'ver' : 'oculto'; if (k === 'obras' && !sc[k]) return sc.escolas || 'oculto'; return sc[k] || 'oculto'; };
 const podeVerSec = k => nivelSec(k) !== 'oculto';
 const podeEditarSec = k => !SEM_EDICAO.has(k) && nivelSec(k) === 'editar';
 const podeExtra = k => { const a = acesso(); return !!(a.administrar || (a.extras || {})[k]); };
@@ -464,7 +465,7 @@ async function renderPerfis(){
 const MODELOS_PERFIL = [
   ['branco', 'Em branco', 'fa-file', 'Tudo oculto; você escolhe seção por seção', {}, {}],
   ['consulta', 'Consulta total', 'fa-eye', 'Vê todas as seções, sem editar', { '*':'ver' }, { exportar:true, documentos:true }],
-  ['gabinete', 'Gabinete — análise e documentos', 'fa-landmark', 'Indicadores, relatórios, mapas, Modo TV e Apresentação', { estrutura:'ver', escolas:'ver', apresentacao:'ver', painel:'ver', relatorios:'ver', tv:'ver', propostas:'ver', reestruturacao:'ver', resultados:'ver', regional:'ver', chefias:'ver' }, { documentos:true, exportar:true }],
+  ['gabinete', 'Gabinete — análise e documentos', 'fa-landmark', 'Indicadores, relatórios, mapas, Modo TV e Apresentação', { estrutura:'ver', escolas:'ver', apresentacao:'ver', obras:'ver', painel:'ver', relatorios:'ver', tv:'ver', propostas:'ver', reestruturacao:'ver', resultados:'ver', regional:'ver', chefias:'ver' }, { documentos:true, exportar:true }],
   ['pessoas', 'Gestão de pessoas', 'fa-id-card-clip', 'Edita servidores e chefias; consulta a estrutura', { estrutura:'ver', painel:'ver', servidores:'editar', chefias:'editar', implantacao:'ver', relatorios:'ver' }, { nomesServidores:true, exportar:true, documentos:true }],
   ['regional', 'DRE / Gestão regional', 'fa-map-location-dot', 'Edita escolas e alunos; vê DREs, servidores e indicadores', { estrutura:'ver', escolas:'editar', apresentacao:'ver', regional:'ver', painel:'ver', servidores:'ver', relatorios:'ver', tv:'ver' }, { documentos:true }],
   ['financeiro', 'Financeiro', 'fa-coins', 'Edita custos; vê estrutura e propostas', { estrutura:'ver', financeiro:'editar', propostas:'ver', painel:'ver', relatorios:'ver' }, { exportar:true, documentos:true }],
@@ -1426,6 +1427,7 @@ function atualizarVistaAtual(){
   else if (vistaAtual === 'reunioes') renderReunioes();
   else if (vistaAtual === 'relatorios') renderRelatorios();
   else if (vistaAtual === 'apresentacao') renderApresentacao();
+  else if (vistaAtual === 'obras') renderObras();
   atualizarBadgeIm();
 }
 function redesenharTudo(){ indexar(); atualizarVistaAtual(); if (selId && porId.has(selId)) renderPainel(); else fecharPainel(); }
@@ -6293,10 +6295,12 @@ function apTipos(es){ const c = {}; es.forEach(e => { const g = grupoTipo(e.tipo
 function apRoteiro(D, A){
   if (A.tipo === 'estado') { const R = [['capa', 'Boas-vindas'], ['territorio', 'Mato Grosso no mapa'], ['numeros', 'A rede em números'], ['dres', 'As Diretorias Regionais'], ['distancias', 'Distâncias'], ['orgao', 'O órgão central']];
     if (D.sv.length || apProf(A).tem) R.push(['pessoas', 'Pessoas']);
+    if (apObrasDe(D, A).length) R.push(['obras', 'Obras e investimentos']);
     R.push(['perfil', 'Perfil da rede'], ['satelite', 'Maiores escolas no satélite']); if (apNoticiasDe(A).length) R.push(['noticias', 'Boas notícias']); R.push(['fim', 'Encerramento']); return R; }
   const R = [['capa', 'Boas-vindas'], ['territorio', A.tipo === 'mun' ? 'O município no mapa' : 'A região no mapa'], ['numeros', 'A rede em números']];
   if (A.tipo === 'dre') R.push(['municipios', 'Municípios atendidos']);
   if (A.es.length) R.push(['perfil', 'Perfil da rede'], ['satelite', A.tipo === 'mun' ? 'Nossas escolas no satélite' : 'Maiores escolas no satélite']);
+  if (apObrasDe(D, A).length) R.push(['obras', 'Obras e investimentos']);
   if (A.tipo === 'mun' && A.dre) R.push(['dre', 'A DRE que atende']);
   if (apNoticiasDe(A).length) R.push(['noticias', 'Boas notícias']);
   R.push(['fim', 'Encerramento']); return R;
@@ -6332,6 +6336,7 @@ function apTela(D, A, k){
         <div class="apx-rosca apx-in" style="--i:3"><svg viewBox="0 0 42 42"><circle cx="21" cy="21" r="15.9" class="f"/><circle cx="21" cy="21" r="15.9" class="u" style="--p:${pu.toFixed(1)}"/></svg><div><b>${Math.round(pu)}%</b><small>urbanas</small></div>
           <p><span><i style="background:#38bdf8"></i>Urbanas <b>${urb.length}</b></span><span><i style="background:#a3e635"></i>Rurais <b>${rur}</b></span></p></div></div></div>`; }
   if (k === 'satelite') return apSatHTML(A);
+  if (k === 'obras') return apTelaObras(D, A);
   if (k === 'noticias') return apTelaNoticias(A);
   if (k === 'dre') return apTelaDre(D, A);
   return apTelaFim(D, A);
@@ -6917,6 +6922,247 @@ function apTerEstRealce(d, on){
 function apTerEstFoco(d){
   const S = apEstado; if (!S || !S.lt) return; const l = S.lt.reg.get(d) || []; if (!l.length) return; S.lt.livre = true; clearTimeout(S.terT);
   const b = L.latLngBounds([]); l.forEach(p => b.extend(p.getBounds())); S.lt.m.flyToBounds(b, Object.assign({ duration:1.8 }, S.lt.pad));
+}
+/* ===================== OBRAS E INAUGURAÇÕES =====================
+   Contratos e convênios de obras (reformas, ampliações, construções, quadras...), ligados às escolas da base,
+   com execução, valores, previsão e o caminho até a inauguração. Importa a planilha "Inaugurações - Contratos e Convênios". */
+let obAba = store.get('gaborg_ob_aba', 'painel'), obFil = { q:'', dre:'', status:'', objeto:'', origem:'', inaug:'' }, obLim = 100, obOrd = 'valor', obMapa = null;
+const OB_ABAS = [['painel', 'Painel', 'fa-gauge-high'], ['lista', 'Obras', 'fa-list'], ['mapa', 'Mapa', 'fa-map-location-dot'], ['inauguracoes', 'Inaugurações', 'fa-ribbon'], ['importar', 'Importar', 'fa-file-import']];
+const OB_ST = { 'Concluída':'#16a34a', 'Em execução':'#2563eb', 'Paralisada':'#d97706', 'Rescisão':'#dc2626', 'Com pendência':'#a855f7', 'Em projeto':'#64748b' };
+const OB_ETAPAS = [['Inaugurada', '#16a34a', 'fa-ribbon'], ['Agendada', '#0891b2', 'fa-calendar-check'], ['Pronta para inaugurar', '#7c3aed', 'fa-flag-checkered'], ['Entregue sem inauguração', '#64748b', 'fa-box-open'], ['Concluída', '#65a30d', 'fa-circle-check'], ['Em obra', '#2563eb', 'fa-helmet-safety'], ['Interrompida', '#dc2626', 'fa-triangle-exclamation']];
+const obStatus = o => { const s = String(o.status || '').toUpperCase(); return /RESCI/.test(s) ? 'Rescisão' : /PARALIS/.test(s) ? 'Paralisada' : /PEND[EÊ]NCIA DE EXECU/.test(s) ? 'Com pendência' : /CONCLU/.test(s) ? 'Concluída' : /EXECU/.test(s) ? 'Em execução' : /PROJETO|APROVA|LICITA/.test(s) ? 'Em projeto' : 'Em execução'; };
+const obSim = v => /^\s*(sim|s|x|apta|ok)\s*$/i.test(String(v || ''));
+function obEtapa(o){
+  const st = obStatus(o), i = String(o.inaugurar || '').toUpperCase(), sit = String(o.situacao || ''), di = Date.parse(o.dataInauguracao || '');
+  if (/INAUGURADA/.test(i) || /INAUGURAD/.test(String(o.atoGs || '').toUpperCase()) || /^4/.test(sit) || (isFinite(di) && di <= Date.now())) return 'Inaugurada';
+  if (isFinite(di)) return 'Agendada';
+  if (/ENTREGUE/.test(i)) return 'Entregue sem inauguração';
+  if (st === 'Rescisão' || st === 'Paralisada') return 'Interrompida';
+  const pronta = st === 'Concluída' || st === 'Com pendência' || obExec(o) >= 95;
+  if (pronta && (/^SIM/.test(i) || /^2/.test(sit) || obSim(o.aptaSpat) || obSim(o.aptaSagr) || obSim(o.atoGs))) return 'Pronta para inaugurar';
+  if (st === 'Concluída' || st === 'Com pendência') return 'Concluída';
+  return 'Em obra';
+}
+const OB_OBJ = [[/QUADRA/, 'Quadra poliesportiva', 'fa-basketball'], [/CEI|CONSTRU[CÇ][AÃ]O NOVA/, 'Construção nova', 'fa-school'], [/TRANSFORMADOR/, 'Posto transformador', 'fa-bolt'], [/P[OÓ]RTICO/, 'Pórtico', 'fa-archway'], [/MANUTEN/, 'Manutenção', 'fa-screwdriver-wrench'], [/REFORMA|AMPLIA/, 'Reforma e/ou ampliação', 'fa-trowel-bricks']];
+const obObj = o => { const s = String(o.objeto || '').toUpperCase(), r = OB_OBJ.find(([re]) => re.test(s)); return r ? r[1] : (o.objeto ? o.objeto.charAt(0) + o.objeto.slice(1).toLowerCase() : 'Outro'); };
+const obObjIc = o => { const s = String(o.objeto || '').toUpperCase(), r = OB_OBJ.find(([re]) => re.test(s)); return r ? r[2] : 'fa-helmet-safety'; };
+const obLista = () => (DB.obras || []);
+const obNome = o => apNomeCurto(String(o.unidade || '—').replace(/^\s*COL[EÉ]GIO ESTADUAL INTEGRADO\s*-?\s*/i, 'CEI ').replace(/^CEI\s*-?\s*CEI\s*/i, 'CEI ').replace(/\s+-\s+/g, ' – ')).replace(/\bCei\b/g, 'CEI');
+const obEscola = o => o.escolaCodigo ? escolasLista().find(e => e.codigo === o.escolaCodigo) || null : null;
+const obDre = o => { const e = obEscola(o); if (e) return e.dre; if (o.dre) { const d = distanciasMT().dres.find(x => norm(x) === norm(o.dre) || norm(nomeDRE(x)) === norm(String(o.dre).replace(/^DRE\s+/i, ''))); if (d) return d; } const q = dreDosMunicipios().get(chaveMun(o.municipio)); return q ? Object.entries(q).sort((a, b) => b[1] - a[1])[0][0] : ''; };
+const obValor = o => num(o.valor), obExec = o => Math.max(0, Math.min(100, num(o.execFisica)));
+function obMunCentro(k){
+  if (!obMunCentro.c) { obMunCentro.c = new Map(); apGeo().muns.forEach(m => { const b = L_bounds(m.geo); obMunCentro.c.set(m.k, [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2]); }); }
+  return obMunCentro.c.get(k) || null;
+}
+function obPos(o, i){
+  if (numBR(o.latitude) && numBR(o.longitude)) return [numBR(o.latitude), numBR(o.longitude), 'manual'];
+  const e = obEscola(o); if (e) return [e.latitude, e.longitude, 'escola'];
+  const c = obMunCentro(chaveMun(o.municipio)); if (!c) return null; const a = (i || 0) * 2.399; return [c[0] + Math.sin(a) * .012 * Math.sqrt(i || 0), c[1] + Math.cos(a) * .012 * Math.sqrt(i || 0), 'municipio'];
+}
+/* liga a obra à escola da base: mesmo município + nomes parecidos (palavras em comum, tolerando erros de digitação) */
+function obPalavras(s){
+  s = norm(s).toUpperCase().replace(/\(.*?\)/g, ' ').replace(/COLEGIO ESTADUAL INTEGRADO|\bCEI\s*\d*\b|ESCOLA ESTADUAL|ESC\.? EST\.?|SALA ANEXA|NO DISTRITO.*$/g, ' ')
+    .replace(/^\s*(E\.?\s?E\.?\s?C\.?\s?M\.?|EEDIEB|EEEP|EEI|E\.?\s?E\.?|E\.?\s?M\.?)\s*/, ' ').replace(/[^A-Z0-9 ]/g, ' ')
+    .replace(/\b(EECM|EEDIEB|EEI|EEEP|EE|EM|CEJA|INDIGENA|MILITAR|PROFA?|PROFESSORA?|DR|DRA|DOUTORA?|DEP|DEPUTADA?|GOV|GOVERNADOR|SEN|SENADOR|PADRE|PE|CEL|CORONEL|TEN|TENENTE|IRMA|DONA|DOM|MAJOR|CAPITAO|PRESIDENTE|ARCEBISPO|BISPO|MONSENHOR|SGT|SARGENTO|SD|SOLDADO|PM|BM|SDPM)\b/g, ' ');
+  return s.split(/\s+/).filter(w => w && !['DE', 'DA', 'DO', 'DOS', 'DAS', 'E'].includes(w) && (w.length > 1 || /\d/.test(w)));
+}
+function obParecidas(a, b){ if (a === b) return true; if (a.length < 4 || b.length < 4) return false; let d = 0, i = 0, j = 0; while (i < a.length && j < b.length) { if (a[i] === b[j]) { i++; j++; continue; } d++; if (d > 2) return false; if (a.length > b.length) i++; else if (b.length > a.length) j++; else { i++; j++; } } return d + (a.length - i) + (b.length - j) <= 2; }
+function obSemelhanca(A, B){ if (!A.length || !B.length) return 0; let c = 0; const usado = new Set(); A.forEach(w => { const k = B.findIndex((x, j) => !usado.has(j) && obParecidas(w, x)); if (k >= 0) { usado.add(k); c++; } }); return 2 * c / (A.length + B.length); }
+function obCasar(unidade, municipio, rede){
+  if (rede && !/ESTAD/i.test(rede)) return null;
+  const k = chaveMun(municipio), cand = escolasLista().filter(e => chaveMun(e.municipio) === k); if (!cand.length) return null;
+  const A = obPalavras(unidade), sc = cand.map(e => [obSemelhanca(A, obPalavras(e.nome)), e]).sort((a, b) => b[0] - a[0]);
+  return sc[0][0] >= .66 && (sc.length < 2 || sc[0][0] - sc[1][0] >= .15) ? sc[0][1].codigo : null;
+}
+function obFiltrar(L){
+  const q = norm(obFil.q);
+  return L.filter(o => (!q || norm([o.unidade, o.municipio, o.empresa, o.codigo, o.objeto].join(' ')).includes(q)) && (!obFil.dre || obDre(o) === obFil.dre) && (!obFil.status || obStatus(o) === obFil.status)
+    && (!obFil.objeto || obObj(o) === obFil.objeto) && (!obFil.origem || o.origem === obFil.origem) && (!obFil.inaug || obEtapa(o) === obFil.inaug));
+}
+function abaOb(k){ obAba = k; store.set('gaborg_ob_aba', k); renderObras(); const r = $('#v-obras .rolagem'); if (r) r.scrollTop = 0; }
+const backendSemObras = () => online() && backendVersao && svVerMaior('1.19.0', backendVersao);
+function renderObras(){
+  const el = $('#ob-corpo'); if (!el) return; const L = obLista(), imp = param('obrasImport', null), pode = podeEditarSec('obras');
+  const aviso = backendSemObras() ? `<div class="cartao bl" style="--c:#d97706"><h3><i class="fa-solid fa-triangle-exclamation"></i>Atualize o Codigo.gs para a versão 1.19.0</h3><p class="s">A planilha está com o backend ${esc(backendVersao)}. Sem a atualização, as obras importadas ficam só neste navegador.</p></div>` : '';
+  const topo = abasG(OB_ABAS.filter(a => a[0] !== 'importar' || pode), obAba, 'abaOb') + (imp && imp.em ? `<p class="sv-orig"><i class="fa-solid fa-file-excel"></i>Base: <b>${esc(imp.arquivo || 'planilha')}</b> · importada em ${fmtData(imp.em)} por ${esc(imp.por || '')} · ${fmtN(L.length)} obras</p>` : '');
+  if (!L.length && obAba !== 'importar') { el.innerHTML = aviso + topo + `<div class="cartao vazio"><i class="fa-solid fa-helmet-safety" style="font-size:34px;color:var(--marca);margin-bottom:10px"></i><h3 style="margin:0 0 6px">Nenhuma obra cadastrada ainda</h3><p class="s">${pode ? 'Importe a planilha de contratos e convênios (aba Importar) ou cadastre uma obra.' : 'Peça a quem administra as obras para importar a planilha.'}</p>${pode ? `<div style="display:flex;gap:8px;justify-content:center;margin-top:12px"><button class="btn btn-p" onclick="abaOb('importar')"><i class="fa-solid fa-file-import"></i>Importar planilha</button><button class="btn btn-s" onclick="obFicha('')"><i class="fa-solid fa-plus"></i>Nova obra</button></div>` : ''}</div>`; return; }
+  const corpo = { painel:obPainel, lista:obListaTela, mapa:obMapaTela, inauguracoes:obInaugTela, importar:obImportarTela }[obAba] || obPainel;
+  el.innerHTML = aviso + topo + corpo(L);
+  if (obAba === 'mapa') setTimeout(obDesenharMapa, 30);
+}
+const obChip = o => { const s = obStatus(o); return `<span class="ob-st" style="--c:${OB_ST[s]}">${s}</span>`; };
+const obProg = o => `<span class="ob-prog" title="Execução física ${fmtP(obExec(o))}"><i style="width:${obExec(o).toFixed(1)}%;background:${OB_ST[obStatus(o)]}"></i></span><small>${Math.round(obExec(o))}%</small>`;
+const obPrev = o => { const t = /^\d{4}-\d{2}/.test(o.previsao || '') ? Date.parse(o.previsao) : NaN; return isFinite(t) && new Date(t).getFullYear() > 1990 ? new Date(t).toLocaleDateString('pt-BR', { month:'short', year:'numeric' }) : (o.previsao || '—'); };
+function obBarras(it, fmt){ const mx = Math.max(1, ...it.map(x => x[1])); return it.map(([n, v, c, on, ex]) => `<div class="barra-l ob-b" ${on ? `style="cursor:pointer" onclick="${on}"` : ''}><span class="n" title="${esc(n)}">${esc(n)}</span><span class="t"><span style="width:${(v / mx * 100).toFixed(2)}%;background:${c || '#2563eb'}"></span></span><b>${fmt ? fmt(v) : fmtN(v)}${ex ? `<small>${ex}</small>` : ''}</b></div>`).join(''); }
+const obBarrasR = it => `<div class="ob-br">${obBarras(it, fmtRc)}</div>`;
+const obIrLista = o => `obFil=Object.assign({q:'',dre:'',status:'',objeto:'',origem:'',inaug:''},${esc(JSON.stringify(o))});obLim=100;abaOb('lista')`;
+function obPainel(L){
+  const tot = L.reduce((t, o) => t + obValor(o), 0), cont = f => L.filter(f).length, st = Object.keys(OB_ST).map(s => [s, cont(o => obStatus(o) === s), OB_ST[s], obIrLista({ status:s })]).filter(x => x[1]);
+  const obj = {}; L.forEach(o => { const k = obObj(o); obj[k] = obj[k] || [0, 0]; obj[k][0]++; obj[k][1] += obValor(o); });
+  const dres = {}; L.forEach(o => { const d = obDre(o) || 'Sem DRE'; dres[d] = dres[d] || [0, 0]; dres[d][0]++; dres[d][1] += obValor(o); });
+  const et = OB_ETAPAS.map(([k, c]) => [k, cont(o => obEtapa(o) === k), c, obIrLista({ inaug:k })]).filter(x => x[1]);
+  const prontas = L.filter(o => ['Pronta para inaugurar', 'Agendada'].includes(obEtapa(o))).sort((a, b) => obValor(b) - obValor(a));
+  const hoje = Date.now(), em6 = hoje + 183 * 864e5, proximas = L.filter(o => obStatus(o) === 'Em execução' && (t => isFinite(t) && t >= hoje - 31 * 864e5 && t <= em6)(Date.parse(o.previsao))).sort((a, b) => Date.parse(a.previsao) - Date.parse(b.previsao));
+  const lin = o => `<div class="ob-li" onclick="obFicha(${arg(o.id)})"><i class="fa-solid ${obObjIc(o)}"></i><span><b>${esc(obNome(o))}</b><small>${esc(apNomeCurto(o.municipio))} · ${esc(obObj(o))} · ${fmtRc(obValor(o))}</small></span>${obChip(o)}</div>`;
+  return `<div class="kpis">${kpiG('#1e3a8a', 'fa-helmet-safety', 'Obras', fmtN(L.length), `${cont(o => o.origem === 'Contrato')} contratos · ${cont(o => o.origem === 'Convênio')} convênios`, "abaOb('lista')")}
+      ${kpiG('#0f766e', 'fa-sack-dollar', 'Investimento', fmtRc(tot), 'valor total dos contratos e convênios')}
+      ${kpiG('#16a34a', 'fa-circle-check', 'Concluídas', fmtN(cont(o => obStatus(o) === 'Concluída')), `${fmtP(cont(o => obStatus(o) === 'Concluída') / Math.max(1, L.length) * 100)} das obras`, obIrLista({ status:'Concluída' }))}
+      ${kpiG('#2563eb', 'fa-person-digging', 'Em execução', fmtN(cont(o => obStatus(o) === 'Em execução')), `${proximas.length} com término previsto em até 6 meses`, obIrLista({ status:'Em execução' }))}
+      ${kpiG('#dc2626', 'fa-triangle-exclamation', 'Paralisadas ou em rescisão', fmtN(cont(o => ['Paralisada', 'Rescisão'].includes(obStatus(o)))), 'precisam de atenção', obIrLista({ status:'Paralisada' }))}
+      ${kpiG('#7c3aed', 'fa-ribbon', 'Inaugurações', fmtN(cont(o => obEtapa(o) === 'Inaugurada')), `${prontas.length} prontas ou agendadas`, "abaOb('inauguracoes')")}</div>
+    <div class="ob-g2"><div class="cartao"><h3><i class="fa-solid fa-signal"></i>Situação das obras</h3>${obBarras(st)}</div>
+      <div class="cartao"><h3><i class="fa-solid fa-ribbon"></i>Caminho até a inauguração</h3>${obBarras(et)}</div>
+      <div class="cartao"><h3><i class="fa-solid fa-shapes"></i>Tipo de obra · investimento</h3>${obBarrasR(Object.entries(obj).sort((a, b) => b[1][1] - a[1][1]).map(([k, [n, v]]) => [k, v, '#0f766e', obIrLista({ objeto:k }), n + ' obra(s)']))}</div>
+      <div class="cartao"><h3><i class="fa-solid fa-route"></i>Por DRE · investimento</h3>${obBarrasR(Object.entries(dres).sort((a, b) => b[1][1] - a[1][1]).map(([k, [n, v]]) => [k === 'Sem DRE' ? k : nomeDRE(k), v, k === 'Sem DRE' ? '#94a3b8' : corDRE(distanciasMT().dres, k), k === 'Sem DRE' ? '' : obIrLista({ dre:k }), n + ' obra(s)']))}</div>
+      <div class="cartao"><h3><i class="fa-solid fa-flag-checkered"></i>Prontas para inaugurar</h3>${prontas.slice(0, 8).map(lin).join('') || '<p class="s">Nenhuma obra marcada como pronta para inaugurar.</p>'}${prontas.length > 8 ? `<button class="btn btn-s btn-sm" onclick="abaOb('inauguracoes')">Ver todas (${prontas.length})</button>` : ''}</div>
+      <div class="cartao"><h3><i class="fa-solid fa-hourglass-half"></i>Término previsto nos próximos 6 meses</h3>${proximas.slice(0, 8).map(o => lin(o).replace('</span>' + obChip(o), `</span><span class="ob-qd">${obPrev(o)}</span>`)).join('') || '<p class="s">Nenhuma obra em execução com término nos próximos 6 meses.</p>'}</div></div>`;
+}
+function obListaTela(L){
+  const F = obFiltrar(L), ord = { valor:(a, b) => obValor(b) - obValor(a), exec:(a, b) => obExec(b) - obExec(a), prev:(a, b) => (Date.parse(a.previsao) || 9e15) - (Date.parse(b.previsao) || 9e15), mun:(a, b) => String(a.municipio).localeCompare(b.municipio, 'pt-BR') }[obOrd];
+  const sel = (k, rot, ops) => `<select class="campo" onchange="obFil.${k}=this.value;obLim=100;renderObras()"><option value="">${rot}</option>${ops.map(([v, t]) => `<option value="${esc(v)}" ${obFil[k] === v ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>`;
+  const dres = distanciasMT().dres, objs = [...new Set(L.map(obObj))].sort(), pode = podeEditarSec('obras');
+  return `<div class="filtros"><div class="busca"><i class="fa-solid fa-magnifying-glass"></i><input class="campo" id="ob-q" placeholder="Buscar escola, município, empresa ou contrato" value="${esc(obFil.q)}" oninput="obFil.q=this.value;obLim=100;clearTimeout(window.tOb);window.tOb=setTimeout(()=>{renderObras();const i=$('#ob-q');i.focus();i.setSelectionRange(i.value.length,i.value.length)},250)"></div>
+      ${sel('dre', 'Todas as DREs', dres.map(d => [d, nomeDRE(d)]))}${sel('status', 'Toda situação', Object.keys(OB_ST).map(s => [s, s]))}${sel('objeto', 'Todo tipo de obra', objs.map(s => [s, s]))}${sel('inaug', 'Toda etapa', OB_ETAPAS.map(e => [e[0], e[0]]))}${sel('origem', 'Contratos e convênios', [['Contrato', 'Contratos'], ['Convênio', 'Convênios']])}
+      <select class="campo" onchange="obOrd=this.value;renderObras()">${[['valor', 'Maior valor'], ['exec', 'Mais adiantadas'], ['prev', 'Previsão de término'], ['mun', 'Município']].map(([v, t]) => `<option value="${v}" ${obOrd === v ? 'selected' : ''}>${t}</option>`).join('')}</select>
+      ${Object.values(obFil).some(Boolean) ? `<button class="btn btn-g btn-sm" onclick="obFil={q:'',dre:'',status:'',objeto:'',origem:'',inaug:''};renderObras()"><i class="fa-solid fa-xmark"></i>Limpar</button>` : ''}
+      <span style="flex:1"></span>${pode ? `<button class="btn btn-p btn-sm" onclick="obFicha('')"><i class="fa-solid fa-plus"></i>Nova obra</button>` : ''}<button class="btn btn-s btn-sm" onclick="obCSV()"><i class="fa-solid fa-file-csv"></i>CSV</button></div>
+    <p class="s" style="margin:6px 0">${fmtN(F.length)} obra(s) · ${fmtRc(F.reduce((t, o) => t + obValor(o), 0))} · ${F.filter(o => !o.escolaCodigo).length} sem escola vinculada</p>
+    <div class="tab-wrap"><table class="tab ob-tab"><thead><tr><th>Unidade escolar</th><th>Município / DRE</th><th>Obra</th><th>Situação</th><th>Execução</th><th class="dir">Valor</th><th>Previsão</th><th>Inauguração</th></tr></thead><tbody>
+    ${F.sort(ord).slice(0, obLim).map(o => { const et = OB_ETAPAS.find(e => e[0] === obEtapa(o)) || OB_ETAPAS[5]; return `<tr class="clic" onclick="obFicha(${arg(o.id)})"><td style="white-space:normal;min-width:220px"><b title="${esc(o.unidade)}">${esc(obNome(o))}</b>${o.escolaCodigo ? '' : ` <span class="ob-sv" title="Sem escola da base vinculada${/MUNIC/i.test(o.rede) ? ' (rede municipal)' : ''}">${/MUNIC/i.test(o.rede) ? 'municipal' : 'sem vínculo'}</span>`}<br><small class="s">${esc(o.origem)} ${esc(o.codigo || '')}${o.empresa ? ' · ' + esc(o.empresa) : ''}</small></td>
+      <td>${esc(apNomeCurto(o.municipio))}<br><small class="s">${obDre(o) ? esc(nomeDRE(obDre(o))) : '—'}</small></td><td><i class="fa-solid ${obObjIc(o)}" style="color:var(--mut)"></i> ${esc(obObj(o))}</td><td>${obChip(o)}</td><td style="min-width:110px">${obProg(o)}</td><td class="dir">${fmtM0(obValor(o))}</td><td>${esc(obPrev(o))}</td>
+      <td><span class="ob-et" style="--c:${et[1]}"><i class="fa-solid ${et[2]}"></i>${et[0]}</span></td></tr>`; }).join('') || '<tr><td colspan="8" class="vazio">Nenhuma obra com esses filtros.</td></tr>'}</tbody></table></div>
+    ${F.length > obLim ? `<div style="text-align:center;margin-top:8px"><button class="btn btn-s btn-sm" onclick="obLim+=200;renderObras()">Mostrar mais (${fmtN(F.length - obLim)})</button></div>` : ''}`;
+}
+function obCSV(){
+  const q = v => { const s = String(v ?? ''); return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const L = obFiltrar(obLista()), cab = ['Origem', 'Instrumento', 'Código', 'DRE', 'Município', 'Unidade escolar', 'Código da escola', 'Rede', 'Objeto', 'Salas', 'Alunos', 'Empresa', 'Status', 'Situação (grupo)', 'Valor', '% execução física', 'Previsão', 'Etapa da inauguração', 'Inaugurar (SUOB)', 'Data da inauguração'];
+  baixarArquivo('obras.csv', '﻿' + [cab.join(';'), ...L.map(o => [o.origem, o.instrumento, o.codigo, nomeDRE(obDre(o)), o.municipio, o.unidade, o.escolaCodigo, o.rede, o.objeto, o.salas, o.alunos, o.empresa, o.status, obStatus(o), String(obValor(o)).replace('.', ','), String(obExec(o)).replace('.', ','), obPrev(o), obEtapa(o), o.inaugurar, o.dataInauguracao].map(q).join(';'))].join('\n'), 'text/csv;charset=utf-8');
+}
+function obMapaTela(L){
+  const F = obFiltrar(L);
+  return `<div class="filtros">${['', ...Object.keys(OB_ST)].map(s => `<button class="btn btn-sm ${obFil.status === s ? 'btn-p' : 'btn-s'}" onclick="obFil.status='${s}';renderObras()">${s ? `<i class="ob-dot" style="background:${OB_ST[s]}"></i>${s}` : 'Todas'} <b>${s ? L.filter(o => obStatus(o) === s).length : L.length}</b></button>`).join('')}</div>
+    <div class="ob-mapa" id="ob-mapa"></div><p class="s" style="margin-top:6px">${fmtN(F.length)} obra(s) no mapa · o tamanho do ponto acompanha o valor · obras sem escola vinculada aparecem no centro do município (borda tracejada).</p>`;
+}
+async function obDesenharMapa(){
+  const el = $('#ob-mapa'); if (!el) return;
+  try { await carregarLeaflet(); } catch (e) { el.innerHTML = '<p class="s" style="padding:20px">Mapa indisponível sem internet.</p>'; return; }
+  if (obMapa) { try { obMapa.remove(); } catch (e) {} }
+  const m = obMapa = L.map(el, { zoomSnap:.25, preferCanvas:true }); L.tileLayer(BASES_MT.claro[1], { maxZoom:18, attribution:BASES_MT.claro[2] }).addTo(m);
+  const F = obFiltrar(obLista()), porMun = new Map(), b = L.latLngBounds([]), mx = Math.max(1, ...F.map(obValor));
+  F.forEach(o => { const k = chaveMun(o.municipio), i = porMun.get(k) || 0; porMun.set(k, i + 1); const p = obPos(o, i); if (!p) return; const s = obStatus(o);
+    const c = L.circleMarker([p[0], p[1]], { radius:5 + Math.sqrt(obValor(o) / mx) * 14, color:p[2] === 'municipio' ? '#334155' : '#fff', weight:p[2] === 'municipio' ? 1.5 : 1.2, dashArray:p[2] === 'municipio' ? '3 3' : null, fillColor:OB_ST[s], fillOpacity:.82 }).addTo(m);
+    c.bindPopup(`<div class="mt-pop"><div class="t" style="--c:${OB_ST[s]}"><i class="fa-solid ${obObjIc(o)}"></i> ${esc(obObj(o))} · ${s}</div><b>${esc(obNome(o))}</b><small>${esc(apNomeCurto(o.municipio))} · ${esc(o.origem)} ${esc(o.codigo || '')}</small>
+      <div class="l"><i class="fa-solid fa-sack-dollar"></i><span><b>${fmtM0(obValor(o))}</b> · execução ${Math.round(obExec(o))}%</span></div><div class="l"><i class="fa-solid fa-calendar"></i><span>Previsão: ${esc(obPrev(o))} · ${esc(obEtapa(o))}</span></div>
+      ${o.empresa ? `<div class="l"><i class="fa-solid fa-building"></i>${esc(o.empresa)}</div>` : ''}<div class="l"><a href="#" onclick="event.preventDefault();obFicha(${arg(o.id)})">Abrir ficha da obra</a></div></div>`, { className:'mt-popup', maxWidth:330 });
+    b.extend([p[0], p[1]]); });
+  if (b.isValid()) m.fitBounds(b.pad(.08)); else m.setView([-13, -56], 6);
+}
+function obInaugTela(L){
+  const pode = podeEditarSec('obras'), col = OB_ETAPAS.filter(e => e[0] !== 'Em obra' && e[0] !== 'Interrompida');
+  return `<p class="s" style="margin:0 0 10px">Obras concluídas no caminho até a inauguração. Abra a ficha para marcar <b>apta (SPAT/SAGR)</b>, o <b>ato do Gabinete</b> e a <b>data da inauguração</b>.</p>
+    <div class="ob-kan">${col.map(([k, c, ic]) => { const l = L.filter(o => obEtapa(o) === k).sort((a, b) => (Date.parse(a.dataInauguracao) || 9e15) - (Date.parse(b.dataInauguracao) || 9e15) || obValor(b) - obValor(a)); return `<div class="ob-col" style="--c:${c}"><h4><i class="fa-solid ${ic}"></i>${k}<b>${l.length}</b></h4>
+      ${l.slice(0, 60).map(o => `<div class="ob-card" onclick="obFicha(${arg(o.id)})"><b>${esc(obNome(o))}</b><small>${esc(apNomeCurto(o.municipio))} · ${esc(obObj(o))}</small><div class="r"><span>${fmtRc(obValor(o))}</span>${o.dataInauguracao ? `<span class="d"><i class="fa-solid fa-calendar-day"></i>${fmtDia(o.dataInauguracao)}</span>` : ''}${obSim(o.aptaSpat) ? '<span class="ok">SPAT</span>' : ''}${obSim(o.aptaSagr) ? '<span class="ok">SAGR</span>' : ''}</div></div>`).join('') || '<p class="s">—</p>'}${l.length > 60 ? `<p class="s">e mais ${l.length - 60}</p>` : ''}</div>`; }).join('')}</div>`;
+}
+function obFicha(id){
+  const o0 = id ? obLista().find(x => x.id === id) : null; if (id && !o0) return; const pode = podeEditarSec('obras'), o = o0 || novoReg('obras', { origem:'Contrato', rede:'ESTADUAL' });
+  const ro = pode ? '' : 'disabled', c = (k, rot, t) => `<label><span class="rot">${rot}</span><input class="campo" name="${k}" ${t || ''} value="${esc(o[k] ?? '')}" ${ro}></label>`, ta = (k, rot) => `<label><span class="rot">${rot}</span><textarea class="campo" name="${k}" rows="2" ${ro}>${esc(o[k] ?? '')}</textarea></label>`;
+  const so = (k, rot, ops) => `<label><span class="rot">${rot}</span><select class="campo" name="${k}" ${ro}>${['', ...ops].map(v => `<option value="${esc(v)}" ${String(o[k] || '') === v ? 'selected' : ''}>${v || '—'}</option>`).join('')}</select></label>`;
+  const escs = escolasLista().filter(e => chaveMun(e.municipio) === chaveMun(o.municipio)).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  const sts = ['OBRA EM EXECUÇÃO', 'OBRA CONCLUÍDA', 'OBRA CONCLUÍDA - COM PENDÊNCIA DE EXECUÇÃO', 'OBRA PARALISADA', 'EM PROCESSO DE RESCISÃO', 'CONTRATO RESCINDIDO', 'EM APROVAÇÃO DE PROJETO'];
+  abrirModal({ titulo:id ? 'Obra · ' + (o.unidade || o.codigo) : 'Nova obra', rotulo:pode ? 'Salvar' : 'Fechar', largura:820, html:`${pode ? '' : '<p class="s">Seu perfil pode ver as obras, mas não alterar.</p>'}
+    <div class="ob-fi-top"><span class="ob-et" style="--c:${(OB_ETAPAS.find(e => e[0] === obEtapa(o)) || OB_ETAPAS[5])[1]}">${obEtapa(o)}</span>${obChip(o)}<span class="s">${Math.round(obExec(o))}% executada · ${fmtM0(obValor(o))}</span></div>
+    <div class="g2">${c('unidade', 'Unidade escolar', 'required')}${c('municipio', 'Município', 'required list="ob-muns"')}</div><datalist id="ob-muns">${apGeo().muns.map(m => `<option value="${esc(m.nome)}">`).join('')}</datalist>
+    <label><span class="rot">Escola da base vinculada (para o mapa e a apresentação)</span><select class="campo" name="escolaCodigo" ${ro}><option value="">— sem vínculo (fica no centro do município) —</option>${escs.map(e => `<option value="${esc(e.codigo)}" ${e.codigo === o.escolaCodigo ? 'selected' : ''}>${esc(e.nome)} (${esc(e.codigo)})</option>`).join('')}</select></label>
+    <div class="g3">${so('origem', 'Origem', ['Contrato', 'Convênio'])}${c('instrumento', 'Instrumento')}${c('codigo', 'Nº contrato / convênio')}</div>
+    <div class="g3">${c('objeto', 'Objeto', 'list="ob-objs"')}${so('rede', 'Rede', ['ESTADUAL', 'MUNICIPAL', 'ENTIDADE FILANTRÓPICA'])}${c('empresa', 'Empresa')}</div><datalist id="ob-objs">${['REFORMA E/OU AMPLIAÇÃO', 'CONSTRUÇÃO NOVA', 'QUADRA POLIESPORTIVA', 'POSTO TRANSFORMADOR', 'PÓRTICO', 'MANUTENÇÃO'].map(v => `<option value="${v}">`).join('')}</datalist>
+    <div class="g3"><label><span class="rot">Status</span><input class="campo" name="status" list="ob-sts" value="${esc(o.status || '')}" ${ro}></label><datalist id="ob-sts">${sts.map(v => `<option value="${v}">`).join('')}</datalist>${c('valor', 'Valor (R$)', 'type="number" step="0.01" min="0"')}${c('execFisica', '% execução física', 'type="number" step="0.1" min="0" max="100"')}</div>
+    <div class="g3">${c('salas', 'Salas de aula', 'type="number" min="0"')}${c('alunos', 'Alunos atendidos', 'type="number" min="0"')}${c('previsao', 'Previsão de conclusão', 'placeholder="AAAA-MM ou texto"')}</div>
+    <h4 class="ob-fi-h"><i class="fa-solid fa-ribbon"></i>Inauguração</h4>
+    <div class="g3">${so('inaugurar', 'Inaugurar (SUOB)', ['SIM', 'NÃO', 'INAUGURADA', 'ENTREGUE SEM INAUGURAÇÃO', 'EM VERIFICAÇÃO PELO FISCAL'])}${so('aptaSpat', 'Apta (SPAT)', ['SIM', 'NÃO'])}${so('aptaSagr', 'Apta (SAGR)', ['SIM', 'NÃO'])}</div>
+    <div class="g3">${so('atoGs', 'Ato de inauguração (GS)', ['SIM', 'INAUGURADA'])}${c('dataInauguracao', 'Data da inauguração', 'type="date"')}${c('situacao', 'Situação (planilha)')}</div>
+    <div class="g3">${ta('obsSuob', 'Observação SUOB')}${ta('obsSpat', 'Observação SPAT')}${ta('obsSagr', 'Observação SAGR')}</div>${ta('observacoes', 'Outras observações')}
+    <details><summary class="s" style="cursor:pointer">Posição no mapa (opcional)</summary><div class="g2">${c('latitude', 'Latitude')}${c('longitude', 'Longitude')}</div><p class="s">Use quando a obra não está numa escola da base (ex.: escola nova).</p></details>
+    ${pode && id ? `<button type="button" class="btn btn-g btn-sm" style="color:#dc2626;margin-top:6px" onclick="obExcluir(${arg(id)})"><i class="fa-solid fa-trash"></i>Excluir obra</button>` : ''}`,
+    aoConfirmar:m => { if (!pode) return true; const f = m.querySelector('form'), v = k => String((f.elements[k] || {}).value ?? '').trim();
+      const mud = {}; ['unidade', 'municipio', 'escolaCodigo', 'origem', 'instrumento', 'codigo', 'objeto', 'rede', 'empresa', 'status', 'salas', 'alunos', 'previsao', 'inaugurar', 'aptaSpat', 'aptaSagr', 'atoGs', 'dataInauguracao', 'situacao', 'obsSuob', 'obsSpat', 'obsSagr', 'observacoes', 'latitude', 'longitude'].forEach(k => { mud[k] = v(k); });
+      mud.valor = v('valor') === '' ? '' : String(Math.max(0, num(v('valor')))); mud.execFisica = v('execFisica') === '' ? '' : String(Math.max(0, Math.min(100, num(v('execFisica')))));
+      if (!mud.unidade || !mud.municipio) throw new Error('Informe a unidade escolar e o município.');
+      mud.vinculo = mud.escolaCodigo !== (o.escolaCodigo || '') ? 'manual' : (o.vinculo || '');
+      const r = o0 || o; Object.assign(r, mud, { atualizadoEm:agora(), atualizadoPor:cfg.usuario || '' }); if (!o0) { r.id = 'ob_' + Date.now().toString(36); DB.obras = DB.obras || []; DB.obras.push(r); }
+      enfileirar('obras', r); toast('Obra salva.'); renderObras(); return true; } });
+}
+async function obExcluir(id){
+  if (!await confirmar('Excluir obra', 'Excluir esta obra do GABOrg? Ela volta se você importar a planilha de novo.', 'Excluir', true)) return;
+  const o = obLista().find(x => x.id === id); if (!o) return; DB.obras = obLista().filter(x => x.id !== id); enfileirar('obras', o, true); document.querySelectorAll('.modal').forEach(m => m.remove()); renderObras();
+}
+/* ---------- importação da planilha (abas CONTRATOS e CONVÊNIOS) ---------- */
+function obImportarTela(){
+  const imp = param('obrasImport', null);
+  return `<div class="cartao bl" style="--c:#0f766e"><h3><i class="fa-solid fa-file-import"></i>Importar a planilha de obras</h3>
+    <p class="s">Use a planilha <b>Inaugurações – Contratos e Convênios</b> (.xlsx), com as abas <b>CONTRATOS</b> e <b>CONVÊNIOS</b>. O sistema lê unidade escolar, município, objeto, empresa, status, valores, execução, previsão e as colunas de inauguração (SUOB, SPAT, SAGR e GS), e liga cada obra à escola da base pelo nome e município.</p>
+    <p class="s">Ao importar de novo: os dados da planilha são atualizados, mas o que foi ajustado aqui (escola vinculada à mão, posição no mapa, data e ato de inauguração preenchidos no sistema) é mantido.</p>
+    <label class="btn btn-p" style="margin-top:6px"><i class="fa-solid fa-file-excel"></i>Escolher planilha<input type="file" accept=".xlsx,.xls" hidden onchange="obImportar(this.files[0]);this.value=''"></label>
+    ${imp && imp.em ? `<p class="s" style="margin-top:10px">Última importação: <b>${esc(imp.arquivo)}</b> em ${fmtData(imp.em)} · ${fmtN(imp.n)} obras · ${fmtN(imp.vinc)} ligadas a escolas.</p>` : ''}</div>`;
+}
+const OB_COLS = { codigo:['cod contrato', 'cod. contrato', 'convenio', 'contrato'], instrumento:['instrumento'], dre:['dre'], municipio:['municipio'], unidade:['unidade escolar'], rede:['unidade'], objeto:['objeto resumo', 'objeto'], salas:['quant salas de aula'], alunos:['n de alunos', 'no de alunos'], empresa:['empresa'], status:['status'],
+  valor:['contrato r$ inicial + aditivo + reajuste + prorrogacao', 'valor total (global)', 'valor total', 'valor'], execFisica:['execucao', '% execucao fisica'], execFinanceira:['% execucao financeira (desembolso estado)'], situacao:['situacao'], previsao:['previsao conclusao obra'],
+  obsSuob:['observacao (suob)'], obsSpat:['observacao (spat)', 'obs (spat)'], obsSagr:['observacao (sagr)', 'obs (sagr)'], inaugurar:['inaugurar (suob)'], aptaSpat:['apta para inauguracao (spat)'], aptaSagr:['apta para inauguracao (sagr)'], atoGs:['ato de inauguracao (gs)'], dataInauguracao:['data da inauguacao (gs)', 'data da inauguracao (gs)'], observacoes:['observacoes'], dataPrevista:['data prevista'] };
+const obHash = s => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); };
+const obData = v => { if (v instanceof Date && isFinite(v)) return v.getFullYear() < 1950 ? '' : v.toISOString().slice(0, 10); if (typeof v === 'number') return v > 30000 && v < 80000 ? new Date(Math.round((v - 25569) * 864e5)).toISOString().slice(0, 10) : ''; return String(v ?? '').trim(); };
+async function obImportar(f){
+  if (!f) return;
+  try {
+    toast('Lendo a planilha de obras...');
+    await carregarScript(['https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js', 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js']);
+    const wb = XLSX.read(await f.arrayBuffer(), { type:'array', cellDates:true }), nh = s => norm(s).replace(/º|°/g, 'o').replace(/\s+/g, ' ').trim(), novas = [];
+    wb.SheetNames.forEach(nome => {
+      const L = XLSX.utils.sheet_to_json(wb.Sheets[nome], { header:1, raw:true, defval:'' }); const hi = L.findIndex(l => l.some(c => nh(c) === 'unidade escolar') && l.some(c => nh(c) === 'municipio')); if (hi < 0) return;
+      const cab = L[hi].map(nh), idx = {}; Object.entries(OB_COLS).forEach(([k, alts]) => { const i = alts.map(a => cab.indexOf(a)).find(i => i >= 0); if (i !== undefined) idx[k] = i; });
+      const origem = /CONV/i.test(nome) ? 'Convênio' : 'Contrato';
+      L.slice(hi + 1).forEach(r => { const g = k => idx[k] === undefined ? '' : r[idx[k]]; const unidade = String(g('unidade')).replace(/\s+/g, ' ').trim(), municipio = String(g('municipio')).trim(); if (!unidade || !municipio) return;
+        const ex = v => { const n = typeof v === 'number' ? v : num(String(v).replace('%', '').replace(',', '.')); return v === '' || v == null ? '' : String(Math.round((n <= 1.0001 ? n * 100 : n) * 10) / 10); };
+        const o = { origem, instrumento:String(g('instrumento')).trim(), codigo:String(g('codigo')).trim(), dre:String(g('dre')).trim(), municipio, unidade, rede:String(g('rede')).trim() || 'ESTADUAL', objeto:String(g('objeto')).trim(), salas:/^\d+$/.test(String(g('salas')).trim()) ? String(g('salas')).trim() : '', alunos:/^\d+$/.test(String(g('alunos')).trim()) ? String(g('alunos')).trim() : '',
+          empresa:String(g('empresa')).trim(), status:String(g('status')).trim(), valor:String(Math.round(num(g('valor')) * 100) / 100 || ''), execFisica:ex(g('execFisica')), execFinanceira:ex(g('execFinanceira')), situacao:String(g('situacao')).trim(), previsao:obData(g('previsao')),
+          obsSuob:String(g('obsSuob')).replace(/^#N\/A$/, '').trim(), obsSpat:String(g('obsSpat')).replace(/^#N\/A$/, '').trim(), obsSagr:String(g('obsSagr')).replace(/^#N\/A$/, '').trim(), inaugurar:String(g('inaugurar')).replace(/^-$/, '').trim(), aptaSpat:String(g('aptaSpat')).trim(), aptaSagr:String(g('aptaSagr')).trim(), atoGs:String(g('atoGs')).trim(), dataInauguracao:obData(g('dataInauguracao')), observacoes:[g('observacoes'), g('dataPrevista') ? 'Data prevista: ' + obData(g('dataPrevista')) : ''].filter(Boolean).join(' · ') };
+        o.id = 'ob_' + obHash([origem, o.codigo, norm(municipio), norm(unidade), norm(o.objeto)].join('|')); novas.push(o); });
+    });
+    if (!novas.length) throw new Error('Não encontrei abas com as colunas "Unidade escolar" e "Município".');
+    const ids = new Set(), unicas = novas.filter(o => { while (ids.has(o.id)) o.id += 'x'; ids.add(o.id); return true; });
+    const atuais = new Map(obLista().map(o => [o.id, o])); let vinc = 0;
+    unicas.forEach(o => { const a = atuais.get(o.id); if (a && a.vinculo === 'manual') { o.escolaCodigo = a.escolaCodigo; o.vinculo = 'manual'; } else o.escolaCodigo = obCasar(o.unidade, o.municipio, o.rede) || '';
+      if (a) { ['latitude', 'longitude'].forEach(k => { if (a[k]) o[k] = a[k]; }); ['dataInauguracao', 'atoGs', 'aptaSpat', 'aptaSagr', 'inaugurar'].forEach(k => { if (!o[k] && a[k]) o[k] = a[k]; }); }
+      if (o.escolaCodigo) vinc++; });
+    const sai = [...atuais.keys()].filter(id => !ids.has(id)), est = unicas.filter(o => /ESTAD/i.test(o.rede)).length;
+    if (!await confirmar('Importar obras', `<b>${unicas.length}</b> obras: ${unicas.filter(o => o.origem === 'Contrato').length} de contratos e ${unicas.filter(o => o.origem === 'Convênio').length} de convênios · ${fmtRc(unicas.reduce((t, o) => t + num(o.valor), 0))}.<br>
+      Escolas estaduais ligadas automaticamente à base: <b>${vinc}</b> de ${est} (as demais podem ser ligadas na ficha da obra; escolas novas ficam no centro do município).<br>${atuais.size ? `${unicas.filter(o => atuais.has(o.id)).length} já existiam e serão atualizadas${sai.length ? ` · <b>${sai.length}</b> não estão mais na planilha e serão removidas` : ''}.<br>` : ''}<br>Gravar na planilha do GABOrg?`, 'Importar')) return;
+    const quando = agora(), por = cfg.usuario || '', ops = [];
+    DB.obras = unicas.map(o => novoReg('obras', Object.assign({}, atuais.get(o.id) || {}, o, { atualizadoEm:quando, atualizadoPor:por + ' (planilha)' })));
+    DB.obras.forEach(o => ops.push({ op:'upsert', table:'obras', record:Object.assign({}, o) })); sai.forEach(id => ops.push({ op:'delete', table:'obras', record:{ id } }));
+    svEnfileirarLote(ops); salvarParam('obrasImport', { arquivo:f.name, em:quando, por, n:unicas.length, vinc });
+    toast(`${unicas.length} obras importadas · ${vinc} ligadas a escolas.`); abaOb('painel');
+  } catch (e) { toast('Falha ao importar: ' + e.message, 'erro'); }
+}
+/* ---------- apresentação: obras do município, da DRE ou do estado ---------- */
+function apObrasDe(D, A){
+  const L = obLista(); if (!L.length) return [];
+  if (A.tipo === 'estado') return L;
+  if (A.tipo === 'mun') return L.filter(o => chaveMun(o.municipio) === A.m.k);
+  return L.filter(o => obDre(o) === A.d);
+}
+function apTelaObras(D, A){
+  const L = apObrasDe(D, A), tot = L.reduce((t, o) => t + obValor(o), 0), cont = f => L.filter(f).length;
+  const destaque = [...L].sort((a, b) => (['Inaugurada', 'Agendada', 'Pronta para inaugurar'].includes(obEtapa(b)) - ['Inaugurada', 'Agendada', 'Pronta para inaugurar'].includes(obEtapa(a))) || obValor(b) - obValor(a)).slice(0, A.tipo === 'mun' ? 6 : 6);
+  const obj = {}; L.forEach(o => { const k = obObj(o); obj[k] = obj[k] || [0, 0, obObjIc(o)]; obj[k][0]++; obj[k][1] += obValor(o); });
+  const anel = o => { const p = obExec(o), c = OB_ST[obStatus(o)]; return `<svg viewBox="0 0 36 36" class="an"><circle cx="18" cy="18" r="15.9" class="f"/><circle cx="18" cy="18" r="15.9" class="v" style="stroke:${c};--p:${p.toFixed(1)}"/></svg><b>${Math.round(p)}%</b>`; };
+  return `<div class="apx-l apx-l-larga apx-obras"><span class="apx-k apx-in" style="--i:0"><i class="fa-solid fa-helmet-safety"></i> Obras e investimentos</span><h2 class="apx-in" style="--i:1">${A.tipo === 'mun' ? 'Investimentos nas escolas de ' + esc(A.nome) : A.tipo === 'estado' ? 'Obras nas escolas de Mato Grosso' : 'Obras nas escolas da região'}</h2>
+    <div class="apx-ob-n"><div class="apx-in" style="--i:2"><i class="fa-solid fa-sack-dollar"></i><b class="apx-rs">${fmtRc(tot)}</b><small>investidos em ${L.length} obra${L.length === 1 ? '' : 's'}</small></div>
+      <div class="apx-in" style="--i:3"><i class="fa-solid fa-circle-check"></i>${apCont(cont(o => obStatus(o) === 'Concluída'))}<small>concluídas</small></div>
+      <div class="apx-in" style="--i:4"><i class="fa-solid fa-person-digging"></i>${apCont(cont(o => obStatus(o) === 'Em execução'))}<small>em execução</small></div>
+      <div class="apx-in" style="--i:5"><i class="fa-solid fa-ribbon"></i>${apCont(cont(o => obEtapa(o) === 'Inaugurada'))}<small>inauguradas${cont(o => ['Pronta para inaugurar', 'Agendada'].includes(obEtapa(o))) ? ` · ${cont(o => ['Pronta para inaugurar', 'Agendada'].includes(obEtapa(o)))} a inaugurar` : ''}</small></div></div>
+    <div class="apx-ob-tipos apx-in" style="--i:6">${Object.entries(obj).sort((a, b) => b[1][1] - a[1][1]).map(([k, [n, v, ic]]) => `<span><i class="fa-solid ${ic}"></i>${esc(k)} <b>${n}</b></span>`).join('')}</div>
+    <div class="apx-ob-g">${destaque.map((o, i) => { const et = OB_ETAPAS.find(e => e[0] === obEtapa(o)) || OB_ETAPAS[5]; return `<article class="apx-in" style="--i:${i + 7}"><div class="pg">${anel(o)}</div><div class="tx"><span class="ob" style="--c:${OB_ST[obStatus(o)]}"><i class="fa-solid ${obObjIc(o)}"></i>${esc(obObj(o))}</span><b>${esc(obNome(o))}</b><small>${A.tipo !== 'mun' ? esc(apNomeCurto(o.municipio)) + ' · ' : ''}${fmtRc(obValor(o))}${o.salas ? ` · ${o.salas} salas` : ''}${o.alunos ? ` · ${fmtN(o.alunos)} alunos` : ''}</small><span class="et" style="--c:${et[1]}"><i class="fa-solid ${et[2]}"></i>${et[0] === 'Em obra' ? obStatus(o) + (o.previsao ? ' · previsão ' + obPrev(o) : '') : et[0]}${o.dataInauguracao ? ' · ' + fmtDia(o.dataInauguracao) : ''}</span></div></article>`; }).join('')}</div>
+    ${L.length > destaque.length ? `<p class="apx-fonte apx-in" style="--i:14">e mais ${L.length - destaque.length} obra(s) · fonte: contratos e convênios da SEDUC-MT</p>` : ''}</div>`;
 }
 function abrirModoTV(){
   if (vistaAtual !== 'mapa') { const v = vistaAtual; vistaAtual = 'mapa'; calcularLayout(); vistaAtual = v; } else calcularLayout();

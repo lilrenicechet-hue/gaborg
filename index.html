@@ -1109,6 +1109,7 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background
   .nav-b[data-vista="resultados"] span{font-size:0}.nav-b[data-vista="resultados"] span::after{content:'Metas';font-size:10px}
   .nav-b[data-vista="relatorios"] span{font-size:0}.nav-b[data-vista="relatorios"] span::after{content:'Relatórios';font-size:10px}
   .nav-b[data-vista="apresentacao"] span{font-size:0}.nav-b[data-vista="apresentacao"] span::after{content:'Apresentar';font-size:10px}
+  .nav-b[data-vista="obras"] span{font-size:0}.nav-b[data-vista="obras"] span::after{content:'Obras';font-size:10px}
   .nav-b[data-vista="regional"] span{font-size:0}.nav-b[data-vista="regional"] span::after{content:'Regional';font-size:10px}
   .lado-pe .av{width:38px;height:38px;cursor:pointer;box-shadow:0 0 0 2px #1e293b}
   .vista{padding-top:env(safe-area-inset-top)}
@@ -1619,13 +1620,50 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background
 .apx-pes-c .mini i,.apx-pes-c .mini .ii{color:#7dd3fc;font-size:16px}.apx-pes-c .mini .ii svg{width:18px;height:18px;color:#f472b6}.apx-pes-c .mini .apx-cont{display:block;font-size:clamp(24px,2.2vw,38px);font-weight:900;margin-top:4px;letter-spacing:-.03em}.apx-pes-c .mini small{color:#bfdbfe;font-size:12px}
 .apx-pes-c .aviso{color:#fde68a;font-size:12px}
 @media (max-width:1100px){.apx-dist,.apx-org-g{max-width:100%;grid-template-columns:1fr}}
+/* ===== Obras ===== */
+.ob-st{display:inline-flex;align-items:center;gap:5px;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:700;color:var(--c);background:color-mix(in srgb,var(--c) 13%,var(--sup));white-space:nowrap}
+.ob-st::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--c)}
+.ob-et{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--c);white-space:nowrap}
+.ob-prog{display:inline-block;width:70px;height:7px;border-radius:9px;background:var(--linha);overflow:hidden;vertical-align:middle;margin-right:6px}.ob-prog i{display:block;height:100%;border-radius:inherit}
+.ob-sv{font-size:10.5px;font-weight:700;color:#b45309;background:#fef3c7;border-radius:6px;padding:1px 6px}
+.ob-g2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,440px),1fr));gap:14px;margin-top:14px}
+.ob-b .t span{border-radius:4px}
+.ob-li{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:8px 6px;border-bottom:1px solid var(--linha);cursor:pointer}.ob-li:hover{background:var(--marca-bg)}
+.ob-li>i{color:var(--marca);width:20px;text-align:center}.ob-li b{display:block;font-size:13px}.ob-li small{color:var(--mut);font-size:11.5px}
+.ob-qd{font-size:12px;font-weight:700;color:var(--marca);white-space:nowrap}
+.ob-tab tr.clic{cursor:pointer}
+.ob-dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:middle}
+.ob-mapa{height:calc(100vh - 290px);min-height:420px;border-radius:14px;overflow:hidden;border:1px solid var(--linha)}
+.ob-kan{display:grid;grid-template-columns:repeat(5,minmax(220px,1fr));gap:12px;overflow-x:auto;padding-bottom:6px}
+.ob-col{background:var(--marca-bg);border-radius:14px;padding:10px;border-top:4px solid var(--c);min-height:200px}
+.ob-col h4{margin:2px 4px 10px;font-size:13px;display:flex;gap:8px;align-items:center;color:var(--c)}.ob-col h4 b{margin-left:auto;background:var(--c);color:#fff;border-radius:99px;padding:1px 8px;font-size:11.5px}
+.ob-card{background:var(--sup);border:1px solid var(--linha);border-radius:11px;padding:9px 11px;margin-bottom:8px;cursor:pointer;transition:transform .15s,box-shadow .15s}.ob-card:hover{transform:translateY(-1px);box-shadow:0 6px 16px -10px rgba(15,23,42,.4)}
+.ob-card b{display:block;font-size:12.5px;line-height:1.3}.ob-card small{color:var(--mut);font-size:11px}
+.ob-card .r{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;font-size:11px;align-items:center}.ob-card .r span{font-weight:700}.ob-card .d{color:#0891b2}.ob-card .ok{background:#dcfce7;color:#166534;border-radius:5px;padding:0 5px}
+.ob-fi-top{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:-4px 0 10px}
+.ob-fi-h{margin:12px 0 4px;font-size:13px;display:flex;gap:8px;align-items:center;color:var(--marca)}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}@media (max-width:700px){.g3{grid-template-columns:1fr}}
+/* apresentação: obras */
+.apx-ob-n{display:grid;grid-template-columns:1.4fr repeat(3,1fr);gap:14px}
+.apx-ob-n>div{padding:16px 20px;border-radius:18px;background:rgba(11,18,34,.62);border:1px solid rgba(255,255,255,.12)}
+.apx-ob-n i{color:#fdba74;font-size:18px}.apx-ob-n .apx-cont,.apx-ob-n .apx-rs{display:block;font-size:clamp(30px,3vw,52px);font-weight:900;letter-spacing:-.04em;margin-top:6px;line-height:1}.apx-ob-n .apx-rs{color:#fde68a}.apx-ob-n small{color:#bfdbfe;font-size:13px}
+.apx-ob-tipos{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}.apx-ob-tipos span{display:inline-flex;gap:8px;align-items:center;padding:7px 13px;border-radius:12px;background:rgba(255,255,255,.08);font-size:13.5px;color:#dbeafe}.apx-ob-tipos i{color:#fdba74}.apx-ob-tipos b{color:#fff}
+.apx-ob-g{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,400px),1fr));gap:12px}
+.apx-ob-g article{display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:center;padding:14px 18px;border-radius:18px;background:rgba(11,18,34,.62);border:1px solid rgba(255,255,255,.1)}
+.apx-ob-g .pg{position:relative;width:70px;height:70px;display:grid;place-items:center}.apx-ob-g .pg b{position:absolute;font-size:16px}
+.apx-ob-g .an{position:absolute;inset:0;transform:rotate(-90deg)}.apx-ob-g .an .f{fill:none;stroke:rgba(255,255,255,.12);stroke-width:3.4}.apx-ob-g .an .v{fill:none;stroke-width:3.4;stroke-linecap:round;stroke-dasharray:0 100;transition:stroke-dasharray 1.6s cubic-bezier(.16,1,.3,1) 1s}
+.apx-s.on .apx-ob-g .an .v{stroke-dasharray:var(--p) 100}
+.apx-ob-g .tx{min-width:0;display:flex;flex-direction:column;gap:3px}.apx-ob-g .tx b{font-size:clamp(15px,1.25vw,19px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.apx-ob-g .tx small{color:#93c5fd;font-size:12.5px}
+.apx-ob-g .ob{display:inline-flex;gap:6px;align-items:center;font-size:12px;font-weight:700;color:#fdba74}.apx-ob-g .et{font-size:12.5px;font-weight:600;color:color-mix(in srgb,var(--c) 60%,#fff);display:inline-flex;gap:6px;align-items:center}
+@media (max-width:1100px){.apx-ob-n{grid-template-columns:1fr 1fr}}
+.ob-br .barra-l{grid-template-columns:minmax(0,170px) 1fr 150px}.ob-br .barra-l b{white-space:nowrap}.ob-br .barra-l b small{margin-left:6px;font-weight:500;color:var(--mut);font-size:11px}
 </style>
 </head>
 <body>
 <!-- Vigia de inicialização: se o arquivo.js não carregar ou falhar, mostra o motivo em vez de uma tela vazia -->
 <script>
-window.GABORG_VERSAO_HTML = '1.37.0'; window.GABORG_ERROS = [];
-window.GABORG_NOVIDADES = "Nova apresentação da SEDUC-MT (todo o estado): Mato Grosso em satélite com as 13 regionais e todas as escolas, rede em números, as Diretorias Regionais, distâncias, órgão central, pessoas, perfil da rede, maiores escolas, boas notícias e encerramento.";
+window.GABORG_VERSAO_HTML = '1.38.0'; window.GABORG_ERROS = [];
+window.GABORG_NOVIDADES = "Nova seção Obras e inaugurações: importa a planilha de contratos e convênios, liga cada obra à escola, mostra painel, lista com filtros, mapa e o caminho até a inauguração, com ficha editável. A Apresentação ganhou a tela Obras e investimentos (município, DRE e estado).";
 window.addEventListener('error', function (e) {
   var alvo = e.target || {};
   if (alvo.tagName === 'SCRIPT') window.GABORG_ERROS.push('Não foi possível baixar o arquivo ' + (alvo.getAttribute('src') || '') + '.');
@@ -1749,6 +1787,7 @@ window.addEventListener('load', function () { setTimeout(function () { window.GA
       <button class="nav-b" data-vista="reestruturacao"><i class="fa-solid fa-compass-drafting"></i><span>Reestruturação</span></button>
       <button class="nav-b" data-vista="chefias"><i class="fa-solid fa-user-tie"></i><span>Chefias</span></button>
       <button class="nav-b" data-vista="servidores"><i class="fa-solid fa-id-card-clip"></i><span>Servidores</span></button>
+      <button class="nav-b" data-vista="obras"><i class="fa-solid fa-helmet-safety"></i><span>Obras</span></button>
       <button class="nav-b" data-vista="regional"><i class="fa-solid fa-route"></i><span>Gestão regional</span></button>
       <h6>SISTEMA</h6>
       <button class="nav-b so-adm" data-vista="usuarios"><i class="fa-solid fa-user-shield"></i><span>Administração</span></button>
@@ -1919,6 +1958,10 @@ window.addEventListener('load', function () { setTimeout(function () { window.GA
       <div class="topo"><div><h1><i class="fa-solid fa-user-tie"></i>Chefias e sucessão</h1><p>Quem ocupa cada chefia, vagas, interinos, substitutos e atos de nomeação.</p></div></div>
       <div class="rolagem" id="ch-corpo"></div>
     </section>
+    <section class="vista fora" id="v-obras">
+      <div class="topo"><div><h1><i class="fa-solid fa-helmet-safety"></i>Obras e inaugurações</h1><p>Contratos e convênios de obras nas escolas: execução, investimento, mapa e o caminho até a inauguração.</p></div></div>
+      <div class="rolagem" id="ob-corpo"></div>
+    </section>
     <section class="vista fora" id="v-servidores">
       <div class="topo"><div><h1><i class="fa-solid fa-id-card-clip"></i>Servidores</h1><p>Quem está lotado em cada unidade do Órgão Central e das DREs, vínculos, cargos e correspondência com a nova estrutura.</p></div></div>
       <div class="rolagem" id="sv-corpo"></div>
@@ -1990,6 +2033,6 @@ window.addEventListener('load', function () { setTimeout(function () { window.GA
 
 <div id="toast"><i class="fa-solid fa-check"></i><span></span></div>
 
-<script src="arquivo.js?v=1.37.0" onerror="window.GABORG_ERROS.push('O arquivo arquivo.js não foi encontrado no servidor (erro 404).');GABORG_DIAGNOSTICO()"></script>
+<script src="arquivo.js?v=1.38.0" onerror="window.GABORG_ERROS.push('O arquivo arquivo.js não foi encontrado no servidor (erro 404).');GABORG_DIAGNOSTICO()"></script>
 </body>
 </html>
