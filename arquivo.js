@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.39.0';
+const VERSAO = '1.40.0';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -380,7 +380,7 @@ const somenteLeitura = () => { const k = VISTA_SECAO[typeof vistaAtual !== 'unde
 const SECOES_ACESSO = [
   ['Estrutura', [['estrutura', 'Mapa e lista de setores', 'fa-diagram-project', ['mapa', 'lista'], 'Organograma, lista, painel do setor, valores, vínculos'], ['escolas', 'Mapa de MT (escolas)', 'fa-map-location-dot', ['escolas'], 'Mapa das escolas e DREs; editar escolas e alunos']]],
   ['Análise', [['painel', 'Indicadores', 'fa-chart-line', ['painel'], 'Indicadores estratégicos (só leitura)', true], ['relatorios', 'Relatórios e minutas', 'fa-file-pdf', ['relatorios'], 'Montar relatórios, portarias e decretos', true], ['financeiro', 'Financeiro', 'fa-coins', ['financeiro'], 'Rubricas, despesas e custos'],
-    ['propostas', 'Propostas', 'fa-lightbulb', ['propostas'], 'Cenários de reestruturação'], ['validacoes', 'Validações', 'fa-stamp', ['validacoes'], 'Pedidos e respostas de validação'], ['tv', 'Modo TV', 'fa-tv', [], 'Apresentação em tela cheia', true], ['apresentacao', 'Apresentação', 'fa-person-chalkboard', ['apresentacao'], 'Apresentação animada por município ou DRE (receber prefeitos)', true]]],
+    ['propostas', 'Propostas', 'fa-lightbulb', ['propostas'], 'Cenários de reestruturação'], ['validacoes', 'Validações', 'fa-stamp', ['validacoes'], 'Pedidos e respostas de validação'], ['apresentacao', 'Apresentação', 'fa-person-chalkboard', ['apresentacao'], 'Apresentação animada por município ou DRE (receber prefeitos)', true]]],
   ['Gestão', [['reestruturacao', 'Reestruturação', 'fa-compass-drafting', ['reestruturacao'], 'Diagnóstico, metas, competências e minuta'], ['chefias', 'Chefias', 'fa-user-tie', ['chefias'], 'Titulares, substitutos e atos'],
     ['servidores', 'Servidores', 'fa-id-card-clip', ['servidores'], 'Lotação, vínculos e importação'], ['regional', 'Gestão regional', 'fa-route', ['regional'], 'Análise das DREs e sugestões'], ['obras', 'Obras e inaugurações', 'fa-helmet-safety', ['obras'], 'Contratos, convênios, execução e inaugurações']]]
 ];
@@ -408,7 +408,6 @@ const podeVerVista = v => !VISTAS_REMOVIDAS.has(v) && (!VISTA_SECAO[v] || podeVe
 const primeiraVista = () => { const b = [...document.querySelectorAll('.lado .nav-b[data-vista]')].find(b => podeVerVista(b.dataset.vista)); return b ? b.dataset.vista : 'config'; };
 function aplicarAcessoUI(){
   document.querySelectorAll('.lado .nav-b[data-vista]').forEach(b => b.classList.toggle('sem-acesso', !podeVerVista(b.dataset.vista) || (b.dataset.vista === 'usuarios' && !ehAdmin())));
-  const tv = document.querySelector('.nav-b.nav-tv'); if (tv) tv.classList.toggle('sem-acesso', !podeVerSec('tv'));
   document.querySelectorAll('.lado nav h6').forEach(h => { let n = h.nextElementSibling, vis = false; while (n && n.tagName !== 'H6') { if (n.classList.contains('nav-b') && !n.classList.contains('sem-acesso') && !(n.classList.contains('so-adm') && !ehAdmin())) vis = true; n = n.nextElementSibling; } h.classList.toggle('sem-acesso', !vis); });
   document.body.classList.toggle('adm', ehAdmin()); document.body.classList.toggle('ro', somenteLeitura());
   const sim = $('#acesso-sim'); if (sim) sim.remove();
@@ -423,7 +422,6 @@ function sairSimulacao(){ delete cfg.simulado; aplicarAcessoUI(); trocarVista('u
 /* exportações e documentos respeitam as permissões extras */
 ['exportarCSV', 'exportarJSON', 'exportarEscolasMT', 'svExportar', 'exportarChefias', 'csvBaixar'].forEach(n => { const f = window[n]; if (typeof f !== 'function') return; window[n] = function(){ if (!podeExtra('exportar')) return toast('Seu perfil não pode exportar planilhas.', 'aviso'); return f.apply(this, arguments); }; });
 ['emitirDoc', 'exportarMinuta'].forEach(n => { const f = window[n]; if (typeof f !== 'function') return; window[n] = function(){ if (!podeExtra('documentos')) return toast('Seu perfil não pode emitir documentos.', 'aviso'); return f.apply(this, arguments); }; });
-['abrirModoTV'].forEach(n => { const f = window[n]; if (typeof f !== 'function') return; window[n] = function(){ if (!podeVerSec('tv')) return toast('Seu perfil não tem acesso ao Modo TV.', 'aviso'); return f.apply(this, arguments); }; });
 
 /* ---------- tela de perfis ---------- */
 async function carregarPerfis(){
@@ -465,11 +463,11 @@ async function renderPerfis(){
 const MODELOS_PERFIL = [
   ['branco', 'Em branco', 'fa-file', 'Tudo oculto; você escolhe seção por seção', {}, {}],
   ['consulta', 'Consulta total', 'fa-eye', 'Vê todas as seções, sem editar', { '*':'ver' }, { exportar:true, documentos:true }],
-  ['gabinete', 'Gabinete — análise e documentos', 'fa-landmark', 'Indicadores, relatórios, mapas, Modo TV e Apresentação', { estrutura:'ver', escolas:'ver', apresentacao:'ver', obras:'ver', painel:'ver', relatorios:'ver', tv:'ver', propostas:'ver', reestruturacao:'ver', resultados:'ver', regional:'ver', chefias:'ver' }, { documentos:true, exportar:true }],
+  ['gabinete', 'Gabinete — análise e documentos', 'fa-landmark', 'Indicadores, relatórios, mapas e Apresentação', { estrutura:'ver', escolas:'ver', apresentacao:'ver', obras:'ver', painel:'ver', relatorios:'ver', tv:'ver', propostas:'ver', reestruturacao:'ver', resultados:'ver', regional:'ver', chefias:'ver' }, { documentos:true, exportar:true }],
   ['pessoas', 'Gestão de pessoas', 'fa-id-card-clip', 'Edita servidores e chefias; consulta a estrutura', { estrutura:'ver', painel:'ver', servidores:'editar', chefias:'editar', implantacao:'ver', relatorios:'ver' }, { nomesServidores:true, exportar:true, documentos:true }],
   ['regional', 'DRE / Gestão regional', 'fa-map-location-dot', 'Edita escolas e alunos; vê DREs, servidores e indicadores', { estrutura:'ver', escolas:'editar', apresentacao:'ver', regional:'ver', painel:'ver', servidores:'ver', relatorios:'ver', tv:'ver' }, { documentos:true }],
   ['financeiro', 'Financeiro', 'fa-coins', 'Edita custos; vê estrutura e propostas', { estrutura:'ver', financeiro:'editar', propostas:'ver', painel:'ver', relatorios:'ver' }, { exportar:true, documentos:true }],
-  ['indicadores', 'Somente indicadores', 'fa-chart-line', 'Indicadores e Modo TV, nada mais', { painel:'ver', tv:'ver' }, {}]
+  ['indicadores', 'Somente indicadores', 'fa-chart-line', 'Indicadores e Apresentação, nada mais', { painel:'ver', apresentacao:'ver' }, {}]
 ];
 function novoPerfil(){
   abrirModal({ titulo:'Novo perfil: comece por um modelo', rotulo:'Fechar', semCancelar:true, largura:760, html:`<p class="s" style="margin:0 0 10px">Escolha um ponto de partida. Depois você ajusta cada seção.</p><div class="pf-modelos">${MODELOS_PERFIL.map(([k, t, ic, d]) => `<button type="button" onclick="this.closest('.modal').remove();formPerfil('',false,false,${arg(k)})"><i class="fa-solid ${ic}"></i><b>${t}</b><small>${d}</small></button>`).join('')}</div>` });
@@ -1092,7 +1090,7 @@ function alinharSel(modo){
 /* Teclado no mapa: setas movem a seleção (Shift = 10 px), Ctrl+Z desfaz, Esc limpa */
 let ultimaSeta = 0;
 document.addEventListener('keydown', e => {
-  if (vistaAtual !== 'mapa' || document.querySelector('.modal') || !$('#tv-modo').classList.contains('hidden') || e.target.closest('input,textarea,select,[contenteditable]')) return;
+  if (vistaAtual !== 'mapa' || document.querySelector('.modal') || e.target.closest('input,textarea,select,[contenteditable]')) return;
   if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z') { e.preventDefault(); desfazerPos(); return; }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a' && !somenteLeitura()) { e.preventDefault(); visiveis.forEach(n => multi.add(n.id)); elNo.forEach((el, k) => el.classList.toggle('msel', multi.has(k))); atualizarBarraSel(); return; }
   if (e.key === 'Escape' && (multi.size || modoSel)) { limparMulti(); alternarModoSel(false); e.stopImmediatePropagation(); return; }
@@ -1397,7 +1395,7 @@ function addVinculo(id){
 function rmVinculo(vid){ const v = DB.vinculos.find(x => x.id === vid); if (!v) return; DB.vinculos = DB.vinculos.filter(x => x.id !== vid); enfileirar('vinculos', v, true); renderPainel(); if (vistaAtual === 'mapa') desenharArestas(); }
 
 /* ===================== VISTAS ===================== */
-document.querySelectorAll('.nav-b').forEach(b => { b.title = b.querySelector('span').textContent; b.addEventListener('click', () => b.dataset.acao === 'tv' ? abrirModoTV() : trocarVista(b.dataset.vista)); });
+document.querySelectorAll('.nav-b').forEach(b => { b.title = b.querySelector('span').textContent; b.addEventListener('click', () => trocarVista(b.dataset.vista)); });
 function trocarVista(v){
   if (!podeVerVista(v)) { if (document.querySelector('#app:not(.hidden)')) toast('Seu perfil não tem acesso a esta seção.', 'aviso'); v = primeiraVista(); }
   vistaAtual = v; document.body.classList.toggle('ro', somenteLeitura());
@@ -2361,7 +2359,7 @@ function finResumo(area){
   const orc = setoresArea.reduce((a, s) => a + numBR(s.orcamento), 0);
   const dif = t.Proposto.a - t.Atual.a;
   const kpi = (cor, ic, r, v, s) => `<div class="cartao kpi" style="--c:${cor}"><div class="r"><i class="fa-solid ${ic}"></i>${r}</div><div class="v" style="font-size:22px">${v}</div><div class="s">${s}</div></div>`;
-  if (!DB.rubricas.length && !DB.despesas.length) return `<div class="cartao bl"><h3><i class="fa-solid fa-sack-dollar"></i>Comece pela tabela de valores</h3><p class="s">Cadastre os valores mensais dos cargos em comissão (DGA), funções gratificadas, bolsas e demais despesas em <b>Tabela de valores</b>. Depois faça os <b>lançamentos</b> em cada setor (quantidade × valor), no cenário <b>Atual</b> e no <b>Proposto</b>. O resumo, o painel do setor e o Modo TV passam a mostrar os totais.</p><div class="acoes"><button class="btn btn-p so-edit" onclick="abaFin('tabela')"><i class="fa-solid fa-table"></i>Abrir a tabela de valores</button></div></div>`;
+  if (!DB.rubricas.length && !DB.despesas.length) return `<div class="cartao bl"><h3><i class="fa-solid fa-sack-dollar"></i>Comece pela tabela de valores</h3><p class="s">Cadastre os valores mensais dos cargos em comissão (DGA), funções gratificadas, bolsas e demais despesas em <b>Tabela de valores</b>. Depois faça os <b>lançamentos</b> em cada setor (quantidade × valor), no cenário <b>Atual</b> e no <b>Proposto</b>. O resumo, o painel do setor e os relatórios passam a mostrar os totais.</p><div class="acoes"><button class="btn btn-p so-edit" onclick="abaFin('tabela')"><i class="fa-solid fa-table"></i>Abrir a tabela de valores</button></div></div>`;
   // por categoria
   const porCat = {}; lista.forEach(d => { const c = calcDesp(d), k = c.categoria; porCat[k] = porCat[k] || [0, 0]; porCat[k][d.cenario === 'Proposto' ? 1 : 0] += c.anual; });
   const cats = Object.keys(porCat).sort((a, b) => porCat[b][0] - porCat[a][0]);
@@ -3239,7 +3237,7 @@ function mostrarCaminho(id){
 /* Duplo clique no fundo: aproxima naquele ponto */
 vpEl.addEventListener('dblclick', e => { if (e.target.closest('.no')) return; const r = vpEl.getBoundingClientRect(), cx = e.clientX - r.left, cy = e.clientY - r.top, k = Math.min(2.5, view.k * 1.6), q = k / view.k; view = { k, x:cx - (cx - view.x) * q, y:cy - (cy - view.y) * q }; aplicarView(!semMovimento()); });
 document.addEventListener('keydown', e => {
-  if (vistaAtual !== 'mapa' || e.ctrlKey || e.metaKey || e.altKey || document.querySelector('.modal') || !$('#tv-modo').classList.contains('hidden') || e.target.closest('input,textarea,select,[contenteditable]')) return;
+  if (vistaAtual !== 'mapa' || e.ctrlKey || e.metaKey || e.altKey || document.querySelector('.modal') || e.target.closest('input,textarea,select,[contenteditable]')) return;
   if (e.key === 'l' || e.key === 'L') { alternarMapaUI('leg'); toast(mapaUI.leg ? 'Legenda visível.' : 'Legenda escondida (L para mostrar).'); }
   if (e.key === 'm' || e.key === 'M') alternarMapaUI('mini');
   if ((e.key === 'f' || e.key === 'F') && selId) focarRamo(selId);
@@ -5957,7 +5955,7 @@ function fecharPaleta(){ const el = $('#paleta'); if (el) el.remove(); }
 function listarPaleta(txt){
   const q = norm(txt), r = [];
   document.querySelectorAll('.lado .nav-b[data-vista]:not(.sem-acesso)').forEach(b => r.push({ g:'Seções', ic:b.querySelector('i').className, t:b.title || b.textContent.trim(), a:() => trocarVista(b.dataset.vista) }));
-  [['fa-solid fa-tv', 'Abrir o Modo TV', () => abrirModoTV()], ['fa-solid fa-file-pdf', 'Gerar um relatório em PDF', () => { trocarVista('relatorios'); abaRm('relatorio'); }], ['fa-solid fa-file-contract', 'Minuta de portaria', () => { trocarVista('relatorios'); abaRm('portaria'); }], ['fa-solid fa-shield-halved', 'Verificar o código de um documento', () => { trocarVista('relatorios'); abaRm('verificar'); }], ['fa-solid fa-circle-half-stroke', 'Alternar tema claro/escuro', () => alternarTema()], ['fa-solid fa-route', 'Mapa de MT por distância até a DRE', () => { trocarVista('escolas'); setTimeout(() => modoMT('distancia'), 400); }]]
+  [['fa-solid fa-person-chalkboard', 'Abrir a Apresentação', () => trocarVista('apresentacao')], ['fa-solid fa-file-pdf', 'Gerar um relatório em PDF', () => { trocarVista('relatorios'); abaRm('relatorio'); }], ['fa-solid fa-file-contract', 'Minuta de portaria', () => { trocarVista('relatorios'); abaRm('portaria'); }], ['fa-solid fa-shield-halved', 'Verificar o código de um documento', () => { trocarVista('relatorios'); abaRm('verificar'); }], ['fa-solid fa-circle-half-stroke', 'Alternar tema claro/escuro', () => alternarTema()], ['fa-solid fa-route', 'Mapa de MT por distância até a DRE', () => { trocarVista('escolas'); setTimeout(() => modoMT('distancia'), 400); }]]
     .forEach(([ic, t, a]) => r.push({ g:'Ações', ic, t, a }));
   let L = q ? r.filter(x => norm(x.t).includes(q)) : r;
   if (q.length >= 2) {
@@ -6043,113 +6041,11 @@ function alternarLado(forcar){ ladoCfg.mini = forcar !== undefined ? forcar : !l
 })();
 window.addEventListener('resize', aplicarLado);
 document.addEventListener('keydown', e => {
-  if (e.target.closest('input,textarea,select,[contenteditable]') || document.querySelector('.modal') || !$('#tv-modo').classList.contains('hidden')) return;
+  if (e.target.closest('input,textarea,select,[contenteditable]') || document.querySelector('.modal')) return;
   if (e.key === '[' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); alternarLado(); }
 });
 aplicarLado();
 
-/* ===================== MODO TV ===================== */
-const tv = { slides:[], i:0, timer:null, prog:null, relogio:null, pausado:false, inicio:0, seg:Number(store.get('gaborg_tv_seg', 20)), ocioso:null, voltas:0 };
-function fecharModoTV(){
-  clearTimeout(tv.timer); cancelAnimationFrame(tv.prog); clearInterval(tv.relogio);
-  $('#tv-modo').classList.add('hidden'); $('#tv-palco').innerHTML = '';
-  if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
-  if (vistaAtual === 'mapa') desenharMapa();
-}
-function tvTelaCheia(){ if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); else document.documentElement.requestFullscreen && document.documentElement.requestFullscreen().catch(() => {}); }
-function tvRelogio(){ const d = new Date(); $('#tv-relogio').textContent = d.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' }); $('#tv-data').textContent = d.toLocaleDateString('pt-BR', { weekday:'long', day:'2-digit', month:'long' }); }
-function tvTempo(v){ tv.seg = Number(v); store.set('gaborg_tv_seg', tv.seg); tvAgendar(); }
-function tvPausar(forcar){ tv.pausado = forcar !== undefined ? forcar : !tv.pausado; $('#tv-btn-pausa').innerHTML = `<i class="fa-solid ${tv.pausado ? 'fa-play' : 'fa-pause'}"></i>`; tvAgendar(); }
-function tvPasso(d){ tvMostrar((tv.i + d + tv.slides.length) % tv.slides.length); }
-function tvAgendar(){
-  clearTimeout(tv.timer); cancelAnimationFrame(tv.prog);
-  const bar = $('#tv-barra'); bar.style.width = '0';
-  if (tv.pausado || !tv.seg) return;
-  tv.inicio = performance.now(); const dur = tv.seg * 1000;
-  const anima = () => { const p = Math.min(1, (performance.now() - tv.inicio) / dur); bar.style.width = (p * 100) + '%'; if (p < 1) tv.prog = requestAnimationFrame(anima); };
-  anima(); tv.timer = setTimeout(() => tvPasso(1), dur);
-}
-const tvKpi = (c, l, v, s, m) => `<div class="tv-kpi" style="--c:${c}"><div class="l">${l}</div><div class="v ${m ? 'm' : ''}">${v}</div><div class="s">${s}</div></div>`;
-const TV_SLIDE = {
-  visao(){
-    const at = DB.setores.filter(s => s.status !== 'Extinto'), soma = k => at.reduce((a, s) => a + num(s[k]), 0);
-    const pend = DB.validacoes.filter(v => !v.status || v.status === 'Pendente').length, f = totaisFin(DB.despesas);
-    return `<div class="tv-h" style="--c:#60a5fa"><i class="fa-solid fa-building-columns"></i>Secretaria de Estado de Educação<small>Decreto nº 2.236/2026</small></div>
-      <div class="tv-kpis">${tvKpi('#3b82f6', 'Setores ativos', at.length.toLocaleString('pt-BR'), `${areas.length} áreas${(() => { const e = at.filter(s => s.tipo === 'Unidades Escolares').reduce((t, s) => t + num(s.quantidade), 0); return e ? ' · ' + e.toLocaleString('pt-BR') + ' escolas' : ''; })()}`)}${tvKpi('#22c55e', 'Servidores', soma('servidores').toLocaleString('pt-BR'), `${soma('comissionados').toLocaleString('pt-BR')} comissionados`)}${tvKpi('#a855f7', 'Custo mensal', fmtRc(f.Atual.m), f.Proposto.m ? `proposto ${fmtRc(f.Proposto.m)}` : 'lançamentos atuais', true)}${tvKpi('#f59e0b', 'Validações pendentes', pend, `${DB.validacoes.length} no total`)}${tvKpi('#ef4444', 'Sem responsável', at.filter(s => !s.responsavel && filhosDe(s.id).length).length, 'chefias a definir')}</div>
-      <div class="tv-duas"><div class="tv-caixa"><h4>Setores por tipo</h4>${tvBarras(Object.entries(at.reduce((a, s) => (a[s.tipo] = (a[s.tipo] || 0) + 1, a), {})).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([t, n]) => [t, n, corTipo(t), n]))}</div>
-      <div class="tv-caixa"><h4>Maiores áreas (setores)</h4>${tvBarras(areas.map(a => [nomeCurto(porId.get(a)), DB.setores.filter(s => areaDe.get(s.id) === a && s.status !== 'Extinto').length, corArea(a)]).sort((a, b) => b[1] - a[1]).slice(0, 8).map(x => [x[0], x[1], x[2], x[1]]))}</div></div>`;
-  },
-  mapa(){ return `<div class="tv-h" style="--c:#22d3ee"><i class="fa-solid fa-diagram-project"></i>Mapa da estrutura<small>${visiveis.length} setores visíveis</small></div><div class="tv-mapa" id="tv-mapa"><div class="mundo-tv" id="tv-mundo"></div><span class="tv-dica"><i class="fa-solid fa-hand"></i> arraste para mover · roda ou pinça para zoom · duplo clique centraliza</span></div>`; },
-  areas(){
-    const f = new Map(); DB.despesas.filter(d => d.cenario !== 'Proposto').forEach(d => { const a = areaDe.get(d.setorId); f.set(a, (f.get(a) || 0) + calcDesp(d).mensal); });
-    return `<div class="tv-h" style="--c:#a78bfa"><i class="fa-solid fa-sitemap"></i>Estrutura por área<small>${areas.length} unidades ligadas ao Gabinete</small></div>
-      <div class="tv-grade">${(() => {
-        const grandes = areas.filter(a => DB.setores.filter(x => areaDe.get(x.id) === a).length > 1), unicas = areas.filter(a => !grandes.includes(a));
-        const card = (cor, tit, sub, lst, fm) => `<div class="tv-area" style="--c:${cor}"><b>${esc(tit)}</b><small>${esc(sub)}</small><div class="nums"><span><b>${lst.length}</b>setores</span><span><b>${lst.reduce((t, x) => t + num(x.servidores), 0).toLocaleString('pt-BR')}</b>servidores</span>${fm ? `<span><b>${fmtRc(fm)}</b>por mês</span>` : ''}</div></div>`;
-        const ativos = a => DB.setores.filter(x => areaDe.get(x.id) === a && x.status !== 'Extinto');
-        return grandes.sort((x, y) => ativos(y).length - ativos(x).length).map(a => card(corArea(a), nomeCurto(porId.get(a)), (porId.get(a) || {}).nome || '', ativos(a), f.get(a)).replace('<div class="tv-area"', `<div class="tv-area tv-clic" onclick="tvDetalhe('area',${arg(a)})" title="Ver o detalhe"`)).join('')
-          + (unicas.length ? card('#94a3b8', 'Unidades do Gabinete', unicas.map(a => nomeCurto(porId.get(a))).join(' · '), unicas.flatMap(ativos), unicas.reduce((t, a) => t + (f.get(a) || 0), 0)) : '');
-      })()}</div>`;
-  },
-  fin(){
-    const t = totaisFin(DB.despesas), dif = t.Proposto.a - t.Atual.a;
-    const porCat = {}; DB.despesas.forEach(d => { if (d.cenario === 'Proposto') return; const c = calcDesp(d); porCat[c.categoria] = (porCat[c.categoria] || 0) + c.anual; });
-    const porSet = new Map(); DB.despesas.forEach(d => { if (d.cenario === 'Proposto') return; porSet.set(d.setorId, (porSet.get(d.setorId) || 0) + calcDesp(d).mensal); });
-    return `<div class="tv-h" style="--c:#4ade80"><i class="fa-solid fa-sack-dollar"></i>Financeiro<small>valores com encargos</small></div>
-      <div class="tv-kpis" style="grid-template-columns:repeat(4,1fr)">${tvKpi('#3b82f6', 'Mensal · atual', fmtRc(t.Atual.m), `${t.Atual.n} lançamentos`, true)}${tvKpi('#06b6d4', 'Anual · atual', fmtRc(t.Atual.a), '', true)}${tvKpi('#a855f7', 'Anual · proposto', fmtRc(t.Proposto.a), `${t.Proposto.n} lançamentos`, true)}${tvKpi(dif > 0 ? '#ef4444' : '#22c55e', 'Diferença anual', (dif > 0 ? '+' : '') + fmtRc(Math.abs(dif)).replace('R$', dif < 0 ? '−R$' : 'R$'), 'proposto − atual', true)}</div>
-      <div class="tv-duas"><div class="tv-caixa"><h4>Custo anual por tipo (atual)</h4>${tvBarras(Object.entries(porCat).sort((a, b) => b[1] - a[1]).map(([k, v]) => [k, v, (CATEG_FIN[k] || CATEG_FIN.Outro)[0], fmtRc(v)]))}</div>
-      <div class="tv-caixa"><h4>Setores com maior custo mensal</h4><div class="tv-lista">${[...porSet.entries()].sort((a, b) => b[1] - a[1]).slice(0, 7).map(([id, v]) => `<div><span>${esc(nomeCurto(porId.get(id)))} · ${esc((porId.get(id) || {}).nome || '')}</span><b>${fmtRc(v)}</b></div>`).join('')}</div></div></div>`;
-  },
-  val(){
-    const cont = {}; DB.validacoes.forEach(v => cont[v.status || 'Pendente'] = (cont[v.status || 'Pendente'] || 0) + 1);
-    const pend = DB.validacoes.filter(v => !v.status || v.status === 'Pendente').slice(0, 7);
-    const alto = DB.setores.filter(s => num(s.impacto) >= 4 && s.status !== 'Extinto').sort((a, b) => num(b.impacto) - num(a.impacto)).slice(0, 7);
-    return `<div class="tv-h" style="--c:#fbbf24"><i class="fa-solid fa-stamp"></i>Validações e impacto</div>
-      <div class="tv-kpis" style="grid-template-columns:repeat(4,1fr)">${['Pendente', 'Aprovado', 'Aprovado com ressalvas', 'Reprovado'].map(k => tvKpi(STATUS_VAL[k] || '#64748b', k, cont[k] || 0, 'validações', false)).join('')}</div>
-      <div class="tv-duas"><div class="tv-caixa"><h4>Aguardando validação</h4><div class="tv-lista">${pend.length ? pend.map(v => `<div><span>${esc(nomeCurto(porId.get(v.setorId)))} → ${esc(nomeCurto(porId.get(v.validadorId)))}</span><b>${v.solicitadoEm ? new Date(v.solicitadoEm).toLocaleDateString('pt-BR') : ''}</b></div>`).join('') : '<div><span>Nenhuma pendência</span><b>✓</b></div>'}</div></div>
-      <div class="tv-caixa"><h4>Setores de impacto alto ou crítico</h4><div class="tv-lista">${alto.length ? alto.map(s => `<div><span>${esc(nomeCurto(s))} · ${esc(s.nome)}</span><b style="color:${IMPACTO[num(s.impacto)][1]}">${IMPACTO[num(s.impacto)][0]}</b></div>`).join('') : '<div><span>Nenhum setor avaliado com impacto alto</span><b>—</b></div>'}</div></div></div>`;
-  }
-};
-function tvBarras(itens){ const max = Math.max(1, ...itens.map(x => x[1])); return itens.map(([n, v, c, rot]) => `<div class="tv-bar" style="--c:${c}"><span class="n">${esc(n)}</span><span class="t"><span style="width:${v / max * 100}%"></span></span><span class="v">${rot ?? v}</span></div>`).join(''); }
-function tvMontarMapa(){
-  const cx = $('#tv-mapa'), mundo = $('#tv-mundo'); if (!cx) return;
-  const L = limites();
-  let ar = ''; visiveis.forEach(s => filhosVis(s.id).forEach(k => { if (pos.has(k.id)) ar += `<path d="${caminhoAresta(s, k)}"/>`; }));
-  mundo.innerHTML = `<svg style="position:absolute;left:0;top:0;width:1px;height:1px;overflow:visible">${ar}</svg>` + visiveis.map(cardHTML).join('').replace(/ sel /g, ' ').replace(/ msel /g, ' ');
-  const r = cx.getBoundingClientRect();
-  const fit = () => { const k = Math.min((r.width - 40) / (L.x1 - L.x0), (r.height - 40) / (L.y1 - L.y0), 1.2); return { k, x:(r.width - (L.x1 - L.x0) * k) / 2 - L.x0 * k, y:(r.height - (L.y1 - L.y0) * k) / 2 - L.y0 * k }; };
-  let v = fit(); const ap = () => { mundo.style.transform = `translate(${v.x}px,${v.y}px) scale(${v.k})`; }; ap();
-  let arr = null;
-  cx.addEventListener('pointerdown', e => { arr = { x:e.clientX, y:e.clientY, vx:v.x, vy:v.y }; cx.setPointerCapture(e.pointerId); cx.classList.add('pan'); tvPausar(true); });
-  cx.addEventListener('pointermove', e => { if (!arr) return; v.x = arr.vx + e.clientX - arr.x; v.y = arr.vy + e.clientY - arr.y; ap(); });
-  const solta = () => { arr = null; cx.classList.remove('pan'); }; cx.addEventListener('pointerup', solta); cx.addEventListener('pointercancel', solta);
-  cx.addEventListener('wheel', e => { e.preventDefault(); tvPausar(true); const b = cx.getBoundingClientRect(), mx = e.clientX - b.left, my = e.clientY - b.top, k = Math.max(.08, Math.min(3, v.k * Math.exp(-e.deltaY * .0015))), q = k / v.k; v = { k, x:mx - (mx - v.x) * q, y:my - (my - v.y) * q }; ap(); }, { passive:false });
-  cx.addEventListener('dblclick', () => { v = fit(); ap(); });
-  tv.moverMapa = (dx, dy, z) => { if (z) { const b = cx.getBoundingClientRect(), mx = b.width / 2, my = b.height / 2, k = Math.max(.08, Math.min(3, v.k * z)), q = k / v.k; v = { k, x:mx - (mx - v.x) * q, y:my - (my - v.y) * q }; } else { v.x += dx; v.y += dy; } ap(); };
-}
-/* ===================== MODO TV: ROTEIROS, TELAS NOVAS E INTERAÇÃO ===================== */
-const ROTEIROS_TV = {
-  panorama:['fa-earth-americas', 'Panorama completo', 'Todas as telas, da estrutura à rede escolar', ['visao', 'indicadores', 'mapa', 'areas', 'chefias', 'riscos', 'rede', 'mapamt', 'distancias', 'regional', 'fin', 'props', 'val']],
-  estrutura:['fa-sitemap', 'Estrutura e pessoas', 'Organograma, áreas, chefias, riscos e validações', ['visao', 'mapa', 'areas', 'chefias', 'riscos', 'val']],
-  rede:['fa-school', 'Rede escolar', 'As 631 escolas, o mapa de MT, distâncias e DREs', ['rede', 'mapamt', 'distancias', 'regional']],
-  gestao:['fa-compass-drafting', 'Gestão e decisões', 'Maturidade, riscos e propostas', ['indicadores', 'riscos', 'props']],
-  propostas:['fa-lightbulb', 'Propostas', 'Uma tela para cada proposta, com custo e metas', ['props']],
-  personalizado:['fa-hand-pointer', 'Personalizado', 'Você escolhe as telas', null]
-};
-const TELAS_TV = { visao:'Visão geral', indicadores:'Maturidade e alertas', mapa:'Mapa da estrutura', areas:'Estrutura por área', chefias:'Chefias', riscos:'Riscos', rede:'Rede escolar', mapamt:'Mapa de Mato Grosso', distancias:'Distâncias até as DREs', regional:'Gestão regional', fin:'Financeiro', props:'Propostas (uma por tela)', val:'Validações e impacto' };
-Object.assign(tv, { roteiro:store.get('gaborg_tv_rot', 'panorama'), pers:store.get('gaborg_tv_pers', ['visao', 'rede', 'mapamt']), trans:store.get('gaborg_tv_trans', 'deslizar'), ticker:store.get('gaborg_tv_ticker', true), cont:null, det:null });
-function tvSlides(){
-  const r = ROTEIROS_TV[tv.roteiro] || ROTEIROS_TV.panorama, base = r[3] || tv.pers, L = [];
-  base.forEach(k => {
-    if (k === 'fin' && !DB.despesas.length) return;
-    if (k === 'implantacao' && !(DB.etapas || []).length) return;
-    if (k === 'metas' && !(DB.metas || []).length) return;
-    if (k === 'agenda' && !(DB.reunioes || []).length) return;
-    if (k === 'props') { (DB.propostas || []).filter(p => p.status !== 'Arquivada').forEach(p => L.push(['prop', 'Proposta: ' + p.nome, p.id])); return; }
-    if (TV_SLIDE[k]) L.push([k, TELAS_TV[k] || k]);
-  });
-  return L.length ? L : [['visao', 'Visão geral']];
-}
 /* ===================== APRESENTAÇÃO (por município ou DRE) =====================
    Escolha um município ou uma DRE e abra uma apresentação em tela cheia, animada, com o mapa
    que dá zoom no território, as escolas que "caem" no mapa, números com contagem e a DRE que atende.
@@ -7212,154 +7108,6 @@ function apTelaObrasDest(D, A){
     <div class="apx-ob3-g ${fe && pr ? '' : 'um'}">${fe}${pr}</div></div>`;
 }
 const apTemObrasDest = (D, A) => apObrasDe(D, A).some(o => ['Inaugurada', 'Agendada', 'Pronta para inaugurar'].includes(obEtapa(o)) || (obStatus(o) === 'Em execução' && /^\d{4}-\d{2}/.test(o.previsao || '') && Date.parse(o.previsao) >= Date.now() - 62 * 864e5));
-function abrirModoTV(){
-  if (vistaAtual !== 'mapa') { const v = vistaAtual; vistaAtual = 'mapa'; calcularLayout(); vistaAtual = v; } else calcularLayout();
-  tv.pausado = false; tv.voltas = 0; tv.det = null;
-  $('#tv-seg').value = String(tv.seg);
-  const el = $('#tv-modo'); el.classList.remove('hidden'); el.focus();
-  if (document.documentElement.requestFullscreen && !document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
-  tvRelogio(); clearInterval(tv.relogio); tv.relogio = setInterval(tvRelogio, 1000);
-  tvMenu();
-}
-function tvMenu(){
-  clearTimeout(tv.timer); cancelAnimationFrame(tv.prog); clearInterval(tv.cont); tv.det = null; tv.slides = tvSlides(); tv.i = 0;
-  $('#tv-titulo-slide').textContent = 'Escolha a apresentação'; $('#tv-pontos').innerHTML = ''; $('#tv-barra').style.width = '0';
-  let n = 12;
-  $('#tv-palco').innerHTML = `<div class="tv-slide tv-menu"><div class="tv-h" style="--c:#60a5fa"><i class="fa-solid fa-display"></i>Modo TV<small id="tv-cont">começa sozinho em ${n} s</small></div>
-    <div class="tv-rots">${Object.entries(ROTEIROS_TV).map(([k, [ic, nm, d]]) => `<button class="tv-rot ${tv.roteiro === k ? 'on' : ''}" onclick="tvIniciar('${k}')"><i class="fa-solid ${ic}"></i><b>${nm}</b><span>${d}</span>${k !== 'personalizado' ? `<small>${tvContar(k)} telas</small>` : ''}</button>`).join('')}</div>
-    <div class="tv-opcoes"><div class="tv-pers"><b>Telas do roteiro personalizado</b><div>${Object.entries(TELAS_TV).map(([k, nm]) => `<label><input type="checkbox" data-tvp="${k}" ${tv.pers.includes(k) ? 'checked' : ''} onchange="tvPersMudou()">${nm}</label>`).join('')}</div></div>
-      <div class="tv-cfgs"><label>Transição<select onchange="tv.trans=this.value;store.set('gaborg_tv_trans',tv.trans);tvParar()">${[['deslizar', 'Deslizar'], ['esmaecer', 'Esmaecer'], ['zoom', 'Aproximar'], ['virar', 'Virar']].map(([k, nm]) => `<option value="${k}" ${tv.trans === k ? 'selected' : ''}>${nm}</option>`).join('')}</select></label>
-        <label><input type="checkbox" ${tv.ticker ? 'checked' : ''} onchange="tv.ticker=this.checked;store.set('gaborg_tv_ticker',tv.ticker);tvTicker();tvParar()">Faixa de alertas no rodapé</label>
-        <p>Teclas: ← → mudar de tela · espaço pausar · S sumário · M este menu · 1 a 9 ir para a tela · F tela cheia · Esc sair. Clique nas áreas, DREs e propostas para ver o detalhe.</p></div></div></div>`;
-  tv.cont = setInterval(() => { n--; const c = $('#tv-cont'); if (c) c.textContent = `começa sozinho em ${n} s`; if (n <= 0) tvIniciar(tv.roteiro); }, 1000);
-}
-function tvParar(){ clearInterval(tv.cont); const c = $('#tv-cont'); if (c) c.textContent = 'escolha um roteiro'; }
-function tvContar(k){ const a = tv.roteiro; tv.roteiro = k; const n = tvSlides().length; tv.roteiro = a; return n; }
-function tvPersMudou(){ tvParar(); tv.pers = [...document.querySelectorAll('[data-tvp]:checked')].map(x => x.dataset.tvp); store.set('gaborg_tv_pers', tv.pers); }
-function tvIniciar(k){ clearInterval(tv.cont); tv.roteiro = k; store.set('gaborg_tv_rot', k); tv.slides = tvSlides(); tv.i = 0; tv.det = null; tvTicker(); tvMostrar(0); }
-async function tvMostrar(i){
-  clearInterval(tv.cont); tv.det = null;
-  if (i === 0 && tv.voltas++ > 0 && online()) { try { await lerNuvem(); calcularLayout(); tv.slides = tvSlides(); tvTicker(); } catch (e) {} }
-  if (!tv.slides.length) tv.slides = tvSlides();
-  tv.i = Math.max(0, Math.min(i, tv.slides.length - 1));
-  const [k, t, a] = tv.slides[tv.i];
-  $('#tv-titulo-slide').textContent = t + ' · ' + (tv.i + 1) + '/' + tv.slides.length + ' · ' + (ROTEIROS_TV[tv.roteiro] || [, ''])[1];
-  $('#tv-pontos').innerHTML = tv.slides.map((s, j) => `<button class="${j === tv.i ? 'on' : ''}" title="${esc(s[1])}" onclick="tvMostrar(${j})"></button>`).join('');
-  let html; try { html = TV_SLIDE[k](a); } catch (e) { console.error(e); html = `<div class="tv-h">${esc(t)}</div><p>Não foi possível montar esta tela.</p>`; }
-  $('#tv-palco').innerHTML = `<div class="tv-slide tr-${tv.trans}">${html}</div>`;
-  if (k === 'mapa') tvMontarMapa();
-  tvAgendar();
-}
-function tvSumario(){
-  tvPausar(true); tv.det = 'sumario';
-  $('#tv-palco').innerHTML = `<div class="tv-slide tr-esmaecer"><div class="tv-h" style="--c:#60a5fa"><i class="fa-solid fa-table-cells"></i>Telas desta apresentação<small>clique para ir</small></div>
-    <div class="tv-sum">${tv.slides.map((s, j) => `<button class="${j === tv.i ? 'on' : ''}" onclick="tvPausar(false);tvMostrar(${j})"><span>${j + 1}</span><b>${esc(s[1])}</b></button>`).join('')}</div>
-    <div class="tv-acoes"><button onclick="tvMenu()"><i class="fa-solid fa-layer-group"></i>Trocar de apresentação</button><button onclick="tvPausar(false);tvMostrar(tv.i)"><i class="fa-solid fa-arrow-left"></i>Voltar</button></div></div>`;
-}
-/* faixa de alertas */
-function tvTicker(){
-  const el = $('#tv-ticker'); if (!el) return;
-  if (!tv.ticker) { el.classList.add('hidden'); return; }
-  const it = [];
-  try { insightsInd(dadosInd(''), '').filter(x => x[0] === 'alerta' || x[0] === 'atencao').forEach(x => it.push(x[1].replace(/<[^>]+>/g, ''))); } catch (e) {}
-  const at = (DB.etapas || []).filter(atrasada); if (at.length) it.push(`${at.length} etapa(s) de implantação atrasada(s): ${at.slice(0, 3).map(e => e.titulo).join('; ')}`);
-  const vag = setoresOficiais().filter(s => s.status !== 'Extinto' && CHEFIAS.includes(s.tipo) && chefiaDe(s).situacao === 'Vago'); if (vag.length) it.push(`${vag.length} chefia(s) vaga(s): ${vag.slice(0, 4).map(s => s.sigla || s.nome).join(', ')}`);
-  (DB.reunioes || []).forEach(r => itensReu(r).forEach(x => { if (x.encaminhamento && !x.feito && x.prazo && diasAte(x.prazo) <= 7) it.push(`Encaminhamento ${diasAte(x.prazo) < 0 ? 'atrasado' : 'vence em breve'}: ${x.encaminhamento}${x.responsavel ? ' (' + x.responsavel + ')' : ''}`); }));
-  if (!it.length) it.push('Nenhum alerta no momento.');
-  el.classList.remove('hidden');
-  el.innerHTML = `<span class="tg"><i class="fa-solid fa-bell"></i>Alertas</span><div class="fx"><div class="tr" style="animation-duration:${Math.max(30, it.join(' ').length / 7)}s">${it.concat(it).map(x => `<span>${esc(x)}</span>`).join('')}</div></div>`;
-}
-/* detalhe ao clicar (pausa a apresentação) */
-function tvDetalhe(tipo, ref){
-  tvPausar(true); tv.det = tipo; let h = '';
-  if (tipo === 'area') { const a = porId.get(ref), l = DB.setores.filter(s => areaDe.get(s.id) === ref && s.status !== 'Extinto'), tp = {}; l.forEach(s => tp[s.tipo] = (tp[s.tipo] || 0) + 1);
-    const ch = l.filter(s => CHEFIAS.includes(s.tipo)), vag = ch.filter(s => chefiaDe(s).situacao === 'Vago' || !s.responsavel);
-    h = `<div class="tv-h" style="--c:${corArea(ref)}"><i class="fa-solid fa-building-columns"></i>${esc(a ? a.nome : '')}<small>${l.length} setores</small></div>
-      <div class="tv-kpis" style="grid-template-columns:repeat(4,1fr)">${tvKpi('#3b82f6', 'Setores', l.length, Object.keys(tp).length + ' tipos')}${tvKpi('#22c55e', 'Servidores', fmtN(l.reduce((t, s) => t + num(s.servidores), 0)), 'informados')}${tvKpi('#a855f7', 'Chefias', ch.length, vag.length + ' sem titular')}${tvKpi('#f97316', 'Impacto alto', l.filter(s => num(s.impacto) >= 4).length, 'alto ou crítico')}</div>
-      <div class="tv-duas"><div class="tv-caixa"><h4>Setores por tipo</h4>${tvBarras(Object.entries(tp).sort((x, y) => y[1] - x[1]).map(([t, n]) => [t, n, corTipo(t), n]))}</div><div class="tv-caixa"><h4>Chefias</h4><div class="tv-lista">${ch.slice(0, 9).map(s => `<div><span>${esc(s.nome)}</span><b>${esc(s.responsavel || 'sem titular')}</b></div>`).join('')}</div></div></div>`; }
-  if (tipo === 'dre') { const X = distanciasMT(), l = X.lista.filter(o => o.e.dre === ref), mun = {}; l.forEach(o => mun[o.e.municipio] = (mun[o.e.municipio] || 0) + 1);
-    const med = l.reduce((t, o) => t + o.km, 0) / Math.max(1, l.length), s = setorDaDRE(ref), cor = corDRE(X.dres, ref);
-    h = `<div class="tv-h" style="--c:${cor}"><i class="fa-solid fa-building-flag"></i>${esc(ref)}<small>${s && s.responsavel ? esc(s.responsavel) : ''}</small></div>
-      <div class="tv-kpis" style="grid-template-columns:repeat(4,1fr)">${tvKpi(cor, 'Escolas', l.length, Object.keys(mun).length + ' municípios')}${tvKpi('#65a30d', 'Rurais', l.filter(o => o.e.localidade === 'RURAL').length, pct(l.filter(o => o.e.localidade === 'RURAL').length, l.length) + '%')}${tvKpi('#f97316', 'Distância média', fmtKm(med), '~' + fmtHoras(med) + ' por estrada', true)}${tvKpi('#dc2626', 'Mais distante', fmtKm(Math.max(0, ...l.map(o => o.km))), 'em linha reta', true)}</div>
-      <div class="tv-duas"><div class="tv-caixa"><h4>Escolas por município</h4>${tvBarras(Object.entries(mun).sort((x, y) => y[1] - x[1]).slice(0, 9).map(([m, n]) => [m, n, cor, n]))}</div><div class="tv-caixa"><h4>Escolas mais distantes da sede</h4><div class="tv-lista">${l.slice().sort((x, y) => y.km - x.km).slice(0, 8).map(o => `<div><span>${esc(o.e.nome)} · ${esc(o.e.municipio)}</span><b>${fmtKm(o.km)}</b></div>`).join('')}</div></div></div>`; }
-  $('#tv-palco').innerHTML = `<div class="tv-slide tr-zoom">${h}<div class="tv-acoes"><button onclick="tvPausar(false);tvMostrar(tv.i)"><i class="fa-solid fa-arrow-left"></i>Voltar à apresentação</button></div></div>`;
-}
-/* projeção simples para o mapa de MT na TV (SVG leve, sem bibliotecas externas) */
-function tvMapaMT(dresSel){
-  const fc = topojson.feature(MALHA_MT, MALHA_MT.objects[Object.keys(MALHA_MT.objects)[0]]), X = distanciasMT(), dres = X.dres, porMun = dreDosMunicipios();
-  let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; const kx = Math.cos(-13 * Math.PI / 180);
-  const pts = []; fc.features.forEach(f => (f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates).forEach(pl => pl[0].forEach(([lo, la]) => { const x = lo * kx, y = -la; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; })));
-  const W = 1000, s = W / (x1 - x0), Hh = (y1 - y0) * s, P = (lo, la) => [((lo * kx - x0) * s).toFixed(1), ((-la - y0) * s).toFixed(1)];
-  const path = g => (g.type === 'Polygon' ? [g.coordinates] : g.coordinates).map(pl => pl.map(r => 'M' + r.map(([lo, la]) => P(lo, la).join(',')).join('L') + 'Z').join('')).join('');
-  const mun = fc.features.map(f => { const o = porMun.get(chaveMun(f.properties.nome)), d = o ? Object.entries(o).sort((a, b) => b[1] - a[1])[0][0] : ''; return `<path d="${path(f.geometry)}" fill="${d ? corDRE(dres, d) : '#334155'}" fill-opacity="${d && (!dresSel || dresSel === d) ? .42 : .06}" stroke="#0b1220" stroke-width="1"><title>${esc(f.properties.nome)}${d ? ' · ' + esc(nomeDRE(d)) : ''}</title></path>`; }).join('');
-  const esc_ = X.lista.filter(o => !dresSel || o.e.dre === dresSel).map(o => { const [x, y] = P(o.e.longitude, o.e.latitude); return simbolo(formaTipo(o.e.tipo), x, y, 4.2, corDRE(dres, o.e.dre)); }).join('');
-  const sedes = dres.map(d => { const [x, y] = P(X.sedes.get(d)[1], X.sedes.get(d)[0]), n = X.lista.filter(o => o.e.dre === d).length; return `<g class="tv-sede" onclick="tvDetalhe('dre',${arg(d)})" style="cursor:pointer"><circle cx="${x}" cy="${y}" r="13" fill="${corDRE(dres, d)}" stroke="#fff" stroke-width="2.5"/><text x="${x}" y="${(+y + 4).toFixed(1)}" text-anchor="middle" font-size="11" font-weight="800" fill="#fff">${n}</text><text x="${(+x + 17).toFixed(1)}" y="${(+y + 4).toFixed(1)}" font-size="13" font-weight="700" fill="#e2e8f0" stroke="#0b1220" stroke-width="3" paint-order="stroke">${esc(nomeDRE(d))}</text></g>`; }).join('');
-  return `<svg viewBox="-10 -10 ${W + 140} ${(Hh + 20).toFixed(0)}" preserveAspectRatio="xMidYMid meet" class="tv-svgmt">${mun}${esc_}${sedes}</svg>`;
-}
-Object.assign(TV_SLIDE, {
-  indicadores(){ const D = dadosInd(''), ins = insightsInd(D, ''), idx = D.porArea.length ? Math.round(D.porArea.reduce((t, x) => t + x.idx * x.n, 0) / Math.max(1, D.porArea.reduce((t, x) => t + x.n, 0))) : 0, cor = idx >= 75 ? '#22c55e' : idx >= 50 ? '#f59e0b' : '#ef4444';
-    return `<div class="tv-h" style="--c:${cor}"><i class="fa-solid fa-gauge-high"></i>Maturidade da estrutura<small>leitura automática dos dados</small></div>
-      <div class="tv-duas" style="grid-template-columns:.8fr 2fr"><div class="tv-caixa tv-gauge" style="--c:${cor}"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15.9" class="f"/><circle cx="18" cy="18" r="15.9" class="v" stroke-dasharray="${idx} 100"/></svg><b>${idx}</b><span>índice de maturidade (0 a 100)</span></div>
-      <div class="tv-caixa"><h4>Pontos de atenção</h4><div class="tv-ins">${ins.slice(0, 7).map(([t, h]) => `<div class="${t}">${h}</div>`).join('')}</div></div></div>`; },
-  rede(){ const E = escolasLista(), dres = dresDe(E), rur = E.filter(e => e.localidade === 'RURAL').length, tp = {}; E.forEach(e => { const g = grupoTipo(e.tipo); tp[g] = (tp[g] || 0) + 1; });
-    return `<div class="tv-h" style="--c:#4ade80"><i class="fa-solid fa-school"></i>Rede estadual de ensino<small>clique numa DRE para detalhar</small></div>
-      <div class="tv-kpis">${tvKpi('#22c55e', 'Unidades escolares', fmtN(E.length), dres.length + ' DREs')}${tvKpi('#06b6d4', 'Municípios', new Set(E.map(e => e.municipio)).size, 'atendidos')}${tvKpi('#84cc16', 'Rurais', rur, pct(rur, E.length) + '% da rede')}${tvKpi('#f97316', 'Indígenas', tp['Indígena'] || 0, (tp.Quilombola || 0) + ' quilombolas')}${tvKpi('#14b8a6', 'Cívico-militares', tp['Cívico-militar'] || 0, (tp.Militar || 0) + ' militares')}</div>
-      <div class="tv-duas"><div class="tv-caixa"><h4>Escolas por DRE</h4>${dres.map(d => [d, E.filter(e => e.dre === d).length]).sort((a, b) => b[1] - a[1]).map(([d, n]) => `<div class="tv-bar tv-clic" style="--c:${corDRE(dres, d)}" onclick="tvDetalhe('dre',${arg(d)})"><span class="n">${esc(nomeDRE(d))}</span><span class="t"><span style="width:${n / Math.max(...dres.map(x => E.filter(e => e.dre === x).length)) * 100}%"></span></span><span class="v">${n}</span></div>`).join('')}</div>
-      <div class="tv-caixa"><h4>Escolas por tipo</h4>${tvBarras(Object.entries(tp).sort((a, b) => b[1] - a[1]).map(([g, n]) => [g, n, CORES_TIPO[g] || '#94a3b8', n]))}</div></div>`; },
-  mapamt(){ return `<div class="tv-h" style="--c:#22d3ee"><i class="fa-solid fa-map-location-dot"></i>Mato Grosso: escolas e DREs<small>clique numa sede para detalhar</small></div><div class="tv-mapa tv-mapamt">${tvMapaMT()}</div>`; },
-  distancias(){ const X = distanciasMT(), l = X.lista, med = l.reduce((t, o) => t + o.km, 0) / l.length, por = X.dres.map(d => { const x = l.filter(o => o.e.dre === d); return [d, x.reduce((t, o) => t + o.km, 0) / x.length]; }).sort((a, b) => b[1] - a[1]);
-    return `<div class="tv-h" style="--c:#fb923c"><i class="fa-solid fa-route"></i>Distância das escolas até a sua DRE<small>em linha reta</small></div>
-      <div class="tv-kpis" style="grid-template-columns:repeat(4,1fr)">${tvKpi('#3b82f6', 'Média', fmtKm(med), '~' + fmtHoras(med) + ' por estrada', true)}${tvKpi('#f97316', 'A mais de 100 km', l.filter(o => o.km > 100).length, pct(l.filter(o => o.km > 100).length, l.length) + '% das escolas')}${tvKpi('#dc2626', 'A mais de 300 km', l.filter(o => o.km > 300).length, 'escolas')}${tvKpi('#a855f7', 'Mais perto de outra DRE', l.filter(o => o.prox && o.km - o.prox.km >= 40 && o.prox.km < o.km * .7).length, '40 km ou mais')}</div>
-      <div class="tv-duas"><div class="tv-caixa"><h4>Distância média por DRE</h4>${por.map(([d, v]) => `<div class="tv-bar tv-clic" style="--c:${faixaDist(v)[2]}" onclick="tvDetalhe('dre',${arg(d)})"><span class="n">${esc(nomeDRE(d))}</span><span class="t"><span style="width:${v / por[0][1] * 100}%"></span></span><span class="v">${fmtKm(v)}</span></div>`).join('')}</div>
-      <div class="tv-caixa"><h4>Escolas mais distantes</h4><div class="tv-lista">${l.slice().sort((a, b) => b.km - a.km).slice(0, 8).map(o => `<div><span>${esc(o.e.nome)} · ${esc(o.e.municipio)}</span><b>${fmtKm(o.km)}</b></div>`).join('')}</div></div></div>`; },
-  regional(){ const R = dadosRegionais().sort((a, b) => b.custo - a.custo), dres = R.map(x => x.d).sort();
-    return `<div class="tv-h" style="--c:#f472b6"><i class="fa-solid fa-building-flag"></i>Gestão regional<small>custo estimado de deslocamento por ano</small></div>
-      <div class="tv-grade">${R.map(x => `<div class="tv-area tv-clic" style="--c:${corDRE(dres, x.d)}" onclick="tvDetalhe('dre',${arg(x.d)})"><b>${esc(nomeDRE(x.d))}</b><small>${x.s && x.s.responsavel ? esc(x.s.responsavel) : 'sem responsável indicado'}</small><div class="nums"><span><b>${x.n}</b>escolas</span><span><b>${fmtKm(x.med)}</b>média</span><span><b>${fmtRc(x.custo)}</b>/ano</span></div></div>`).join('')}</div>`; },
-  chefias(){ const T = setoresOficiais().filter(s => s.status !== 'Extinto' && CHEFIAS.includes(s.tipo)).map(s => ({ s, c:chefiaDe(s) })), n = k => T.filter(y => y.c.situacao === k).length;
-    return `<div class="tv-h" style="--c:#818cf8"><i class="fa-solid fa-user-tie"></i>Chefias e sucessão<small>${T.length} chefias</small></div>
-      <div class="tv-kpis" style="grid-template-columns:repeat(5,1fr)">${tvKpi('#22c55e', 'Com titular', n('Titular'), pct(n('Titular'), T.length) + '%')}${tvKpi('#f59e0b', 'Interinos', n('Interino'), '')}${tvKpi('#3b82f6', 'Em nomeação', n('Em nomeação'), '')}${tvKpi('#ef4444', 'Vagos', n('Vago'), '')}${tvKpi('#94a3b8', 'Sem registro', n('Não informado'), 'a cadastrar')}</div>
-      <div class="tv-caixa" style="flex:1"><h4>Vagas e interinidades</h4><div class="tv-lista">${T.filter(y => ['Vago', 'Interino', 'Em nomeação'].includes(y.c.situacao)).sort((a, b) => (prof.get(a.s.id) || 0) - (prof.get(b.s.id) || 0)).slice(0, 8).map(y => `<div><span>${esc(y.s.nome)}</span><b style="color:${SIT_CH[y.c.situacao]}">${esc(y.c.situacao)}${y.c.desde ? ' há ' + diasDesdeData(y.c.desde) + ' dias' : ''}</b></div>`).join('') || '<div><span>Nenhuma vaga ou interinidade registrada.</span></div>'}</div></div>`; },
-  riscos(){ const D = dadosInd(''), r = D.base.filter(emRisco), M = metricasEstrutura(D.base);
-    return `<div class="tv-h" style="--c:#f87171"><i class="fa-solid fa-triangle-exclamation"></i>Riscos e prioridades</div>
-      <div class="tv-kpis" style="grid-template-columns:repeat(4,1fr)">${tvKpi('#ef4444', 'Setores em risco', r.length, 'impacto alto com ponto fraco')}${tvKpi('#f59e0b', 'Validações pendentes', D.pend.length, D.pend.filter(v => diasDesde(v.solicitadoEm) > 15).length + ' há mais de 15 dias')}${tvKpi('#a855f7', 'Chefias sobrecarregadas', M.comSub.filter(x => x[1] > 8).length, 'mais de 8 subordinados')}${tvKpi('#64748b', 'Chefias sem responsável', M.semResp, 'de ' + M.chefias.length)}</div>
-      <div class="tv-caixa" style="flex:1"><h4>Setores de impacto alto ou crítico com ponto fraco</h4><div class="tv-lista">${r.slice(0, 8).map(s => `<div><span>${esc(s.nome)}</span><b style="color:${IMPACTO[num(s.impacto)][1]}">${IMPACTO[num(s.impacto)][0]} · ${esc(statusVal(s.id))}</b></div>`).join('') || '<div><span>Nenhum setor em risco.</span></div>'}</div></div>`; },
-  prop(id){ const p = (DB.propostas || []).find(x => x.id === id); if (!p) return '<div class="tv-h">Proposta removida</div>';
-    const X = diffCenarios('', p.id), c = t => X.est.filter(e => e.tipo === t).length, d = X.aB - X.aA, mt = Object.assign({}, METAS_PADRAO, param('metasReestr', {})), C = cenariosRe(), cen = C.find(q => q.id === p.id), av = cen ? avaliarCenario(cen, metricasEstrutura(cen.lista), C[0], mt) : [];
-    return `<div class="tv-h" style="--c:#fbbf24"><i class="fa-solid fa-lightbulb"></i>${esc(p.nome)}<small>${esc(p.status || 'Em elaboração')}</small></div>${p.descricao ? `<p class="tv-desc">${esc(p.descricao)}</p>` : ''}
-      <div class="tv-kpis">${tvKpi('#22c55e', 'Criadas', c('novo') + c('reativado'), 'unidades')}${tvKpi('#ef4444', 'Extintas', c('extinto'), 'unidades')}${tvKpi('#3b82f6', 'Movidas', c('movido'), '')}${tvKpi('#a855f7', 'Renomeadas', c('renomeado') + c('tipo'), '')}${tvKpi(d > 0 ? '#ef4444' : '#22c55e', 'Custo anual', fmtRc(X.aB), (d >= 0 ? '+' : '') + fmtRs(d) + ' sobre o atual', true)}</div>
-      <div class="tv-duas"><div class="tv-caixa"><h4>Principais alterações</h4><div class="tv-lista">${X.est.filter(e => e.tipo !== 'editado').slice(0, 7).map(e => `<div><span>${e.txt}</span><b>${esc(e.tipo)}</b></div>`).join('') || '<div><span>Sem alterações de unidades.</span></div>'}</div></div>
-      <div class="tv-caixa"><h4>Metas da reorganização</h4><div class="tv-ins">${av.map(y => `<div class="${y.ok ? 'ok' : 'alerta'}">${y.ok ? '✓' : '✗'} ${esc(y.nome)}: <b>${esc(y.valor)}</b></div>`).join('') || '<div class="info">Defina as metas em Reestruturação.</div>'}</div></div></div>`; },
-  implantacao(){ const L = DB.etapas || [], co = L.filter(e => e.status === 'Concluída').length, at = L.filter(atrasada);
-    return `<div class="tv-h" style="--c:#2dd4bf"><i class="fa-solid fa-list-check"></i>Implantação<small>${pct(co, L.length)}% concluído</small></div>
-      <div class="tv-kpis" style="grid-template-columns:repeat(4,1fr)">${tvKpi('#14b8a6', 'Etapas', L.length, co + ' concluídas')}${tvKpi('#3b82f6', 'Em andamento', L.filter(e => e.status === 'Em andamento').length, '')}${tvKpi('#ef4444', 'Atrasadas', at.length, '')}${tvKpi('#7f1d1d', 'Bloqueadas', L.filter(e => e.status === 'Bloqueada').length, '')}</div>
-      <div class="tv-duas"><div class="tv-caixa"><h4>Andamento por fase</h4>${tvBarras(FASES_IM.map(f => { const l = L.filter(e => e.fase === f); return [f, l.length ? Math.round(l.filter(e => e.status === 'Concluída').length * 100 / l.length) : 0, '#14b8a6', l.length ? Math.round(l.filter(e => e.status === 'Concluída').length * 100 / l.length) + '%' : '—']; }))}</div>
-      <div class="tv-caixa"><h4>Atrasadas</h4><div class="tv-lista">${at.slice(0, 7).map(e => `<div><span>${esc(e.titulo)}</span><b style="color:#f87171">${fmtDia(e.prazo)}</b></div>`).join('') || '<div><span>Nenhuma etapa atrasada.</span></div>'}</div></div></div>`; },
-  metas(){ const M = DB.metas || [], O = objetivosRS();
-    return `<div class="tv-h" style="--c:#f472b6"><i class="fa-solid fa-bullseye"></i>Pacto de resultados<small>${M.length} metas</small></div>
-      <div class="tv-caixa" style="flex:1"><h4>Atingimento por objetivo estratégico</h4>${tvBarras(O.map(o => { const p = M.filter(m => m.objetivo === o).map(progressoMeta).filter(v => v !== null), v = p.length ? Math.round(p.reduce((a, b) => a + b, 0) / p.length * 100) : 0; return [o, v, v >= 60 ? '#22c55e' : v >= 30 ? '#f59e0b' : '#ef4444', p.length ? v + '%' : '—']; }))}</div>`; },
-  agenda(){ const R = (DB.reunioes || []).slice().sort((a, b) => String(a.data).localeCompare(String(b.data))), prox = R.filter(r => r.status !== 'Realizada' && tData(r.data) >= Date.now() - 864e5), enc = []; R.forEach(r => itensReu(r).forEach(x => { if (x.encaminhamento && !x.feito) enc.push({ r, x }); }));
-    return `<div class="tv-h" style="--c:#c084fc"><i class="fa-solid fa-people-group"></i>Agenda e encaminhamentos</div>
-      <div class="tv-duas"><div class="tv-caixa"><h4>Próximas reuniões</h4><div class="tv-lista">${prox.slice(0, 6).map(r => `<div><span>${esc(r.titulo)}</span><b>${fmtData(r.data)}</b></div>`).join('') || '<div><span>Nenhuma reunião marcada.</span></div>'}</div></div>
-      <div class="tv-caixa"><h4>Encaminhamentos em aberto</h4><div class="tv-lista">${enc.sort((a, b) => String(a.x.prazo || '9').localeCompare(String(b.x.prazo || '9'))).slice(0, 7).map(({ x }) => `<div><span>${esc(x.encaminhamento)}${x.responsavel ? ' · ' + esc(x.responsavel) : ''}</span><b style="color:${x.prazo && diasAte(x.prazo) < 0 ? '#f87171' : '#e2e8f0'}">${x.prazo ? fmtDia(x.prazo) : '—'}</b></div>`).join('') || '<div><span>Nenhum encaminhamento em aberto.</span></div>'}</div></div></div>`; }
-});
-
-document.addEventListener('keydown', e => {
-  if ($('#tv-modo').classList.contains('hidden')) return;
-  const noMapa = tv.slides[tv.i] && tv.slides[tv.i][0] === 'mapa' && tv.pausado && tv.moverMapa;
-  if (e.target.closest && e.target.closest('input,select,textarea')) { if (e.key === 'Escape') fecharModoTV(); return; }
-  if (e.key === 'Escape') { e.preventDefault(); if (tv.det && tv.slides.length) { tvPausar(false); tvMostrar(tv.i); } else fecharModoTV(); }
-  else if (e.key.toLowerCase() === 's' && tv.slides.length) { e.preventDefault(); tvSumario(); }
-  else if (e.key.toLowerCase() === 'm') { e.preventDefault(); tvMenu(); }
-  else if (/^[1-9]$/.test(e.key) && tv.slides.length) { e.preventDefault(); tvPausar(false); tvMostrar(Number(e.key) - 1); }
-  else if (noMapa && ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','+','-','='].includes(e.key)) { e.preventDefault(); const p = 60; ({ ArrowLeft:() => tv.moverMapa(p, 0), ArrowRight:() => tv.moverMapa(-p, 0), ArrowUp:() => tv.moverMapa(0, p), ArrowDown:() => tv.moverMapa(0, -p), '+':() => tv.moverMapa(0, 0, 1.2), '=':() => tv.moverMapa(0, 0, 1.2), '-':() => tv.moverMapa(0, 0, 1 / 1.2) })[e.key](); }
-  else if (e.key === 'ArrowRight' || e.key === 'PageDown') { e.preventDefault(); tvPasso(1); }
-  else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); tvPasso(-1); }
-  else if (e.key === ' ') { e.preventDefault(); tvPausar(); }
-  else if (e.key.toLowerCase() === 'f') tvTelaCheia();
-  e.stopImmediatePropagation();
-}, true);
-document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && !$('#tv-modo').classList.contains('hidden')) { /* continua em tela normal */ } });
-$('#tv-modo').addEventListener('pointermove', () => { const el = $('#tv-modo'); el.classList.remove('ocioso'); clearTimeout(tv.ocioso); tv.ocioso = setTimeout(() => el.classList.add('ocioso'), 3000); });
 
 /* Erros inesperados depois de aberto: avisa em vez de falhar em silêncio */
 window.addEventListener('error', e => { if (window.GABORG_INICIADO && e.message && typeof toast === 'function') toast('Erro: ' + e.message + ' — recarregue a página. Se repetir, envie esta mensagem ao suporte.', 'erro'); });
@@ -7413,7 +7161,7 @@ function menuUsuario(){
     ${appInstalavel() ? '<button class="it" data-a="instalar"><i class="fa-solid fa-download"></i>Instalar o GABOrg como app</button>' : ''}
     <button class="it" data-a="atualizar"><i class="fa-solid fa-rotate"></i>${atu.nova ? `Atualizar para a versão ${esc(atu.nova)}` : 'Verificar atualização'}<small style="margin-left:auto;color:var(--mut2)">v${VERSAO}</small></button>
     <button class="it" data-a="busca"><i class="fa-solid fa-magnifying-glass"></i>Busca rápida</button>
-    <button class="it" data-a="tv"><i class="fa-solid fa-tv"></i>Modo TV (apresentação)</button>
+    <button class="it" data-a="ap"><i class="fa-solid fa-person-chalkboard"></i>Apresentação</button>
     <button class="it" data-a="tema"><i class="fa-solid fa-circle-half-stroke"></i>${escuro ? 'Tema claro' : 'Tema escuro'}</button>
     <button class="it" data-a="senha"><i class="fa-solid fa-key"></i>Alterar minha senha</button>
     <button class="it" data-a="config"><i class="fa-solid fa-gear"></i>Configurações</button>
@@ -7426,7 +7174,7 @@ function menuUsuario(){
     if (a === 'instalar') instalarApp();
     if (a === 'atualizar') { if (atu.nova) atualizarApp(); else verificarAtualizacao(true); }
     if (a === 'busca') setTimeout(abrirPaleta, 50);
-    if (a === 'tv') abrirModoTV();
+    if (a === 'ap') trocarVista('apresentacao');
     if (a === 'tema') alternarTema();
     if (a === 'senha') modalTrocarSenha(false);
     if (a === 'config') trocarVista('config');
