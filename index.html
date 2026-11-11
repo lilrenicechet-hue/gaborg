@@ -1567,13 +1567,15 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background
 
 .apx-leg span.lg-st,.apx-leg span.lg-pf{padding:0;width:20px;height:20px;gap:0;border-radius:50%;color:#fff;justify-content:center}.apx-leg span.lg-st{background:#f59e0b}.apx-leg span.lg-pf{background:#7c3aed}
 .apx-incl{display:flex;gap:9px;align-items:flex-start;padding:9px 11px;border-radius:11px;background:rgba(251,191,36,.12);color:#fde68a;font-size:11.5px;line-height:1.45}.apx-incl svg{flex:none;width:18px;height:18px;color:#f472b6}.apx-incl.ok{background:rgba(52,211,153,.12);color:#a7f3d0}.apx-incl b{color:#fff}
+.apx-caderno.cheio .apx-lin{padding:clamp(4px,.55vw,9px) 0}.apx-caderno.cheio .apx-lin b{font-size:clamp(26px,2.4vw,44px)}.apx-caderno.cheio .apx-folha h3{margin-bottom:4px}
+.apx-incl i{flex:none;width:18px;text-align:center;color:#34d399;font-size:14px;margin-top:1px}
 </style>
 </head>
 <body>
 <!-- Vigia de inicialização: se o arquivo.js não carregar ou falhar, mostra o motivo em vez de uma tela vazia -->
 <script>
-window.GABORG_VERSAO_HTML = '1.35.0'; window.GABORG_ERROS = [];
-window.GABORG_NOVIDADES = "Apresentação: nomes de todas as escolas e a prefeitura no mapa de satélite; nova tela da rede em números com lousa, caderno e turma (com educação inclusiva); nova tela da DRE com rota animada; boas notícias com imagens e resumo; encerramento com alunos e professores dando tchau. Escolas ganham o campo Alunos da educação inclusiva.";
+window.GABORG_VERSAO_HTML = '1.36.0'; window.GABORG_ERROS = [];
+window.GABORG_NOVIDADES = "Escolas: novos campos Alunos da educação inclusiva e Profissionais da escola, editáveis na ficha e na tabela Editar escolas, incluídos na exportação e na importação da planilha. A Apresentação mostra os profissionais e a relação estudantes por profissional.";
 window.addEventListener('error', function (e) {
   var alvo = e.target || {};
   if (alvo.tagName === 'SCRIPT') window.GABORG_ERROS.push('Não foi possível baixar o arquivo ' + (alvo.getAttribute('src') || '') + '.');
@@ -1938,6 +1940,6 @@ window.addEventListener('load', function () { setTimeout(function () { window.GA
 
 <div id="toast"><i class="fa-solid fa-check"></i><span></span></div>
 
-<script src="arquivo.js?v=1.35.0" onerror="window.GABORG_ERROS.push('O arquivo arquivo.js não foi encontrado no servidor (erro 404).');GABORG_DIAGNOSTICO()"></script>
+<script src="arquivo.js?v=1.36.0" onerror="window.GABORG_ERROS.push('O arquivo arquivo.js não foi encontrado no servidor (erro 404).');GABORG_DIAGNOSTICO()"></script>
 </body>
 </html>
