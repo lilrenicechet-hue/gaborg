@@ -1295,13 +1295,92 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background
 @media (max-width:1100px){.apx-grid{grid-template-columns:1fr}.apx-prev{position:static}}
 @media (max-width:900px){.apx-l,.apx-fim,.apx-flut{max-width:100%}.apx-mapa,.apx-show[data-pos] .apx-mapa{left:0;padding-left:3vw;opacity:.3}.apx-nums,.apx-rank,.apx-escs,.apx-perfil{grid-template-columns:1fr}.apx-flut{position:static;translate:none}.apx-s{overflow:auto;align-items:flex-start}}
 @media (prefers-reduced-motion:reduce){.apx-in,.apx-s.on .apx-in{animation:none;opacity:1;transform:none;filter:none}.apx-svg.pins .apx-pin{animation:none;opacity:1}.apx-fx i,.apx-svg.pulsa .apx-mun path.alvo,.apx-sede .h{animation:none}.apx-svg.liga .apx-liga{animation:none;stroke-dashoffset:0}}
+/* símbolos do município */
+.apx-simb{display:flex;align-items:center;gap:14px}.apx-simb:empty{display:none}
+.apx-simb img{display:block;object-fit:contain;filter:drop-shadow(0 8px 18px rgba(0,0,0,.45))}
+.apx-simb img.c{height:clamp(64px,7vw,112px);width:auto}
+.apx-simb img.b{height:clamp(46px,5vw,80px);width:auto;border-radius:6px;box-shadow:0 0 0 1px rgba(255,255,255,.25)}
+.apx-simb.grande{margin-bottom:22px}
+.apx-simb.mini{position:absolute;right:12px;bottom:12px;gap:8px;padding:6px 8px;border-radius:12px;background:rgba(11,18,34,.6);backdrop-filter:blur(6px)}
+.apx-simb.mini img.c{height:46px}.apx-simb.mini img.b{height:32px}
+.apx-prev-map{position:relative}
+.apx-chips{display:flex;flex-wrap:wrap;gap:10px;margin-top:34px}
+.apx-chips span{display:inline-flex;gap:9px;align-items:center;padding:10px 18px;border-radius:999px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);color:#dbeafe;font-size:clamp(13px,1vw,16px);backdrop-filter:blur(8px)}
+.apx-chips b{color:#fff;font-size:1.15em}.apx-chips i{color:#7dd3fc}
+.apx-fim-top{display:flex;align-items:center;gap:22px;margin-bottom:6px}
+/* números com estudantes */
+.apx-nx{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:clamp(24px,4vw,70px);align-items:center;width:100%;max-width:1340px;margin:0 auto}
+.apx-nx-h{display:flex;flex-direction:column;align-items:flex-start}
+.apx-kids{margin:8px 0 -6px -10px}.apx-kids-svg{width:clamp(260px,30vw,470px);height:auto;display:block;overflow:visible}
+.apx-kids .k{animation:apxFlut2 3.6s ease-in-out infinite}.apx-kids .k2{animation-delay:-1.8s}
+.apx-kids .acena{transform-box:fill-box;transform-origin:15% 90%;animation:apxAcena 1.6s ease-in-out infinite}
+.apx-kids .br{transform-box:fill-box;transform-origin:center;animation:apxBrilho 2.4s ease-in-out infinite;animation-delay:calc(var(--i) * -.5s)}
+@keyframes apxFlut2{50%{translate:0 -7px}}
+@keyframes apxAcena{50%{rotate:-18deg}}
+@keyframes apxBrilho{0%,100%{opacity:.25;scale:.6}50%{opacity:1;scale:1.1}}
+.apx-nx-big{display:flex;flex-direction:column}
+.apx-nx-big .apx-cont{font-size:clamp(60px,7.4vw,128px);font-weight:900;letter-spacing:-.05em;line-height:.95;font-variant-numeric:tabular-nums;background:linear-gradient(90deg,#fff,#bae6fd);-webkit-background-clip:text;background-clip:text;color:transparent}
+.apx-nx-big span{font-size:clamp(16px,1.5vw,24px);color:#bfdbfe;margin-top:6px}
+.apx-nx .apx-pct{width:100%;margin-top:20px}.apx-nx .apx-pct-b{flex:0 0 38%}
+.apx-nx-g{display:grid;grid-template-columns:1fr 1fr;gap:clamp(12px,1.3vw,20px)}
+.apx-num.larga{grid-column:span 2;display:grid;grid-template-columns:auto auto 1fr;align-items:center;gap:18px}
+.apx-num.larga>i{margin:0}.apx-num.larga small{margin:0}
+/* satélite */
+.apx-s-satelite{padding:0}
+.apx-sat{position:absolute;inset:0;background:#0b1222}
+.apx-sat .leaflet-control-attribution{background:rgba(11,18,34,.6);color:#94a3b8;font-size:10px}.apx-sat .leaflet-control-attribution a{color:#93c5fd}
+.apx-sat-vel{position:absolute;inset:0;pointer-events:none;z-index:500;background:linear-gradient(90deg,rgba(11,18,34,.85) 0%,rgba(11,18,34,.35) 32%,transparent 55%),linear-gradient(180deg,rgba(11,18,34,.75) 0%,transparent 16%,transparent 80%,rgba(11,18,34,.8) 100%)}
+.apx-sat-erro{position:absolute;inset:0;display:grid;place-items:center;align-content:center;gap:12px;color:#94a3b8;font-size:18px;padding-left:30vw}.apx-sat-erro i{font-size:40px}
+.apx-sat-p{position:absolute;z-index:600;left:3.2vw;top:96px;max-height:calc(100% - 214px);width:min(430px,31vw);display:flex;flex-direction:column;padding:24px 22px}
+.apx-sat-p h2{margin:6px 0 14px;font-size:clamp(24px,2.3vw,38px)}.apx-sat-p h2 small{display:block;font-size:.5em;font-weight:600;color:#bfdbfe;letter-spacing:0;margin-top:4px}
+.apx-sat-l{display:flex;flex-direction:column;gap:6px;overflow:hidden;flex:1;min-height:0}
+.apx-sl{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding:8px 10px;border-radius:14px;border:1px solid transparent;transition:background .4s,border-color .4s,transform .4s}
+.apx-sl .ic{width:38px;height:38px;border-radius:11px;background:#fff;display:grid;place-items:center;flex:none}
+.apx-sl .t{min-width:0}.apx-sl .t b{display:block;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.apx-sl .t small{color:#93c5fd;font-size:11.5px}
+.apx-sl .v{text-align:right}.apx-sl .v b{display:block;font-size:16px;font-variant-numeric:tabular-nums}.apx-sl .v small{font-size:10.5px;color:#93c5fd}
+.apx-sl.on{background:color-mix(in srgb,var(--c) 30%,rgba(11,18,34,.5));border-color:color-mix(in srgb,var(--c) 70%,#fff);transform:translateX(6px)}
+.apx-sat-mais{color:#93c5fd;font-size:12.5px;margin-top:10px}
+.apx-mk-w{background:none;border:0}
+.apx-mk{position:absolute;left:0;top:0;width:0;height:0}
+.apx-mk .p{position:absolute;left:0;top:0;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;background:#fff;display:grid;place-items:center;box-shadow:0 0 0 3px var(--c),0 6px 16px rgba(0,0,0,.55);transition:width .4s,height .4s,margin .4s}
+.apx-mk:not(.top) .p{width:22px;height:22px;margin:-11px 0 0 -11px;box-shadow:0 0 0 2px var(--c),0 4px 10px rgba(0,0,0,.5)}
+.apx-s-satelite.on .apx-mk .p{animation:apxPop .6s cubic-bezier(.34,1.56,.64,1) backwards;animation-delay:calc(2.9s + var(--i) * 60ms)}
+@keyframes apxPop{from{transform:scale(0) translateY(-20px);opacity:0}}
+.apx-mk .n{position:absolute;left:22px;top:0;transform:translateY(-50%);white-space:nowrap;max-width:420px;overflow:hidden;text-overflow:ellipsis;background:rgba(11,18,34,.84);backdrop-filter:blur(6px);color:#fff;padding:6px 12px 6px 11px;border-radius:11px;border-left:4px solid var(--c);font:700 13.5px/1.2 Inter,system-ui,sans-serif;box-shadow:0 10px 24px -8px rgba(0,0,0,.7);opacity:0;clip-path:inset(0 100% 0 0)}
+.apx-mk .n small{display:block;font-weight:500;font-size:11px;color:#93c5fd;margin-top:2px}
+.apx-sat.vivo .apx-mk:not(.esc) .n{animation:apxLbl .8s cubic-bezier(.16,1,.3,1) forwards;animation-delay:calc(var(--i) * 110ms)}
+.apx-sat .apx-mk.ativo .n{display:block;animation:apxLbl .8s cubic-bezier(.16,1,.3,1) 1.6s forwards;font-size:18px;padding:9px 16px 9px 14px;left:30px;background:rgba(11,18,34,.92);max-width:600px}
+.apx-sat .apx-mk.ativo .n small{font-size:13px}
+.apx-mk.ativo .p{width:44px;height:44px;margin:-22px 0 0 -22px}
+.apx-mk.ativo .p::after{content:'';position:absolute;inset:-12px;border-radius:50%;border:3px solid var(--c);animation:apxAnel 1.8s ease-out infinite}
+@keyframes apxAnel{from{transform:scale(.6);opacity:1}to{transform:scale(1.6);opacity:0}}
+@keyframes apxLbl{from{opacity:0;clip-path:inset(0 100% 0 0);translate:-10px 0}to{opacity:1;clip-path:inset(0 0 0 0);translate:0 0}}
+.apx-show[data-pos=oculto] .apx-mapa{opacity:0}
+/* notícias */
+.apx-news{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.apx-news.n1{grid-template-columns:1fr}.apx-news.n3 .apx-nw:first-child{grid-column:span 2}
+.apx-nw{background:rgba(11,18,34,.62);border:1px solid rgba(255,255,255,.12);border-left:4px solid #34d399;border-radius:20px;padding:22px 26px;backdrop-filter:blur(12px)}
+.apx-nw .f{display:inline-flex;gap:8px;align-items:center;color:#6ee7b7;font-size:13px;font-weight:600;letter-spacing:.02em}
+.apx-nw h3{margin:10px 0 0;font-size:clamp(18px,1.7vw,28px);line-height:1.25;font-weight:800;letter-spacing:-.015em}
+.apx-news.n3 .apx-nw:first-child h3,.apx-news.n1 .apx-nw h3{font-size:clamp(22px,2.3vw,38px)}
+.apx-fonte{color:#64748b;font-size:12.5px;margin-top:20px}
+.apx-not{display:flex;flex-direction:column;gap:6px}
+.apx-not-h{display:flex;align-items:center;justify-content:space-between}.apx-not-h span{font-size:12px;color:#bfdbfe;font-weight:600}
+.apx-not-h button{border:0;background:rgba(255,255,255,.08);color:#bfdbfe;width:28px;height:28px;border-radius:8px;cursor:pointer}
+.apx-not-msg{font-size:12px;color:#94a3b8;padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.04)}
+.apx-not-l{display:flex;flex-direction:column;gap:5px;max-height:220px;overflow:auto}
+.apx-ni{display:grid;grid-template-columns:auto 1fr auto;gap:9px;align-items:start;padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.05);cursor:pointer}
+.apx-ni input{margin-top:3px;accent-color:#34d399}.apx-ni b{display:block;font-size:12.5px;line-height:1.35;font-weight:600}.apx-ni small{color:#94a3b8;font-size:11px}
+.apx-ni a{color:#93c5fd;font-size:11px;padding:3px}
+.apx-not-dica{color:#fbbf24;font-size:11px}
+@media (max-width:900px){.apx-nx{grid-template-columns:1fr}.apx-sat-p{width:auto;right:3vw;bottom:auto;max-height:45vh}.apx-news{grid-template-columns:1fr}.apx-news .apx-nw{grid-column:auto!important}}
 </style>
 </head>
 <body>
 <!-- Vigia de inicialização: se o arquivo.js não carregar ou falhar, mostra o motivo em vez de uma tela vazia -->
 <script>
-window.GABORG_VERSAO_HTML = '1.32.0'; window.GABORG_ERROS = [];
-window.GABORG_NOVIDADES = "Nova seção Apresentação: escolha um município ou uma DRE e abra uma apresentação animada em tela cheia para receber prefeitos e equipes, com mapa que dá zoom no território, escolas no mapa, números com contagem, perfil da rede, maiores escolas e a DRE que atende.";
+window.GABORG_VERSAO_HTML = '1.33.0'; window.GABORG_ERROS = [];
+window.GABORG_NOVIDADES = "Apresentação renovada: escolas em vista de satélite com nomes animados e passeio pelas maiores, estudantes ilustrados com a camiseta azul de MT, bandeira e brasão do município, boas notícias recentes de educação (revisadas pela equipe) e telas mais bem distribuídas.";
 window.addEventListener('error', function (e) {
   var alvo = e.target || {};
   if (alvo.tagName === 'SCRIPT') window.GABORG_ERROS.push('Não foi possível baixar o arquivo ' + (alvo.getAttribute('src') || '') + '.');
@@ -1666,6 +1745,6 @@ window.addEventListener('load', function () { setTimeout(function () { window.GA
 
 <div id="toast"><i class="fa-solid fa-check"></i><span></span></div>
 
-<script src="arquivo.js?v=1.32.0" onerror="window.GABORG_ERROS.push('O arquivo arquivo.js não foi encontrado no servidor (erro 404).');GABORG_DIAGNOSTICO()"></script>
+<script src="arquivo.js?v=1.33.0" onerror="window.GABORG_ERROS.push('O arquivo arquivo.js não foi encontrado no servidor (erro 404).');GABORG_DIAGNOSTICO()"></script>
 </body>
 </html>
