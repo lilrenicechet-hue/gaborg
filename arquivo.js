@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.36.0';
+const VERSAO = '1.37.0';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -6178,6 +6178,7 @@ function apDados(){
 const apCaixa = (bbs, pad) => { let b = [1e9, 1e9, -1e9, -1e9]; bbs.forEach(x => { b = [Math.min(b[0], x[0]), Math.min(b[1], x[1]), Math.max(b[2], x[2]), Math.max(b[3], x[3])]; }); const w = b[2] - b[0], h = b[3] - b[1], p = Math.max(w, h) * (pad ?? .18) + 6; return [b[0] - p, b[1] - p, b[2] + p, b[3] + p]; };
 /* Enquadramento do território: o município inteiro, ou só a área das escolas quando elas ficam concentradas (ex.: zona urbana de Cuiabá) */
 function apFoco(D, A){
+  if (A.tipo === 'estado') return D.G.todo;
   if (A.tipo === 'dre') return apCaixa(A.ms.map(m => m.bb), .08);
   const mb = apCaixa([A.m.bb], .45); if (A.es.length < 4) return mb;
   const P = A.es.map(e => D.G.P(e.longitude, e.latitude)), q = (v, f) => { const o = [...v].sort((x, y) => x - y); return o[Math.min(o.length - 1, Math.max(0, Math.round((o.length - 1) * f)))]; };
@@ -6189,6 +6190,7 @@ const apCorDre = (D, d) => corDRE(D.dres, d);
 const apSv = (D, d) => D.sv.filter(r => svEhDRE(r) && norm(r.unidade) === norm(d)).length;
 const apSedeNome = d => /METROPOLITANA/i.test(d) ? 'Cuiabá' : nomeDRE(d);
 function apAlvo(D){
+  if (apModo === 'est') return apAlvoEstado(D);
   if (apModo === 'mun') { const m = D.muns.find(x => x.k === apSel); if (!m) return null; return { tipo:'mun', m, nome:m.nome, es:m.es, al:m.al, dre:m.dre, cor:m.dre ? apCorDre(D, m.dre) : '#38bdf8' }; }
   const d = apSel; if (!D.dres.includes(d)) return null; const ms = D.muns.filter(m => m.dre === d), es = D.E.filter(e => e.dre === d);
   return { tipo:'dre', d, nome:'DRE ' + nomeDRE(d), ms, es, al:alunosDe(es), dre:d, cor:apCorDre(D, d) };
@@ -6201,10 +6203,10 @@ function renderApresentacao(){
   el.innerHTML = `<div class="apx-esc">
     <header class="apx-hero"><div class="apx-hero-ic"><i class="fa-solid fa-person-chalkboard"></i></div>
       <div class="apx-hero-t"><span class="apx-k">Receber prefeitos e equipes</span><h2>Apresentação do território</h2><p>Escolha no mapa ou na lista e abra uma apresentação animada em tela cheia.</p></div>
-      <div class="apx-hero-f"><div class="seg apx-seg">${[['mun', 'Município', 'fa-city'], ['dre', 'DRE', 'fa-route']].map(([k, t, ic]) => `<button class="${apModo === k ? 'on' : ''}" onclick="apModo='${k}';apSel='';apBusca='';renderApresentacao()"><i class="fa-solid ${ic}"></i>${t}</button>`).join('')}</div>
-        <label class="apx-busca"><i class="fa-solid fa-magnifying-glass"></i><input id="apx-q" value="${esc(apBusca)}" placeholder="${apModo === 'mun' ? 'Buscar entre os ' + D.muns.length + ' municípios...' : 'Buscar DRE...'}" oninput="apBusca=this.value;apLista()"></label></div></header>
+      <div class="apx-hero-f"><div class="seg apx-seg">${[['mun', 'Município', 'fa-city'], ['dre', 'DRE', 'fa-route'], ['est', 'Estado · SEDUC', 'fa-landmark']].map(([k, t, ic]) => `<button class="${apModo === k ? 'on' : ''}" onclick="apModo='${k}';apSel='';apBusca='';renderApresentacao()"><i class="fa-solid ${ic}"></i>${t}</button>`).join('')}</div>
+        ${apModo === 'est' ? '' : `<label class="apx-busca"><i class="fa-solid fa-magnifying-glass"></i><input id="apx-q" value="${esc(apBusca)}" placeholder="${apModo === 'mun' ? 'Buscar entre os ' + D.muns.length + ' municípios...' : 'Buscar DRE...'}" oninput="apBusca=this.value;apLista()"></label>`}</div></header>
     <div class="apx-grid">
-      <div class="apx-col"><div class="apx-col-h"><b>${apModo === 'mun' ? 'Municípios' : 'Diretorias regionais'}</b><small>${apModo === 'mun' ? D.muns.length : D.dres.length}</small></div><div class="apx-lista" id="apx-lista"></div></div>
+      <div class="apx-col"><div class="apx-col-h"><b>${apModo === 'mun' ? 'Municípios' : 'Diretorias regionais'}</b><small>${apModo === 'mun' ? D.muns.length : D.dres.length}</small></div>${apModo === 'est' ? '<p class="apx-col-d">A apresentação do estado reúne todas as regionais. Clique numa DRE para apresentar só ela.</p>' : ''}<div class="apx-lista" id="apx-lista"></div></div>
       <div class="apx-mesc" id="apx-mesc"></div>
       <aside class="apx-prev" id="apx-prev"></aside>
     </div></div>`;
@@ -6213,9 +6215,9 @@ function renderApresentacao(){
 /* Mapa grande para escolher: cor da DRE, intensidade pelo número de estudantes; passe o mouse para ver, clique para escolher */
 function apMapaEscolha(){
   const el = $('#apx-mesc'); if (!el) return; const D = apDados(), G = D.G, mx = Math.max(1, ...D.muns.map(m => m.al));
-  el.innerHTML = `<svg class="apx-msvg" viewBox="-12 -12 ${(G.W + 24).toFixed(0)} ${(G.H + 24).toFixed(0)}" preserveAspectRatio="xMidYMid meet">${D.muns.map(m => `<path d="${m.d}" data-k="${m.k}" data-d="${esc(m.dre)}" style="--c:${m.dre ? apCorDre(D, m.dre) : '#64748b'};--a:${apModo === 'mun' ? (.18 + .72 * Math.sqrt(m.al / mx)).toFixed(2) : '.55'}"/>`).join('')}</svg>
+  el.innerHTML = `<svg class="apx-msvg" viewBox="-12 -12 ${(G.W + 24).toFixed(0)} ${(G.H + 24).toFixed(0)}" preserveAspectRatio="xMidYMid meet">${D.muns.map(m => `<path d="${m.d}" data-k="${m.k}" data-d="${esc(m.dre)}" style="--c:${m.dre ? apCorDre(D, m.dre) : '#64748b'};--a:${apModo === 'mun' ? (.18 + .72 * Math.sqrt(m.al / mx)).toFixed(2) : apModo === 'est' ? '.75' : '.55'}"/>`).join('')}</svg>
     <div class="apx-mtip" id="apx-mtip"></div>
-    <div class="apx-mleg">${apModo === 'mun' ? '<i class="fa-solid fa-hand-pointer"></i> Clique num município · cor da DRE, mais forte = mais estudantes' : '<i class="fa-solid fa-hand-pointer"></i> Clique numa região para escolher a DRE'}</div>`;
+    <div class="apx-mleg">${apModo === 'est' ? '<i class="fa-solid fa-landmark"></i> Todo o estado: cada cor é uma Diretoria Regional de Educação' : apModo === 'mun' ? '<i class="fa-solid fa-hand-pointer"></i> Clique num município · cor da DRE, mais forte = mais estudantes' : '<i class="fa-solid fa-hand-pointer"></i> Clique numa região para escolher a DRE'}</div>`;
   const svg = el.querySelector('svg'), tip = $('#apx-mtip');
   svg.addEventListener('mousemove', e => { const p = e.target.closest('path'); if (!p) { tip.classList.remove('on'); return; }
     const m = D.muns.find(x => x.k === p.dataset.k); if (!m) return; const r = el.getBoundingClientRect();
@@ -6225,13 +6227,13 @@ function apMapaEscolha(){
     svg.querySelectorAll('path.hov').forEach(x => x.classList.remove('hov'));
     (apModo === 'mun' ? [p] : m.dre ? svg.querySelectorAll(`path[data-d="${CSS.escape(m.dre)}"]`) : []).forEach(x => x.classList.add('hov')); });
   svg.addEventListener('mouseleave', () => { tip.classList.remove('on'); svg.querySelectorAll('path.hov').forEach(x => x.classList.remove('hov')); });
-  svg.addEventListener('click', e => { const p = e.target.closest('path'); if (!p) return; const v = apModo === 'mun' ? p.dataset.k : p.dataset.d; if (!v) return;
+  svg.addEventListener('click', e => { const p = e.target.closest('path'); if (!p || apModo === 'est') return; const v = apModo === 'mun' ? p.dataset.k : p.dataset.d; if (!v) return;
     apSel = v; apLista(); apPrevia(); apMapaMarcar(); const it = $('#apx-lista .apx-it.on'); if (it) it.scrollIntoView({ block:'nearest', behavior:'smooth' }); });
   apMapaMarcar();
 }
 function apMapaMarcar(){
   const svg = $('#apx-mesc svg'); if (!svg) return; const sel = [];
-  svg.querySelectorAll('path').forEach(p => { const on = apModo === 'mun' ? p.dataset.k === apSel : p.dataset.d === apSel; p.classList.toggle('sel', on); if (on) sel.push(p); });
+  svg.querySelectorAll('path').forEach(p => { const on = apModo === 'est' ? false : apModo === 'mun' ? p.dataset.k === apSel : p.dataset.d === apSel; p.classList.toggle('sel', on); if (on) sel.push(p); });
   sel.forEach(p => svg.appendChild(p));
 }
 function apLista(){
@@ -6240,21 +6242,21 @@ function apLista(){
     const L = D.muns.filter(m => !q || norm(m.nome).includes(q) || norm(nomeDRE(m.dre)).includes(q)).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
     el.innerHTML = L.length ? L.map(m => `<button class="apx-it ${m.k === apSel ? 'on' : ''}" style="--c:${m.dre ? apCorDre(D, m.dre) : '#94a3b8'}" onclick="apSel='${m.k}';apLista();apPrevia();apMapaMarcar()"><span class="apx-it-n"><b>${esc(m.nome)}</b><small>${m.dre ? 'DRE ' + esc(nomeDRE(m.dre)) : 'Sem escola estadual'}</small></span><span class="apx-it-v"><b>${fmtN(m.es.length)}</b><small>escolas</small></span><span class="apx-it-v"><b>${fmtN(m.al)}</b><small>alunos</small></span></button>`).join('') : '<div class="apx-vazio">Nenhum município encontrado.</div>';
   } else {
-    const L = D.dres.filter(d => !q || norm(d).includes(q));
-    el.innerHTML = L.map(d => { const es = D.E.filter(e => e.dre === d), nm = D.muns.filter(m => m.dre === d).length; return `<button class="apx-it ${d === apSel ? 'on' : ''}" style="--c:${apCorDre(D, d)}" onclick="apSel=${arg(d)};apLista();apPrevia();apMapaMarcar()"><span class="apx-it-n"><b>DRE ${esc(nomeDRE(d))}</b><small>${nm} municípios · sede em ${esc(apSedeNome(d))}</small></span><span class="apx-it-v"><b>${fmtN(es.length)}</b><small>escolas</small></span><span class="apx-it-v"><b>${fmtN(alunosDe(es))}</b><small>alunos</small></span></button>`; }).join('');
+    const L = D.dres.filter(d => apModo === 'est' || !q || norm(d).includes(q));
+    el.innerHTML = L.map(d => { const es = D.E.filter(e => e.dre === d), nm = D.muns.filter(m => m.dre === d).length; return `<button class="apx-it ${d === apSel ? 'on' : ''}" style="--c:${apCorDre(D, d)}" onclick="${apModo === 'est' ? `apModo='dre';apSel=${esc(JSON.stringify(d))};apBusca='';renderApresentacao()` : `apSel=${arg(d)};apLista();apPrevia();apMapaMarcar()`}"><span class="apx-it-n"><b>DRE ${esc(nomeDRE(d))}</b><small>${nm} municípios · sede em ${esc(apSedeNome(d))}</small></span><span class="apx-it-v"><b>${fmtN(es.length)}</b><small>escolas</small></span><span class="apx-it-v"><b>${fmtN(alunosDe(es))}</b><small>alunos</small></span></button>`; }).join('');
   }
 }
 function apPrevia(){
   const el = $('#apx-prev'); if (!el) return; const D = apDados(), A = apAlvo(D);
   if (!A) { el.innerHTML = '<div class="apx-vazio">Escolha um item na lista.</div>'; return; }
-  const box = A.tipo === 'mun' ? apCaixa([A.m.bb], .5) : apCaixa(A.ms.map(m => m.bb), .1);
+  const box = A.tipo === 'estado' ? D.G.todo : A.tipo === 'mun' ? apCaixa([A.m.bb], .5) : apCaixa(A.ms.map(m => m.bb), .1);
   const roteiro = apRoteiro(D, A).map(s => s[1]);
   el.innerHTML = `<div class="apx-prev-map">${apMapaSVG(D, A, box, true)}${apSimbHTML(apCodIBGE(D, A), 'mini')}</div>
-    <div class="apx-prev-c"><span class="apx-k" style="color:${A.cor}">${A.tipo === 'mun' ? (A.dre ? 'DRE ' + esc(nomeDRE(A.dre)) : 'Município') : 'Diretoria Regional de Educação'}</span><h3>${esc(A.nome)}</h3>
-      <div class="apx-prev-n"><div><b>${fmtN(A.es.length)}</b><small>escolas</small></div><div><b>${fmtN(A.al)}</b><small>estudantes</small></div><div><b>${A.tipo === 'mun' ? A.m.pos + 'º' : fmtN(A.ms.length)}</b><small>${A.tipo === 'mun' ? 'em alunos no estado' : 'municípios'}</small></div></div>
-      ${(() => { const p = apProf(A); return p.tem ? `<small class="apx-incl ok"><i class="fa-solid fa-chalkboard-user"></i><span><b>${fmtN(p.n)}</b> profissionais informados em ${p.escolas} de ${A.es.length} escola(s)</span></small>` : `<small class="apx-incl"><i class="fa-solid fa-chalkboard-user"></i><span>Sem dados de profissionais ${A.tipo === 'mun' ? 'deste município' : 'desta DRE'}. Preencha em <b>Mapa de MT › Editar escolas</b>, coluna <b>Profissionais</b>.</span></small>`; })()}
-      ${(() => { const i = apIncl(A); return i.tem ? `<small class="apx-incl ok">${AP_SVG.inclusiva}<span><b>${fmtN(i.n)}</b> estudantes da educação inclusiva informados</span></small>` : `<small class="apx-incl">${AP_SVG.inclusiva}<span>Sem dados de educação inclusiva ${A.tipo === 'mun' ? 'deste município' : 'desta DRE'}${i.esp ? ` (a apresentação mostra as ${i.esp} escola(s) de educação especial)` : ''}. Preencha em <b>Mapa de MT › Editar escolas</b>, coluna <b>Inclusiva</b>.</span></small>`; })()}
-      <label class="apx-campo"><span>Convidado (opcional)</span><input id="apx-conv" value="${esc(apConvidado)}" placeholder="${A.tipo === 'mun' ? 'Ex.: Prefeito(a) Fulano de Tal' : 'Ex.: Equipe da DRE'}" oninput="apConvidado=this.value" maxlength="80"><small>Aparece na capa de boas-vindas. Não é salvo.</small></label>
+    <div class="apx-prev-c"><span class="apx-k" style="color:${A.cor}">${A.tipo === 'estado' ? 'Secretaria de Estado de Educação · todo o estado' : A.tipo === 'mun' ? (A.dre ? 'DRE ' + esc(nomeDRE(A.dre)) : 'Município') : 'Diretoria Regional de Educação'}</span><h3>${esc(A.nome)}</h3>
+      <div class="apx-prev-n"><div><b>${fmtN(A.es.length)}</b><small>escolas</small></div><div><b>${fmtN(A.al)}</b><small>estudantes</small></div><div><b>${A.tipo === 'mun' ? A.m.pos + 'º' : A.tipo === 'estado' ? D.dres.length : fmtN(A.ms.length)}</b><small>${A.tipo === 'mun' ? 'em alunos no estado' : A.tipo === 'estado' ? 'DREs' : 'municípios'}</small></div></div>
+      ${(() => { const p = apProf(A); return p.tem ? `<small class="apx-incl ok"><i class="fa-solid fa-chalkboard-user"></i><span><b>${fmtN(p.n)}</b> profissionais informados em ${p.escolas} de ${A.es.length} escola(s)</span></small>` : `<small class="apx-incl"><i class="fa-solid fa-chalkboard-user"></i><span>Sem dados de profissionais ${A.tipo === 'mun' ? 'deste município' : A.tipo === 'estado' ? 'nas escolas' : 'desta DRE'}. Preencha em <b>Mapa de MT › Editar escolas</b>, coluna <b>Profissionais</b>.</span></small>`; })()}
+      ${(() => { const i = apIncl(A); return i.tem ? `<small class="apx-incl ok">${AP_SVG.inclusiva}<span><b>${fmtN(i.n)}</b> estudantes da educação inclusiva informados</span></small>` : `<small class="apx-incl">${AP_SVG.inclusiva}<span>Sem dados de educação inclusiva ${A.tipo === 'mun' ? 'deste município' : A.tipo === 'estado' ? 'nas escolas' : 'desta DRE'}${i.esp ? ` (a apresentação mostra as ${i.esp} escola(s) de educação especial)` : ''}. Preencha em <b>Mapa de MT › Editar escolas</b>, coluna <b>Inclusiva</b>.</span></small>`; })()}
+      <label class="apx-campo"><span>Convidado (opcional)</span><input id="apx-conv" value="${esc(apConvidado)}" placeholder="${A.tipo === 'mun' ? 'Ex.: Prefeito(a) Fulano de Tal' : A.tipo === 'estado' ? 'Ex.: Comitiva do Ministério da Educação' : 'Ex.: Equipe da DRE'}" oninput="apConvidado=this.value" maxlength="80"><small>Aparece na capa de boas-vindas. Não é salvo.</small></label>
       <label class="apx-campo"><span>Avançar os slides</span><select onchange="apAuto=+this.value">${[[0, 'Manualmente (setas, clique ou passador)'], [10, 'Automático a cada 10 s'], [15, 'Automático a cada 15 s'], [25, 'Automático a cada 25 s']].map(([v, t]) => `<option value="${v}" ${apAuto === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
       <div class="apx-not" id="apx-not"></div>
       <div class="apx-rot" id="apx-rot"><span>Roteiro · ${roteiro.length} telas</span><ol>${roteiro.map(t => `<li>${esc(t)}</li>`).join('')}</ol></div>
@@ -6266,26 +6268,32 @@ function apPrevia(){
 function apMapaSVG(D, A, box, estatico){
   const G = D.G, alvoK = new Set(A.tipo === 'mun' ? [A.m.k] : A.ms.map(m => m.k)), mesmaDre = new Set(A.tipo === 'mun' && A.dre ? D.muns.filter(m => m.dre === A.dre).map(m => m.k) : []);
   const vb = box.map((v, i) => i < 2 ? v : v - box[i - 2]).map(v => v.toFixed(1)).join(' ');
-  const ordem = m => alvoK.has(m.k) ? 2 : mesmaDre.has(m.k) ? 1 : 0, paths = [...D.muns].sort((a, b) => ordem(a) - ordem(b)).map(m => `<path d="${m.d}" class="${alvoK.has(m.k) ? 'alvo' : mesmaDre.has(m.k) ? 'viz' : ''}"/>`).join('');
+  const est = A.tipo === 'estado', ordem = m => alvoK.has(m.k) ? 2 : mesmaDre.has(m.k) ? 1 : 0, paths = [...D.muns].sort((a, b) => ordem(a) - ordem(b)).map(m => `<path d="${m.d}" class="${est ? 'alvo est' : alvoK.has(m.k) ? 'alvo' : mesmaDre.has(m.k) ? 'viz' : ''}"${est && m.dre ? ` style="--c:${apCorDre(D, m.dre)}"` : ''}/>`).join('');
   const fb = apFoco(D, A), r = Math.max(fb[2] - fb[0], fb[3] - fb[1]) / (A.tipo === 'mun' ? 46 : 64) / Math.max(1, Math.sqrt(A.es.length / (A.tipo === 'mun' ? 30 : 60)));
   const pins = estatico ? '' : [...A.es].sort((a, b) => a.latitude - b.latitude).map((e, i) => { const [x, y] = G.P(e.longitude, e.latitude), gt = grupoTipo(e.tipo); return `<g transform="translate(${x.toFixed(2)} ${y.toFixed(2)}) scale(${(r / 10).toFixed(4)})"><g class="apx-pin" style="--i:${Math.min(i, 60)}">${simbolo(FORMAS_TIPO[gt] || 'ponto', 0, 0, 10, CORES_TIPO[gt] || '#38bdf8')}</g></g>`; }).join('');
   const sede = A.dre && D.X.sedes.get(A.dre), sp = sede ? G.P(sede[1], sede[0]) : null;
   const liga = !estatico && sp && A.tipo === 'mun' ? (() => { const a = A.m.c, dx = sp[0] - a[0], dy = sp[1] - a[1], dd = Math.hypot(dx, dy); if (dd < 1) return ''; const k = Math.max(fb[2] - fb[0], fb[3] - fb[1]) / 400, bs = Math.max(dd / 9, k * 30) / 64;
     return `<path class="apx-liga" d="M${a[0].toFixed(1)},${a[1].toFixed(1)}L${sp[0].toFixed(1)},${sp[1].toFixed(1)}" pathLength="100"/><g class="apx-busm"><g transform="scale(${dx < 0 ? -bs : bs} ${bs}) translate(-32 -30)">${AP_SVG.bus.replace('<svg viewBox="0 0 64 34">', '').replace('</svg>', '')}</g><animateMotion dur="5s" repeatCount="indefinite" path="M${a[0].toFixed(1)},${a[1].toFixed(1)}L${sp[0].toFixed(1)},${sp[1].toFixed(1)}"/></g>`; })() : '';
   const rs = estatico ? r * 1.4 : r * 1.25;
-  const sedeG = sp ? `<g class="apx-sede"><circle cx="${sp[0].toFixed(1)}" cy="${sp[1].toFixed(1)}" r="${(rs * 2.4).toFixed(2)}" class="h"/><path transform="translate(${sp[0].toFixed(1)} ${sp[1].toFixed(1)}) scale(${(rs / 10).toFixed(3)})" d="M0,-10L2.9,-3.1L10,-3.1L4.3,1.2L6.5,8.1L0,3.8L-6.5,8.1L-4.3,1.2L-10,-3.1L-2.9,-3.1Z"/></g>` : '';
+  const estrela = (x, y, k) => `<path transform="translate(${x.toFixed(1)} ${y.toFixed(1)}) scale(${k.toFixed(3)})" d="M0,-10L2.9,-3.1L10,-3.1L4.3,1.2L6.5,8.1L0,3.8L-6.5,8.1L-4.3,1.2L-10,-3.1L-2.9,-3.1Z"/>`;
+  const teia = est && !estatico ? `<g class="apx-teia">${D.dres.map(d => { const sd = D.X.sedes.get(d); if (!sd) return ''; const q = G.P(sd[1], sd[0]); return `<path style="--c:${apCorDre(D, d)}" d="${D.E.filter(e => e.dre === d).map(e => { const p = G.P(e.longitude, e.latitude); return `M${q[0].toFixed(1)},${q[1].toFixed(1)}L${p[0].toFixed(1)},${p[1].toFixed(1)}`; }).join('')}"/>`; }).join('')}</g>` : '';
+  const sedesEst = est ? `<g class="apx-sede">${D.dres.map(d => { const sd = D.X.sedes.get(d); if (!sd) return ''; const q = G.P(sd[1], sd[0]); return estrela(q[0], q[1], r * 1.6 / 10); }).join('')}</g>` : '';
+  const sedeG = est ? '' : sp ? `<g class="apx-sede"><circle cx="${sp[0].toFixed(1)}" cy="${sp[1].toFixed(1)}" r="${(rs * 2.4).toFixed(2)}" class="h"/><path transform="translate(${sp[0].toFixed(1)} ${sp[1].toFixed(1)}) scale(${(rs / 10).toFixed(3)})" d="M0,-10L2.9,-3.1L10,-3.1L4.3,1.2L6.5,8.1L0,3.8L-6.5,8.1L-4.3,1.2L-10,-3.1L-2.9,-3.1Z"/></g>` : '';
   let rot = '';
-  const msR = A.tipo === 'dre' ? A.ms : D.muns.filter(m => A.dre && m.dre === A.dre);
+  const msR = A.tipo === 'estado' ? [] : A.tipo === 'dre' ? A.ms : D.muns.filter(m => A.dre && m.dre === A.dre);
   if (!estatico && msR.length) { const fs = A.tipo === 'dre' ? r * 1.25 : Math.max(r * 1.1, Math.max(...msR.map(m => Math.max(m.bb[2] - m.bb[0], m.bb[3] - m.bb[1]))) / 34), ok = [], area = m => (m.bb[2] - m.bb[0]) * (m.bb[3] - m.bb[1]);
     [...msR].sort((a, b) => area(b) - area(a)).forEach(m => { const w = m.nome.length * fs * .56, x = m.c[0], y = m.c[1] + (A.tipo === 'dre' ? r * 2.4 : 0), bx = [x - w / 2 - fs * .3, y - fs, x + w / 2 + fs * .3, y + fs * .3];
       if (!ok.some(o => bx[0] < o.b[2] && bx[2] > o.b[0] && bx[1] < o.b[3] && bx[3] > o.b[1])) ok.push({ m, b:bx, x, y }); });
     rot = `<g class="apx-rots" style="font-size:${fs.toFixed(2)}px">${ok.map(o => `<text x="${o.x.toFixed(1)}" y="${o.y.toFixed(1)}">${esc(o.m.nome)}</text>`).join('')}</g>`; }
-  return `<svg class="apx-svg" viewBox="${vb}" preserveAspectRatio="xMidYMid meet" style="--c:${A.cor}"><g class="apx-mun">${paths}</g>${liga}<g class="apx-pins">${pins}</g>${rot}${sedeG}</svg>`;
+  return `<svg class="apx-svg" viewBox="${vb}" preserveAspectRatio="xMidYMid meet" style="--c:${A.cor}"><g class="apx-mun">${paths}</g>${teia}${liga}<g class="apx-pins">${pins}</g>${rot}${sedeG}${sedesEst}</svg>`;
 }
 /* ---------- conteúdo das telas ---------- */
 const apCont = (v, suf) => `<b class="apx-cont" data-v="${Math.round(num(v))}" data-suf="${suf || ''}">0${suf || ''}</b>`;
 function apTipos(es){ const c = {}; es.forEach(e => { const g = grupoTipo(e.tipo); c[g] = (c[g] || 0) + 1; }); return Object.entries(c).sort((a, b) => b[1] - a[1]); }
 function apRoteiro(D, A){
+  if (A.tipo === 'estado') { const R = [['capa', 'Boas-vindas'], ['territorio', 'Mato Grosso no mapa'], ['numeros', 'A rede em números'], ['dres', 'As Diretorias Regionais'], ['distancias', 'Distâncias'], ['orgao', 'O órgão central']];
+    if (D.sv.length || apProf(A).tem) R.push(['pessoas', 'Pessoas']);
+    R.push(['perfil', 'Perfil da rede'], ['satelite', 'Maiores escolas no satélite']); if (apNoticiasDe(A).length) R.push(['noticias', 'Boas notícias']); R.push(['fim', 'Encerramento']); return R; }
   const R = [['capa', 'Boas-vindas'], ['territorio', A.tipo === 'mun' ? 'O município no mapa' : 'A região no mapa'], ['numeros', 'A rede em números']];
   if (A.tipo === 'dre') R.push(['municipios', 'Municípios atendidos']);
   if (A.es.length) R.push(['perfil', 'Perfil da rede'], ['satelite', A.tipo === 'mun' ? 'Nossas escolas no satélite' : 'Maiores escolas no satélite']);
@@ -6294,6 +6302,7 @@ function apRoteiro(D, A){
   R.push(['fim', 'Encerramento']); return R;
 }
 function apTela(D, A, k){
+  if (A.tipo === 'estado') { const r = apTelaEstado(D, A, k); if (r !== null) return r; }
   const hoje = new Date(), dataL = hoje.toLocaleDateString('pt-BR', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
   const urb = A.es.filter(e => e.localidade !== 'RURAL'), rur = A.es.length - urb.length, alu = A.al, media = A.es.length ? alu / A.es.length : 0;
   const quem = apConvidado.trim();
@@ -6318,7 +6327,7 @@ function apTela(D, A, k){
       ${L.length > vis.length ? `<p class="apx-sub apx-in" style="--i:16">e mais ${L.length - vis.length} município(s): ${esc(L.slice(vis.length).map(m => m.nome).join(', '))}</p>` : ''}</div>`; }
   if (k === 'perfil') { const tp = apTipos(A.es), mx = Math.max(1, ...tp.map(x => x[1])), pu = A.es.length ? urb.length / A.es.length * 100 : 0;
     const ala = {}; A.es.forEach(e => { const g = grupoTipo(e.tipo); ala[g] = (ala[g] || 0) + num(e.alunos); });
-    return `<div class="apx-l apx-l-larga"><span class="apx-k apx-in" style="--i:0">Perfil da rede</span><h2 class="apx-in" style="--i:1">Que escolas estão em ${esc(A.tipo === 'mun' ? A.nome : 'nossa região')}</h2>
+    return `<div class="apx-l apx-l-larga"><span class="apx-k apx-in" style="--i:0">Perfil da rede</span><h2 class="apx-in" style="--i:1">Que escolas estão em ${esc(A.tipo === 'mun' ? A.nome : A.tipo === 'estado' ? 'Mato Grosso' : 'nossa região')}</h2>
       <div class="apx-perfil"><div class="apx-tipos">${tp.map(([g, n], i) => `<div class="apx-tp apx-in" style="--i:${i + 2};--c:${CORES_TIPO[g]}"><span class="ic">${iconeTipoSVG(g, CORES_TIPO[g], 34)}</span><span class="t"><b>${esc(g)}</b><small>${fmtN(ala[g] || 0)} estudantes</small><span class="b"><i style="--w:${(n / mx * 100).toFixed(1)}%"></i></span></span><b class="v">${n}</b></div>`).join('')}</div>
         <div class="apx-rosca apx-in" style="--i:3"><svg viewBox="0 0 42 42"><circle cx="21" cy="21" r="15.9" class="f"/><circle cx="21" cy="21" r="15.9" class="u" style="--p:${pu.toFixed(1)}"/></svg><div><b>${Math.round(pu)}%</b><small>urbanas</small></div>
           <p><span><i style="background:#38bdf8"></i>Urbanas <b>${urb.length}</b></span><span><i style="background:#a3e635"></i>Rurais <b>${rur}</b></span></p></div></div></div>`; }
@@ -6329,6 +6338,7 @@ function apTela(D, A, k){
 }
 /* Enquadramento do mapa em cada tela: caixa, posição (cheio | direita | fundo) e o que acende */
 function apQuadro(D, A, k){
+  if (A.tipo === 'estado') { const T = D.G.todo; return ({ capa:{ box:T, pos:'dir', cls:'pulsa' }, territorio:{ box:T, pos:'oculto', cls:'' }, distancias:{ box:T, pos:'dir', cls:'teia' }, satelite:{ box:T, pos:'oculto', cls:'' }, perfil:{ box:T, pos:'fundo', cls:'pins' } })[k] || { box:T, pos:'fundo', cls:'' }; }
   const G = D.G, alvo = apFoco(D, A), sede = A.dre && D.X.sedes.get(A.dre);
   if (k === 'capa') return { box:G.todo, pos:'dir', cls:'pulsa' };
   if (k === 'fim') return { box:G.todo, pos:'fundo', cls:'pulsa' };
@@ -6397,7 +6407,7 @@ function apIr(i){
   $('#apx-cnt').textContent = (i + 1) + ' / ' + S.R.length + ' · ' + S.R[i][1];
   S.i = i; apAgendar();
   if (k === 'satelite') setTimeout(apSatIniciar, 80); else apSatParar();
-  if (k === 'territorio') setTimeout(apTerIniciar, 80); else apTerParar();
+  if (k === 'territorio') setTimeout(S.A.tipo === 'estado' ? apTerEstado : apTerIniciar, 80); else apTerParar();
 }
 function apZoom(b, ms){
   const S = apEstado, a = S.box.slice(), ease = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2, set = c => { S.svg.setAttribute('viewBox', `${c[0].toFixed(2)} ${c[1].toFixed(2)} ${(c[2] - c[0]).toFixed(2)} ${(c[3] - c[1]).toFixed(2)}`); S.box = c; };
@@ -6433,24 +6443,24 @@ function apSimbolos(){
     try { localStorage.setItem('gaborg_apsimb', JSON.stringify({ t:Date.now(), m })); } catch (e) {}
     return m; }).catch(() => { setTimeout(() => { apSimbolos.p = null; }, 60000); return {}; });
 }
-const apCodIBGE = (D, A) => A.tipo === 'mun' ? A.m.cod : ((D.muns.find(m => m.k === chaveMun(apSedeNome(A.d))) || {}).cod || '');
+const apCodIBGE = (D, A) => A.tipo === 'estado' ? '51' : A.tipo === 'mun' ? A.m.cod : ((D.muns.find(m => m.k === chaveMun(apSedeNome(A.d))) || {}).cod || '');
 const apSimbHTML = (cod, cls) => cod ? `<div class="apx-simb ${cls || ''}" data-cod="${esc(cod)}"></div>` : '';
 function apPreencherSimb(raiz){
   if (!raiz || !raiz.querySelector('.apx-simb[data-cod]')) return;
-  apSimbolos().then(m => raiz.querySelectorAll('.apx-simb[data-cod]').forEach(el => { const o = m[el.dataset.cod]; if (!o || el.classList.contains('ok')) return;
+  apSimbolos().then(m => raiz.querySelectorAll('.apx-simb[data-cod]').forEach(el => { const o = el.dataset.cod === '51' ? AP_UF_SIMB : m[el.dataset.cod]; if (!o || el.classList.contains('ok')) return;
     el.innerHTML = (o.c ? `<img class="c" src="${esc(o.c)}" alt="Brasão" title="Brasão do município (Wikimedia Commons)" onerror="this.remove()">` : '') + (o.b ? `<img class="b" src="${esc(o.b)}" alt="Bandeira" title="Bandeira do município (Wikimedia Commons)" onerror="this.remove()">` : '');
     el.classList.add('ok'); }));
 }
 /* ---------- boas notícias: o Codigo.gs pesquisa no Google Notícias, descarta as negativas; a equipe revisa e marca as que entram ---------- */
 const apNot = new Map(), apNotOff = new Set();
-const apNotChave = A => A.tipo === 'mun' ? 'm:' + A.m.k : 'd:' + A.d;
+const apNotChave = A => A.tipo === 'estado' ? 'e:mt' : A.tipo === 'mun' ? 'm:' + A.m.k : 'd:' + A.d;
 function apNoticiasDe(A){ const r = apNot.get(apNotChave(A)); return r && r.itens ? r.itens.filter(n => !apNotOff.has(n.u)).slice(0, 4) : []; }
 async function apBuscarNoticias(A, forcar){
   const k = apNotChave(A); if (apNot.has(k) && !forcar) return apNotRender();
   if (!online() || !cfg.url) { apNot.set(k, { st:'off' }); return apNotRender(); }
   apNot.set(k, { st:'carregando' }); apNotRender();
   try {
-    const j = await chamar({ action:'ap_noticias', municipio:A.tipo === 'mun' ? A.nome : apSedeNome(A.d), regiao:A.tipo === 'dre' ? nomeDRE(A.d) : '' }, 40000);
+    const j = await chamar({ action:'ap_noticias', municipio:A.tipo === 'estado' ? 'Mato Grosso' : A.tipo === 'mun' ? A.nome : apSedeNome(A.d), regiao:A.tipo === 'dre' ? nomeDRE(A.d) : '' }, 40000);
     if (j.status !== 'success') throw new Error(/desconhecida/i.test(j.message || '') ? 'Atualize o Codigo.gs para a versão 1.16.0 para buscar notícias.' : (j.message || 'Falha na busca.'));
     apNot.set(k, { st:'ok', itens:j.itens || [] });
   } catch (e) { apNot.set(k, { st:'erro', msg:e.message }); }
@@ -6508,7 +6518,7 @@ function apSatHTML(A){
   const L_ = [...A.es].sort((a, b) => num(b.alunos) - num(a.alunos)), vis = L_.slice(0, 9);
   return `<div class="apx-sat" id="apx-sat"></div><div class="apx-sat-vel"></div>
     <div class="apx-card apx-sat-p apx-in" style="--i:0"><span class="apx-k"><i class="fa-solid fa-satellite"></i> Vista de satélite</span>
-      <h2>${A.tipo === 'mun' ? `${A.es.length} ${A.es.length === 1 ? 'escola estadual' : 'escolas estaduais'}` : 'Maiores escolas'}<small>${A.tipo === 'mun' ? 'em ' + esc(A.nome) : 'da ' + esc(A.nome)}</small></h2>
+      <h2>${A.tipo === 'mun' ? `${A.es.length} ${A.es.length === 1 ? 'escola estadual' : 'escolas estaduais'}` : 'Maiores escolas'}<small>${A.tipo === 'mun' ? 'em ' + esc(A.nome) : A.tipo === 'estado' ? 'da rede estadual de Mato Grosso' : 'da ' + esc(A.nome)}</small></h2>
       <div class="apx-sat-l">${vis.map((e, i) => { const g = grupoTipo(e.tipo); return `<div class="apx-sl apx-in" style="--i:${i + 1};--c:${CORES_TIPO[g]}" data-c="${esc(e.codigo)}"><span class="ic">${iconeTipoSVG(g, CORES_TIPO[g], 22)}</span><span class="t"><b>${esc(apNomeCurto(e.nome))}</b><small>${esc(g)}${A.tipo === 'dre' ? ' · ' + esc(apNomeCurto(e.municipio)) : ''}</small></span><span class="v">${num(e.alunos) ? `<b>${fmtN(e.alunos)}</b><small>alunos</small>` : ''}</span></div>`; }).join('')}</div>
       ${L_.length > vis.length ? `<small class="apx-sat-mais">e mais ${L_.length - vis.length} escola(s) no mapa</small>` : ''}</div>`;
 }
@@ -6518,7 +6528,7 @@ async function apSatIniciar(){
   try { await carregarLeaflet(); } catch (e) {}
   if (apEstado !== S || S.R[S.i][0] !== 'satelite') return;
   if (!(window.L && L.map)) { el.innerHTML = '<div class="apx-sat-erro"><i class="fa-solid fa-satellite"></i>Vista de satélite indisponível sem internet.</div>'; return; }
-  const es = [...S.A.es].filter(e => e.latitude && e.longitude).sort((a, b) => num(b.alunos) - num(a.alunos)); if (!es.length) return;
+  const es = [...S.A.es].filter(e => e.latitude && e.longitude).sort((a, b) => num(b.alunos) - num(a.alunos)).slice(0, S.A.tipo === 'estado' ? 60 : 1e9); if (!es.length) return;
   if (!S.lf) {
     const m = L.map(el, { zoomControl:false, keyboard:false, scrollWheelZoom:false, dragging:false, doubleClickZoom:false, boxZoom:false, touchZoom:false, zoomSnap:0, inertia:false });
     m.attributionControl.setPrefix(false);
@@ -6709,7 +6719,9 @@ function apTelaNumeros(D, A){
   const urb = A.es.filter(e => e.localidade !== 'RURAL').length, rur = A.es.length - urb, alu = A.al, media = A.es.length ? alu / A.es.length : 0, pct = D.totAl ? alu / D.totAl * 100 : 0, inc = apIncl(A);
   const pctT = pct.toLocaleString('pt-BR', { maximumFractionDigits:pct < 1 ? 2 : 1 });
   const ic = (c, svg) => `<span class="ic" style="--c:${c}">${svg}</span>`, fa = n => `<i class="fa-solid ${n}"></i>`;
-  const linhas = A.tipo === 'mun'
+  const linhas = A.tipo === 'estado'
+    ? [[ic('#2563eb', fa('fa-school')), apCont(A.es.length), 'escolas estaduais'], [ic('#0891b2', fa('fa-city')), apCont(A.ms.length), 'municípios com escola estadual'], [ic('#ea580c', fa('fa-route')), apCont(D.dres.length), 'Diretorias Regionais de Educação'], [ic('#7c3aed', fa('fa-users')), apCont(media), 'estudantes por escola, em média'], [ic('#16a34a', fa('fa-tractor')), `${apCont(urb)}<em>/</em>${apCont(rur)}`, 'escolas urbanas / rurais']]
+    : A.tipo === 'mun'
     ? [[ic('#2563eb', fa('fa-school')), apCont(A.es.length), A.es.length === 1 ? 'escola estadual' : 'escolas estaduais'], [ic('#7c3aed', fa('fa-users')), apCont(media), 'estudantes por escola, em média'], [ic('#0891b2', fa('fa-city')), `${apCont(urb)}<em>/</em>${apCont(rur)}`, 'escolas urbanas / rurais']]
     : (() => { const km = D.X.lista.filter(o => o.e.dre === A.d), sv = apSv(D, A.d); return [[ic('#2563eb', fa('fa-city')), apCont(A.ms.length), 'municípios atendidos'], [ic('#7c3aed', fa('fa-school')), apCont(A.es.length), 'escolas estaduais'], sv ? [ic('#0891b2', fa('fa-id-card-clip')), apCont(sv), 'servidores na DRE'] : [ic('#0891b2', fa('fa-city')), `${apCont(urb)}<em>/</em>${apCont(rur)}`, 'escolas urbanas / rurais'], [ic('#ea580c', fa('fa-route')), apCont(km.length ? km.reduce((t, o) => t + o.km, 0) / km.length : 0, ' km'), 'distância média das escolas até a sede']]; })();
   const pf = apProf(A);
@@ -6722,14 +6734,14 @@ function apTelaNumeros(D, A){
     <div class="apx-lousa-w apx-in" style="--i:0"><div class="apx-lousa">${doodle}
         <span class="apx-giz-k">A rede em números · ${esc(A.nome)}</span>
         <div class="apx-giz-big">${apCont(alu)}</div>
-        <div class="apx-giz-t">estudantes na rede estadual${A.tipo === 'mun' ? ' em ' + esc(A.nome) : ' da região'}</div>
-        <div class="apx-giz-pct"><svg viewBox="0 0 200 18" preserveAspectRatio="none"><path d="M4,10 Q100,4 196,9" class="tr"/><path d="M4,10 Q100,4 196,9" class="vl" style="--w:${Math.max(1.5, Math.min(100, pct)).toFixed(1)}"/></svg><span><b>${pctT}%</b> dos estudantes de MT</span></div>
+        <div class="apx-giz-t">estudantes na rede estadual${A.tipo === 'mun' ? ' em ' + esc(A.nome) : A.tipo === 'estado' ? ' de Mato Grosso' : ' da região'}</div>
+        ${A.tipo === 'estado' ? `<div class="apx-giz-pct"><span>em <b>${fmtN(A.es.length)}</b> escolas de <b>${A.ms.length}</b> municípios</span></div>` : `<div class="apx-giz-pct"><svg viewBox="0 0 200 18" preserveAspectRatio="none"><path d="M4,10 Q100,4 196,9" class="tr"/><path d="M4,10 Q100,4 196,9" class="vl" style="--w:${Math.max(1.5, Math.min(100, pct)).toFixed(1)}"/></svg><span><b>${pctT}%</b> dos estudantes de MT</span></div>`}
         <div class="apx-bandeja"><i></i><i style="--c:#fde68a"></i><i style="--c:#bfdbfe"></i><span></span></div></div>
       <div class="apx-turma">${apTurma('numeros')}</div></div>
     <div class="apx-caderno apx-in ${linhas.length > 5 ? 'cheio' : ''}" style="--i:2"><div class="apx-espiral">${'<i></i>'.repeat(9)}</div><div class="apx-folha">
       <h3>Caderno da rede</h3>
       ${linhas.map(([i, v, t], j) => `<div class="apx-lin apx-in" style="--i:${j + 3}">${i}<b>${v}</b><span>${t}</span></div>`).join('')}
-      ${A.tipo === 'mun' ? `<div class="apx-medalha apx-in" style="--i:9"><span class="m"><b>${A.m.pos}º</b></span><span>lugar em número de estudantes<br>entre os ${D.muns.length} municípios de MT</span></div>` : (() => { const rk = [...D.dres].map(d => [d, alunosDe(D.E.filter(e => e.dre === d))]).sort((a, b) => b[1] - a[1]).findIndex(x => x[0] === A.d) + 1; return `<div class="apx-medalha apx-in" style="--i:9"><span class="m"><b>${rk}º</b></span><span>lugar em número de estudantes<br>entre as ${D.dres.length} DREs de Mato Grosso</span></div>`; })()}
+      ${A.tipo === 'estado' ? (() => { const R = apDresResumo(D)[0]; return R ? `<div class="apx-medalha apx-in" style="--i:9"><span class="m"><b>${D.dres.length}</b></span><span>regionais · a maior é a DRE ${esc(nomeDRE(R.d))}<br>com ${fmtN(R.al)} estudantes</span></div>` : ''; })() : A.tipo === 'mun' ? `<div class="apx-medalha apx-in" style="--i:9"><span class="m"><b>${A.m.pos}º</b></span><span>lugar em número de estudantes<br>entre os ${D.muns.length} municípios de MT</span></div>` : (() => { const rk = [...D.dres].map(d => [d, alunosDe(D.E.filter(e => e.dre === d))]).sort((a, b) => b[1] - a[1]).findIndex(x => x[0] === A.d) + 1; return `<div class="apx-medalha apx-in" style="--i:9"><span class="m"><b>${rk}º</b></span><span>lugar em número de estudantes<br>entre as ${D.dres.length} DREs de Mato Grosso</span></div>`; })()}
     </div></div></div>`;
 }
 /* ---------- tela: a DRE que atende ---------- */
@@ -6751,7 +6763,7 @@ function apTelaNoticias(A){
   const N = apNoticiasDe(A), img = (n, cls) => n.img ? `<div class="${cls}"><img src="${esc(n.img)}" alt="" referrerpolicy="no-referrer" loading="eager" onerror="this.parentNode.classList.add('sem');this.remove()"><span class="ph"><i class="fa-regular fa-newspaper"></i>${esc((n.f || 'Notícia').slice(0, 24))}</span></div>` : `<div class="${cls} sem"><span class="ph"><i class="fa-regular fa-newspaper"></i>${esc((n.f || 'Notícia').slice(0, 24))}</span></div>`;
   const meta = n => `<span class="f"><i class="fa-solid fa-circle-check"></i>${esc(n.f || 'Notícia')}${apDataN(n.d) ? ' · ' + apDataN(n.d) : ''}</span>`;
   const [a, ...r] = N;
-  return `<div class="apx-l apx-l-larga apx-rev"><span class="apx-k apx-in" style="--i:0"><i class="fa-solid fa-newspaper"></i> Boas notícias</span><h2 class="apx-in" style="--i:1">O que tem dado certo ${A.tipo === 'mun' ? 'em ' + esc(A.nome) : 'na região'}</h2>
+  return `<div class="apx-l apx-l-larga apx-rev"><span class="apx-k apx-in" style="--i:0"><i class="fa-solid fa-newspaper"></i> Boas notícias</span><h2 class="apx-in" style="--i:1">O que tem dado certo ${A.tipo === 'mun' ? 'em ' + esc(A.nome) : A.tipo === 'estado' ? 'na educação de Mato Grosso' : 'na região'}</h2>
     <article class="apx-dest apx-in" style="--i:2">${img(a, 'im')}<div class="tx">${meta(a)}<h3>${esc(a.t)}</h3>${a.res ? `<p>${esc(a.res)}</p>` : ''}</div></article>
     ${r.length ? `<div class="apx-outras n${r.length}">${r.map((n, i) => `<article class="apx-in" style="--i:${i + 3}">${img(n, 'im')}<div class="tx">${meta(n)}<h4>${esc(n.t)}</h4></div></article>`).join('')}</div>` : ''}
     <p class="apx-fonte apx-in" style="--i:7">Fontes: Google Notícias e Bing Notícias · seleção revisada pela equipe</p></div>`;
@@ -6766,8 +6778,8 @@ function apTelaFim(D, A){
   return `<div class="apx-fim2"><div class="apx-confete">${conf}</div><div class="apx-baloes">${bal}</div>
     <div class="apx-fim-l"><div class="apx-fim-top apx-in" style="--i:0"><span class="apx-fim-ic"><i class="fa-solid fa-handshake"></i></span>${apSimbHTML(apCodIBGE(D, A))}</div>
       <h1 class="apx-pula apx-in" style="--i:1">${letras}</h1>
-      <p class="apx-sub apx-in" style="--i:2">Juntos pela educação ${A.tipo === 'mun' ? 'de ' + esc(A.nome) : 'da região de ' + esc(nomeDRE(A.d))}.</p>
-      <div class="apx-fim-n apx-in" style="--i:3"><span><b>${fmtN(A.es.length)}</b> escolas</span><span><b>${fmtN(A.al)}</b> estudantes</span>${A.dre ? `<span>DRE <b>${esc(nomeDRE(A.dre))}</b></span>` : ''}</div>
+      <p class="apx-sub apx-in" style="--i:2">Juntos pela educação ${A.tipo === 'mun' ? 'de ' + esc(A.nome) : A.tipo === 'estado' ? 'de Mato Grosso' : 'da região de ' + esc(nomeDRE(A.d))}.</p>
+      <div class="apx-fim-n apx-in" style="--i:3"><span><b>${fmtN(A.es.length)}</b> escolas</span><span><b>${fmtN(A.al)}</b> estudantes</span>${A.dre ? `<span>DRE <b>${esc(nomeDRE(A.dre))}</b></span>` : A.tipo === 'estado' ? `<span><b>${D.dres.length}</b> DREs</span><span><b>${A.ms.length}</b> municípios</span>` : ''}</div>
       <div class="apx-marca apx-in" style="--i:4"><span class="ic"><i class="fa-solid fa-sitemap"></i></span><span><b>GAB<em>Org</em></b><small>SEDUC-MT · ${esc(new Date().toLocaleDateString('pt-BR'))}</small></span></div></div>
     <div class="apx-fim-turma apx-in" style="--i:2">${apTurma('fim')}</div></div>`;
 }
@@ -6788,6 +6800,124 @@ function apPrefeitura(A){
   })();
 }
 function L_bounds(g){ let b = [90, 180, -90, -180]; (g.type === 'Polygon' ? [g.coordinates] : g.coordinates).forEach(p => p[0].forEach(([lo, la]) => { b = [Math.min(b[0], la), Math.min(b[1], lo), Math.max(b[2], la), Math.max(b[3], lo)]; })); return b; }
+/* ===================== APRESENTAÇÃO DA SEDUC-MT (todo o estado) ===================== */
+const AP_UF_SIMB = { b:'https://commons.wikimedia.org/wiki/Special:FilePath/Bandeira_de_Mato_Grosso.svg?width=360', c:'https://commons.wikimedia.org/wiki/Special:FilePath/Bras%C3%A3o_de_Mato_Grosso.svg?width=360' };
+function apAlvoEstado(D){ return { tipo:'estado', nome:'SEDUC-MT', titulo:'Mato Grosso', es:D.E, al:D.totAl, ms:D.muns.filter(m => m.es.length), dre:'', cor:'#38bdf8' }; }
+/* números por DRE (escolas, estudantes, municípios, servidores, distâncias) */
+function apDresResumo(D){
+  return D.dres.map(d => { const es = D.E.filter(e => e.dre === d), km = D.X.lista.filter(o => o.e.dre === d);
+    return { d, cor:apCorDre(D, d), es:es.length, al:alunosDe(es), ms:D.muns.filter(m => m.dre === d).length, sv:apSv(D, d), km:km.length ? km.reduce((t, o) => t + o.km, 0) / km.length : 0, longe:km.filter(o => o.km > 200).length, max:km.reduce((a, o) => o.km > (a ? a.km : -1) ? o : a, null) }; })
+    .sort((a, b) => b.al - a.al);
+}
+/* estrutura do órgão central (setores, níveis, chefias) */
+function apOrgao(){
+  const L = (setoresOficiais() || []).filter(s => s.status !== 'Extinto'), tipos = {};
+  L.forEach(s => { const t = s.tipo || 'Outro'; tipos[t] = (tipos[t] || 0) + 1; });
+  let niv = 0; L.forEach(s => { const p = prof.get(s.id); if (p !== undefined && p + 1 > niv) niv = p + 1; });
+  const ch = { Titular:0, Interino:0, 'Em nomeação':0, Vago:0, 'Não informado':0 }; L.forEach(s => { const c = chefiaDe(s), k = ch[c.situacao] !== undefined ? c.situacao : 'Não informado'; ch[k]++; });
+  const desc = id => { let n = 0; const v = x => filhosDe(x).forEach(f => { if (f.status !== 'Extinto') { n++; v(f.id); } }); v(id); return n; };
+  const topo = areas.map(id => porId.get(id)).filter(s => s && s.status !== 'Extinto').map(s => ({ s, n:desc(s.id), sv:num(s.servidores) })).sort((a, b) => b.n - a.n);
+  return { n:L.length, tipos:Object.entries(tipos).sort((a, b) => b[1] - a[1]), niv, ch, topo, raiz:raizes()[0] };
+}
+function apTelaEstado(D, A, k){
+  const R = apDresResumo(D), fa = n => `<i class="fa-solid ${n}"></i>`;
+  if (k === 'capa') { const dataL = new Date().toLocaleDateString('pt-BR', { weekday:'long', day:'numeric', month:'long', year:'numeric' }), quem = apConvidado.trim();
+    return `<div class="apx-l apx-capa">${apSimbHTML('51', 'apx-in grande" style="--i:0')}<span class="apx-k apx-in" style="--i:0"><i class="fa-solid fa-landmark"></i> Secretaria de Estado de Educação de Mato Grosso</span>
+      <p class="apx-boas apx-in" style="--i:1">${quem ? `Bem-vindo(a), <b>${esc(quem)}</b>` : 'Seja bem-vindo(a)'}</p>
+      <h1 class="apx-in" style="--i:2">SEDUC<span style="color:#7dd3fc">-MT</span></h1>
+      <p class="apx-sub apx-in" style="--i:3">A rede estadual de ensino de Mato Grosso: ${fmtN(D.E.length)} escolas, ${fmtN(A.ms.length)} municípios e ${D.dres.length} Diretorias Regionais de Educação</p>
+      <div class="apx-chips apx-in" style="--i:4"><span><i class="fa-solid fa-school"></i><b>${fmtN(D.E.length)}</b> escolas</span><span><i class="fa-solid fa-children"></i><b>${fmtN(D.totAl)}</b> estudantes</span><span><i class="fa-solid fa-route"></i><b>${D.dres.length}</b> DREs</span><span><i class="fa-regular fa-calendar"></i>${esc(dataL.charAt(0).toUpperCase() + dataL.slice(1))}</span></div></div>`; }
+  if (k === 'territorio') { const tp = apTipos(A.es);
+    return `<div class="apx-sat apx-ter" id="apx-ter"></div><div class="apx-sat-vel"></div>
+      <div class="apx-card apx-flut apx-ter-c apx-in" style="--i:0"><span class="apx-k"><i class="fa-solid fa-satellite"></i> Território</span><h2>Mato Grosso</h2>
+      <p class="apx-big">${apCont(A.es.length)}<span>escolas estaduais em ${A.ms.length} municípios</span></p>
+      <div class="apx-leg">${tp.map(([g, n]) => `<span>${iconeTipoSVG(g, CORES_TIPO[g], 18)}${esc(g)} <b>${n}</b></span>`).join('')}</div>
+      <div class="apx-leg"><span><span class="lg-st">${AP_SVG.estrela}</span>${D.dres.length} sedes de DRE</span></div></div>
+      <div class="apx-ter-dica apx-in" style="--i:3"><i class="fa-solid fa-hand-pointer"></i> Arraste, aproxime e passe o mouse nas regiões e escolas</div>
+      <div class="apx-card apx-ter-l apx-in" style="--i:2"><span class="apx-k"><i class="fa-solid fa-route"></i> As ${D.dres.length} Diretorias Regionais</span>
+        <div class="apx-tl" id="apx-tl">${R.map((r, i) => `<div class="apx-ti" data-d="${esc(r.d)}" style="--c:${r.cor}"><span class="n">${i + 1}</span><b>DRE ${esc(nomeDRE(r.d))}</b><small>${r.es} esc. · ${fmtN(r.al)}</small></div>`).join('')}</div></div>`; }
+  if (k === 'dres') { const mx = Math.max(1, ...R.map(r => r.al)), temSv = R.some(r => r.sv);
+    return `<div class="apx-l apx-l-larga apx-dres"><span class="apx-k apx-in" style="--i:0"><i class="fa-solid fa-route"></i> As Diretorias Regionais de Educação</span><h2 class="apx-in" style="--i:1">${D.dres.length} regionais levam a SEDUC a todo o estado</h2>
+      <div class="apx-dg">${R.map((r, i) => `<div class="apx-dc apx-in" style="--i:${Math.min(i + 2, 14)};--c:${r.cor}"><div class="h"><span class="p">${i + 1}</span><b>${esc(nomeDRE(r.d))}</b></div>
+        <div class="v"><span><b>${fmtN(r.al)}</b>estudantes</span><span><b>${r.es}</b>escolas</span><span><b>${r.ms}</b>municípios</span>${temSv ? `<span><b>${fmtN(r.sv)}</b>servidores</span>` : `<span><b>${fmtKm(r.km)}</b>média até a sede</span>`}</div>
+        <span class="b"><i style="--w:${(r.al / mx * 100).toFixed(1)}%"></i></span></div>`).join('')}</div></div>`; }
+  if (k === 'distancias') { const L = D.X.lista, n = L.length || 1, med = L.reduce((t, o) => t + o.km, 0) / n, faixas = [[0, 50, '#22c55e'], [50, 100, '#84cc16'], [100, 200, '#eab308'], [200, 300, '#f97316'], [300, 1e9, '#ef4444']].map(([a, b, c]) => ({ a, b, c, n:L.filter(o => o.km >= a && o.km < b).length }));
+    const mxF = Math.max(1, ...faixas.map(f => f.n)), longe = [...L].sort((a, b) => b.km - a.km).slice(0, 4), mais200 = L.filter(o => o.km > 200).length;
+    return `<div class="apx-l apx-dist"><span class="apx-k apx-in" style="--i:0"><i class="fa-solid fa-road"></i> Distâncias</span><h2 class="apx-in" style="--i:1">Uma rede do tamanho de Mato Grosso</h2>
+      <div class="apx-dist-n"><div class="apx-in" style="--i:2">${apCont(med, ' km')}<small>em média, da escola até a sede da sua DRE (em linha reta)</small></div><div class="apx-in" style="--i:3">${apCont(mais200)}<small>escolas a mais de 200 km da sede (${(mais200 / n * 100).toLocaleString('pt-BR', { maximumFractionDigits:1 })}%)</small></div></div>
+      <div class="apx-hist apx-in" style="--i:4">${faixas.map(f => `<div style="--c:${f.c}"><span class="hb"><i style="--h:${(f.n / mxF * 100).toFixed(1)}%"></i></span><b>${f.n}</b><small>${f.b > 1e8 ? '+' + f.a : f.a + '–' + f.b} km</small></div>`).join('')}</div>
+      <div class="apx-longe apx-in" style="--i:5"><span>As escolas mais distantes da sede</span>${longe.map(o => `<div><b>${esc(apNomeCurto(o.e.nome))}</b><small>${esc(apNomeCurto(o.e.municipio))} · DRE ${esc(nomeDRE(o.e.dre))}</small><em>${fmtKm(o.km)}</em></div>`).join('')}</div></div>`; }
+  if (k === 'orgao') { const O = apOrgao(), chT = O.ch.Titular + O.ch.Interino, icT = { Gabinete:'fa-landmark', Superintendência:'fa-building-columns', Coordenadoria:'fa-sitemap', Gerência:'fa-briefcase', Diretoria:'fa-building', 'Núcleo Regional':'fa-route', Núcleo:'fa-circle-nodes', Unidade:'fa-cube', Conselho:'fa-users-rectangle', Secretaria:'fa-building-flag', Ouvidoria:'fa-ear-listen', Comissão:'fa-people-group' };
+    return `<div class="apx-l apx-l-larga apx-org"><span class="apx-k apx-in" style="--i:0"><i class="fa-solid fa-diagram-project"></i> Órgão central</span><h2 class="apx-in" style="--i:1">Como a SEDUC-MT está organizada</h2>
+      <div class="apx-org-g"><div class="apx-org-n">
+          <div class="apx-in" style="--i:2">${fa('fa-sitemap')}${apCont(O.n)}<small>unidades na estrutura</small></div>
+          <div class="apx-in" style="--i:3">${fa('fa-layer-group')}${apCont(O.niv)}<small>níveis hierárquicos</small></div>
+          ${chT ? `<div class="apx-in" style="--i:4">${fa('fa-user-tie')}${apCont(chT)}<small>chefias ocupadas${O.ch.Vago ? ` · ${O.ch.Vago} vaga(s)` : ''}</small></div>` : `<div class="apx-in" style="--i:4">${fa('fa-building-columns')}${apCont(O.topo.length)}<small>áreas ligadas ao gabinete</small></div>`}
+          <div class="apx-tipos-o apx-in" style="--i:5">${O.tipos.slice(0, 8).map(([t, n]) => `<span>${fa(icT[t] || 'fa-cube')}<b>${n}</b>${esc(t)}</span>`).join('')}</div></div>
+        <div class="apx-org-a apx-in" style="--i:3"><span class="t">${O.raiz ? esc(O.raiz.sigla || O.raiz.nome) : 'SEDUC-MT'} · áreas e quantas unidades cada uma reúne</span>
+          ${O.topo.filter(x => x.n > 0).slice(0, 10).map((x, i) => { const mx = Math.max(1, O.topo[0] ? O.topo[0].n : 1); return `<div class="r" style="--i:${i}"><b title="${esc(x.s.nome)}">${esc(x.s.sigla || x.s.nome)}</b><span class="b"><i style="--w:${(x.n / mx * 100).toFixed(1)}%"></i></span><em>${x.n}</em></div>`; }).join('')}
+          ${O.topo.length > 10 ? `<small>e mais ${O.topo.length - 10} área(s)</small>` : ''}</div></div></div>`; }
+  if (k === 'pessoas') { const sv = D.sv.length ? svDados(D.sv) : null, pf = apProf(A), inc = apIncl(A), cargos = sv ? Object.entries(sv.porCargo).sort((a, b) => b[1] - a[1]).slice(0, 6) : [], mxC = Math.max(1, ...cargos.map(c => c[1]));
+    const pe = sv && sv.n ? sv.efet / sv.n * 100 : 0;
+    return `<div class="apx-l apx-l-larga apx-pes"><span class="apx-k apx-in" style="--i:0"><i class="fa-solid fa-people-group"></i> Pessoas</span><h2 class="apx-in" style="--i:1">Quem faz a educação acontecer</h2>
+      <div class="apx-pes-g">
+        ${sv ? `<div class="apx-pes-c apx-in" style="--i:2"><span class="t">${fa('fa-id-card-clip')} Servidores da SEDUC (órgão central e DREs)</span><div class="big">${apCont(sv.n)}</div>
+          <div class="dv"><div style="--w:${(sv.oc / Math.max(1, sv.n) * 100).toFixed(1)}%"><i></i></div><p><span><i style="background:#38bdf8"></i>Órgão central <b>${fmtN(sv.oc)}</b></span><span><i style="background:#a78bfa"></i>DREs <b>${fmtN(sv.dre)}</b></span></p></div>
+          <div class="dv"><div style="--w:${pe.toFixed(1)}%" class="ef"><i></i></div><p><span><i style="background:#22c55e"></i>Efetivos <b>${fmtN(sv.efet)}</b></span><span><i style="background:#f59e0b"></i>Temporários e outros <b>${fmtN(sv.n - sv.efet)}</b></span></p></div></div>
+        <div class="apx-pes-c apx-in" style="--i:3"><span class="t">${fa('fa-briefcase')} Principais grupos de cargos</span>${cargos.map(([c, n]) => `<div class="r"><b>${esc(c)}</b><span class="b"><i style="--w:${(n / mxC * 100).toFixed(1)}%"></i></span><em>${fmtN(n)}</em></div>`).join('')}</div>` : ''}
+        <div class="apx-pes-c apx-in" style="--i:4"><span class="t">${fa('fa-school')} Nas escolas</span>
+          <div class="mini"><div>${fa('fa-children')}${apCont(A.al)}<small>estudantes</small></div>${pf.tem ? `<div>${fa('fa-chalkboard-user')}${apCont(pf.n)}<small>profissionais${pf.escolas < A.es.length ? ` (${pf.escolas} de ${A.es.length} escolas informadas)` : ''}</small></div>${pf.razao >= 1 ? `<div>${fa('fa-scale-balanced')}${apCont(pf.razao)}<small>estudantes por profissional</small></div>` : ''}` : ''}${inc.tem ? `<div><span class="ii">${AP_SVG.inclusiva}</span>${apCont(inc.n)}<small>estudantes da educação inclusiva</small></div>` : inc.esp ? `<div><span class="ii">${AP_SVG.inclusiva}</span>${apCont(inc.esp)}<small>escolas de educação especial</small></div>` : ''}</div>
+          ${!pf.tem ? '<small class="aviso">Profissionais por escola: preencha em Mapa de MT › Editar escolas.</small>' : ''}</div></div></div>`; }
+  return null;
+}
+/* território do estado: regiões das DREs coloridas, sedes e todas as escolas (pontos) */
+async function apTerEstado(){
+  const S = apEstado; if (!S) return; const el = S.el.querySelector('#apx-ter'); if (!el) return;
+  apTerParar();
+  try { await carregarLeaflet(); } catch (e) {}
+  if (apEstado !== S || S.R[S.i][0] !== 'territorio') return;
+  if (!(window.L && L.map)) { el.innerHTML = '<div class="apx-sat-erro"><i class="fa-solid fa-satellite"></i>Vista de satélite indisponível sem internet.</div>'; return; }
+  const D = S.D, A = S.A;
+  if (!S.lt) {
+    const m = L.map(el, { zoomControl:false, keyboard:false, zoomSnap:0, zoomDelta:.5, wheelPxPerZoomLevel:100, minZoom:4.5, maxZoom:18.5, preferCanvas:true });
+    m.attributionControl.setPrefix(false); L.control.zoom({ position:'bottomright' }).addTo(m);
+    L.tileLayer(ESRI('World_Imagery'), { maxZoom:19, maxNativeZoom:18, attribution:'Imagens de satélite: Esri, Maxar, Earthstar Geographics · Limites: IBGE' }).addTo(m);
+    L.tileLayer(ESRI('Reference/World_Boundaries_and_Places'), { maxZoom:19, maxNativeZoom:18, opacity:.5 }).addTo(m);
+    const buracos = D.muns.flatMap(x => apAneis(x.geo).map(p => p[0]));
+    L.polygon([[[-60, -120], [-60, 0], [30, 0], [30, -120]], ...buracos], { stroke:false, fillColor:'#020617', fillOpacity:.62, interactive:false, className:'apx-mask' }).addTo(m);
+    const reg = new Map();
+    D.muns.forEach(x => { const cor = x.dre ? apCorDre(D, x.dre) : '#64748b', pg = L.polygon(apAneis(x.geo), { color:'#ffffff', weight:.7, opacity:.45, fillColor:cor, fillOpacity:.22, className:'apx-est' }).addTo(m);
+      pg.bindTooltip(`<b>${esc(x.nome)}</b><br>${x.dre ? 'DRE ' + esc(nomeDRE(x.dre)) + ' · ' : ''}${x.es.length} escola(s) · ${fmtN(x.al)} estudantes`, { sticky:true, className:'apx-tip' });
+      pg.on('mouseover', () => apTerEstRealce(x.dre, true)); pg.on('mouseout', () => apTerEstRealce(x.dre, false));
+      if (x.dre) { if (!reg.has(x.dre)) reg.set(x.dre, []); reg.get(x.dre).push(pg); } });
+    const rend = L.canvas({ padding:.3 });
+    D.E.forEach(e => { if (!e.latitude || !e.longitude) return; const g = grupoTipo(e.tipo);
+      L.circleMarker([e.latitude, e.longitude], { renderer:rend, radius:3.6, color:'#ffffff', weight:1, fillColor:CORES_TIPO[g] || '#2563eb', fillOpacity:1, className:'apx-pt' })
+        .bindTooltip(`<b>${esc(apNomeCurto(e.nome))}</b><br>${esc(apNomeCurto(e.municipio))} · ${esc(g)}${num(e.alunos) ? ' · ' + fmtN(e.alunos) + ' alunos' : ''}`, { className:'apx-tip' }).addTo(m); });
+    D.dres.forEach(d => { const sd = D.X.sedes.get(d); if (!sd) return;
+      L.marker(sd, { keyboard:false, zIndexOffset:3000, icon:L.divIcon({ className:'apx-sede-w', iconSize:[0, 0], html:`<span class="apx-sede-m mini" style="--c:${apCorDre(D, d)}">${AP_SVG.estrela}</span><span class="apx-sede-n">${esc(nomeDRE(d))}</span>` }) })
+        .on('click', () => apTerEstFoco(d)).addTo(m); });
+    S.lt = { m, mk:new Map(), reg, b:L.latLngBounds(buracos.flat()), livre:false };
+    ['mousedown', 'wheel', 'touchstart'].forEach(ev => el.addEventListener(ev, () => { if (S.lt) { S.lt.livre = true; clearTimeout(S.terT); } }, { passive:true }));
+    S.el.querySelectorAll('.apx-ti[data-d]').forEach(it => { it.onmouseenter = () => apTerEstRealce(it.dataset.d, true); it.onmouseleave = () => apTerEstRealce(it.dataset.d, false); it.onclick = () => apTerEstFoco(it.dataset.d); });
+  }
+  const F = S.lt, m = F.m, W = el.clientWidth || innerWidth; m.invalidateSize(); F.livre = false;
+  const card = S.el.querySelector('.apx-s.on .apx-ter-c'), lst = S.el.querySelector('.apx-s.on .apx-ter-l');
+  F.pad = { paddingTopLeft:[card ? card.getBoundingClientRect().right + 30 : 480, 90], paddingBottomRight:[lst ? W - lst.getBoundingClientRect().left + 30 : 70, 110] };
+  el.classList.remove('desenha', 'pins', 'vivo');
+  m.setView(F.b.getCenter(), Math.max(3.5, m.getBoundsZoom(F.b) - 2.2), { animate:false });
+  S.terT = setTimeout(() => { if (apEstado !== S) return; m.flyToBounds(F.b, Object.assign({ duration:3 }, F.pad));
+    S.terT = setTimeout(() => { el.classList.add('desenha'); S.terT = setTimeout(() => { el.classList.add('pins', 'vivo'); apTerRolar(S); }, 1200); }, 3100); }, 400);
+}
+function apTerEstRealce(d, on){
+  const S = apEstado; if (!S || !S.lt || !d) return; const l = S.lt.reg.get(d) || [];
+  l.forEach(p => p.setStyle({ fillOpacity:on ? .6 : .22, weight:on ? 1.4 : .7, opacity:on ? .9 : .45 }));
+  S.el.querySelectorAll('.apx-ti[data-d]').forEach(x => x.classList.toggle('on', on && x.dataset.d === d));
+}
+function apTerEstFoco(d){
+  const S = apEstado; if (!S || !S.lt) return; const l = S.lt.reg.get(d) || []; if (!l.length) return; S.lt.livre = true; clearTimeout(S.terT);
+  const b = L.latLngBounds([]); l.forEach(p => b.extend(p.getBounds())); S.lt.m.flyToBounds(b, Object.assign({ duration:1.8 }, S.lt.pad));
+}
 function abrirModoTV(){
   if (vistaAtual !== 'mapa') { const v = vistaAtual; vistaAtual = 'mapa'; calcularLayout(); vistaAtual = v; } else calcularLayout();
   tv.pausado = false; tv.voltas = 0; tv.det = null;
