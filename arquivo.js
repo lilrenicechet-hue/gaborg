@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.31.1';
+const VERSAO = '1.32.0';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -379,7 +379,7 @@ const somenteLeitura = () => { const k = VISTA_SECAO[typeof vistaAtual !== 'unde
 const SECOES_ACESSO = [
   ['Estrutura', [['estrutura', 'Mapa e lista de setores', 'fa-diagram-project', ['mapa', 'lista'], 'Organograma, lista, painel do setor, valores, vínculos'], ['escolas', 'Mapa de MT (escolas)', 'fa-map-location-dot', ['escolas'], 'Mapa das escolas e DREs; editar escolas e alunos']]],
   ['Análise', [['painel', 'Indicadores', 'fa-chart-line', ['painel'], 'Indicadores estratégicos (só leitura)', true], ['relatorios', 'Relatórios e minutas', 'fa-file-pdf', ['relatorios'], 'Montar relatórios, portarias e decretos', true], ['financeiro', 'Financeiro', 'fa-coins', ['financeiro'], 'Rubricas, despesas e custos'],
-    ['propostas', 'Propostas', 'fa-lightbulb', ['propostas'], 'Cenários de reestruturação'], ['validacoes', 'Validações', 'fa-stamp', ['validacoes'], 'Pedidos e respostas de validação'], ['tv', 'Modo TV', 'fa-tv', [], 'Apresentação em tela cheia', true]]],
+    ['propostas', 'Propostas', 'fa-lightbulb', ['propostas'], 'Cenários de reestruturação'], ['validacoes', 'Validações', 'fa-stamp', ['validacoes'], 'Pedidos e respostas de validação'], ['tv', 'Modo TV', 'fa-tv', [], 'Apresentação em tela cheia', true], ['apresentacao', 'Apresentação', 'fa-person-chalkboard', ['apresentacao'], 'Apresentação animada por município ou DRE (receber prefeitos)', true]]],
   ['Gestão', [['reestruturacao', 'Reestruturação', 'fa-compass-drafting', ['reestruturacao'], 'Diagnóstico, metas, competências e minuta'], ['chefias', 'Chefias', 'fa-user-tie', ['chefias'], 'Titulares, substitutos e atos'],
     ['servidores', 'Servidores', 'fa-id-card-clip', ['servidores'], 'Lotação, vínculos e importação'], ['regional', 'Gestão regional', 'fa-route', ['regional'], 'Análise das DREs e sugestões']]]
 ];
@@ -397,7 +397,7 @@ function perfilSistema(nome){
 }
 let perfisLista = [];
 const acesso = () => cfg.simulado || cfg.acesso || perfilSistema(cfg.perfil);
-const nivelSec = k => { const a = acesso(); return a.administrar ? 'editar' : ((a.secoes || {})[k] || 'oculto'); };
+const nivelSec = k => { const a = acesso(), sc = a.secoes || {}; if (a.administrar) return 'editar'; if (k === 'apresentacao' && !sc[k]) return sc.escolas && sc.escolas !== 'oculto' ? 'ver' : 'oculto'; return sc[k] || 'oculto'; };
 const podeVerSec = k => nivelSec(k) !== 'oculto';
 const podeEditarSec = k => !SEM_EDICAO.has(k) && nivelSec(k) === 'editar';
 const podeExtra = k => { const a = acesso(); return !!(a.administrar || (a.extras || {})[k]); };
@@ -464,9 +464,9 @@ async function renderPerfis(){
 const MODELOS_PERFIL = [
   ['branco', 'Em branco', 'fa-file', 'Tudo oculto; você escolhe seção por seção', {}, {}],
   ['consulta', 'Consulta total', 'fa-eye', 'Vê todas as seções, sem editar', { '*':'ver' }, { exportar:true, documentos:true }],
-  ['gabinete', 'Gabinete — análise e documentos', 'fa-landmark', 'Indicadores, relatórios, mapas e Modo TV', { estrutura:'ver', escolas:'ver', painel:'ver', relatorios:'ver', tv:'ver', propostas:'ver', reestruturacao:'ver', resultados:'ver', regional:'ver', chefias:'ver' }, { documentos:true, exportar:true }],
+  ['gabinete', 'Gabinete — análise e documentos', 'fa-landmark', 'Indicadores, relatórios, mapas, Modo TV e Apresentação', { estrutura:'ver', escolas:'ver', apresentacao:'ver', painel:'ver', relatorios:'ver', tv:'ver', propostas:'ver', reestruturacao:'ver', resultados:'ver', regional:'ver', chefias:'ver' }, { documentos:true, exportar:true }],
   ['pessoas', 'Gestão de pessoas', 'fa-id-card-clip', 'Edita servidores e chefias; consulta a estrutura', { estrutura:'ver', painel:'ver', servidores:'editar', chefias:'editar', implantacao:'ver', relatorios:'ver' }, { nomesServidores:true, exportar:true, documentos:true }],
-  ['regional', 'DRE / Gestão regional', 'fa-map-location-dot', 'Edita escolas e alunos; vê DREs, servidores e indicadores', { estrutura:'ver', escolas:'editar', regional:'ver', painel:'ver', servidores:'ver', relatorios:'ver', tv:'ver' }, { documentos:true }],
+  ['regional', 'DRE / Gestão regional', 'fa-map-location-dot', 'Edita escolas e alunos; vê DREs, servidores e indicadores', { estrutura:'ver', escolas:'editar', apresentacao:'ver', regional:'ver', painel:'ver', servidores:'ver', relatorios:'ver', tv:'ver' }, { documentos:true }],
   ['financeiro', 'Financeiro', 'fa-coins', 'Edita custos; vê estrutura e propostas', { estrutura:'ver', financeiro:'editar', propostas:'ver', painel:'ver', relatorios:'ver' }, { exportar:true, documentos:true }],
   ['indicadores', 'Somente indicadores', 'fa-chart-line', 'Indicadores e Modo TV, nada mais', { painel:'ver', tv:'ver' }, {}]
 ];
@@ -1425,6 +1425,7 @@ function atualizarVistaAtual(){
   else if (vistaAtual === 'regional') renderRegional();
   else if (vistaAtual === 'reunioes') renderReunioes();
   else if (vistaAtual === 'relatorios') renderRelatorios();
+  else if (vistaAtual === 'apresentacao') renderApresentacao();
   atualizarBadgeIm();
 }
 function redesenharTudo(){ indexar(); atualizarVistaAtual(); if (selId && porId.has(selId)) renderPainel(); else fecharPainel(); }
@@ -6140,6 +6141,252 @@ function tvSlides(){
     if (TV_SLIDE[k]) L.push([k, TELAS_TV[k] || k]);
   });
   return L.length ? L : [['visao', 'Visão geral']];
+}
+/* ===================== APRESENTAÇÃO (por município ou DRE) =====================
+   Escolha um município ou uma DRE e abra uma apresentação em tela cheia, animada, com o mapa
+   que dá zoom no território, as escolas que "caem" no mapa, números com contagem e a DRE que atende.
+   Só lê dados (escolas, alunos, DREs; servidores apenas em número). Nada é gravado; o nome do convidado não é guardado. */
+let apModo = 'mun', apSel = '', apBusca = '', apConvidado = '', apAuto = 0, apEstado = null;
+function apGeo(){
+  if (apGeo.c) return apGeo.c;
+  const obj = MALHA_MT.objects[Object.keys(MALHA_MT.objects)[0]], fc = topojson.feature(MALHA_MT, obj);
+  const kx = Math.cos(-13 * Math.PI / 180), anel = g => g.type === 'Polygon' ? [g.coordinates] : g.coordinates;
+  let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+  fc.features.forEach(f => anel(f.geometry).forEach(pl => pl[0].forEach(([lo, la]) => { const x = lo * kx, y = -la; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; })));
+  const W = 1000, s = W / (x1 - x0), H = (y1 - y0) * s, P = (lo, la) => [(lo * kx - x0) * s, (-la - y0) * s];
+  const muns = fc.features.map(f => { const b = [1e9, 1e9, -1e9, -1e9];
+    const d = anel(f.geometry).map(pl => pl.map(r => 'M' + r.map(([lo, la]) => { const p = P(lo, la); if (p[0] < b[0]) b[0] = p[0]; if (p[1] < b[1]) b[1] = p[1]; if (p[0] > b[2]) b[2] = p[0]; if (p[1] > b[3]) b[3] = p[1]; return p[0].toFixed(1) + ',' + p[1].toFixed(1); }).join('L') + 'Z').join('')).join('');
+    return { k:chaveMun(f.properties.nome), nome:f.properties.nome, d, bb:b, c:[(b[0] + b[2]) / 2, (b[1] + b[3]) / 2] }; });
+  return apGeo.c = { W, H, P, muns, todo:[0, 0, W, H] };
+}
+/* Dados vivos (escolas e alunos podem ter sido editados) */
+function apDados(){
+  const G = apGeo(), X = distanciasMT(), E = escolasLista(), porMun = dreDosMunicipios(), porK = new Map();
+  E.forEach(e => { const k = chaveMun(e.municipio); if (!porK.has(k)) porK.set(k, []); porK.get(k).push(e); });
+  const muns = G.muns.map(m => { const q = porMun.get(m.k), es = porK.get(m.k) || []; return Object.assign({}, m, { dre:q ? Object.entries(q).sort((a, b) => b[1] - a[1])[0][0] : '', es, al:alunosDe(es) }); });
+  const rank = [...muns].sort((a, b) => b.al - a.al || b.es.length - a.es.length); rank.forEach((m, i) => { m.pos = i + 1; });
+  let sv = []; try { if (podeVerSec('servidores')) sv = svAtivos(); } catch (e) {}
+  return { G, X, E, muns, totAl:alunosDe(E), dres:X.dres, sv };
+}
+const apCaixa = (bbs, pad) => { let b = [1e9, 1e9, -1e9, -1e9]; bbs.forEach(x => { b = [Math.min(b[0], x[0]), Math.min(b[1], x[1]), Math.max(b[2], x[2]), Math.max(b[3], x[3])]; }); const w = b[2] - b[0], h = b[3] - b[1], p = Math.max(w, h) * (pad ?? .18) + 6; return [b[0] - p, b[1] - p, b[2] + p, b[3] + p]; };
+/* Enquadramento do território: o município inteiro, ou só a área das escolas quando elas ficam concentradas (ex.: zona urbana de Cuiabá) */
+function apFoco(D, A){
+  if (A.tipo === 'dre') return apCaixa(A.ms.map(m => m.bb), .08);
+  const mb = apCaixa([A.m.bb], .45); if (A.es.length < 4) return mb;
+  const P = A.es.map(e => D.G.P(e.longitude, e.latitude)), q = (v, f) => { const o = [...v].sort((x, y) => x - y); return o[Math.min(o.length - 1, Math.max(0, Math.round((o.length - 1) * f)))]; };
+  const lo = A.es.length >= 10 ? .06 : 0, xs = P.map(p => p[0]), ys = P.map(p => p[1]), sb = apCaixa([[q(xs, lo), q(ys, lo), q(xs, 1 - lo), q(ys, 1 - lo)]], .6), ar = b => (b[2] - b[0]) * (b[3] - b[1]);
+  return ar(sb) < ar(mb) * .15 ? sb : mb;
+}
+const apPt = (G, la, lo) => { const p = G.P(lo, la); return [p[0], p[1], p[0], p[1]]; };
+const apCorDre = (D, d) => corDRE(D.dres, d);
+const apSv = (D, d) => D.sv.filter(r => svEhDRE(r) && norm(r.unidade) === norm(d)).length;
+const apSedeNome = d => /METROPOLITANA/i.test(d) ? 'Cuiabá' : nomeDRE(d);
+function apAlvo(D){
+  if (apModo === 'mun') { const m = D.muns.find(x => x.k === apSel); if (!m) return null; return { tipo:'mun', m, nome:m.nome, es:m.es, al:m.al, dre:m.dre, cor:m.dre ? apCorDre(D, m.dre) : '#38bdf8' }; }
+  const d = apSel; if (!D.dres.includes(d)) return null; const ms = D.muns.filter(m => m.dre === d), es = D.E.filter(e => e.dre === d);
+  return { tipo:'dre', d, nome:'DRE ' + nomeDRE(d), ms, es, al:alunosDe(es), dre:d, cor:apCorDre(D, d) };
+}
+/* ---------- tela de escolha ---------- */
+function renderApresentacao(){
+  const el = $('#v-apresentacao'); if (!el) return;
+  const D = apDados();
+  if (!apSel) { const top = apModo === 'mun' ? [...D.muns].sort((a, b) => b.al - a.al)[0] : null; apSel = apModo === 'mun' ? (top ? top.k : '') : D.dres[0]; }
+  el.innerHTML = `<div class="apx-esc">
+    <header class="apx-hero"><div class="apx-hero-ic"><i class="fa-solid fa-person-chalkboard"></i></div>
+      <div><span class="apx-k">Receber prefeitos e equipes</span><h2>Apresentação do território</h2><p>Escolha um município ou uma DRE e abra uma apresentação animada em tela cheia: mapa com zoom, escolas, estudantes, perfil da rede e a regional que atende.</p></div></header>
+    <div class="apx-grid">
+      <div class="apx-col">
+        <div class="apx-bar"><div class="seg apx-seg">${[['mun', 'Município', 'fa-city'], ['dre', 'DRE', 'fa-route']].map(([k, t, ic]) => `<button class="${apModo === k ? 'on' : ''}" onclick="apModo='${k}';apSel='';apBusca='';renderApresentacao()"><i class="fa-solid ${ic}"></i>${t}</button>`).join('')}</div>
+          <label class="apx-busca"><i class="fa-solid fa-magnifying-glass"></i><input id="apx-q" value="${esc(apBusca)}" placeholder="${apModo === 'mun' ? 'Buscar entre os ' + D.muns.length + ' municípios...' : 'Buscar DRE...'}" oninput="apBusca=this.value;apLista()"></label></div>
+        <div class="apx-lista" id="apx-lista"></div>
+      </div>
+      <aside class="apx-prev" id="apx-prev"></aside>
+    </div></div>`;
+  apLista(); apPrevia();
+}
+function apLista(){
+  const el = $('#apx-lista'); if (!el) return; const D = apDados(), q = norm(apBusca);
+  if (apModo === 'mun') {
+    const L = D.muns.filter(m => !q || norm(m.nome).includes(q) || norm(nomeDRE(m.dre)).includes(q)).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+    el.innerHTML = L.length ? L.map(m => `<button class="apx-it ${m.k === apSel ? 'on' : ''}" style="--c:${m.dre ? apCorDre(D, m.dre) : '#94a3b8'}" onclick="apSel='${m.k}';apLista();apPrevia()"><span class="apx-it-n"><b>${esc(m.nome)}</b><small>${m.dre ? 'DRE ' + esc(nomeDRE(m.dre)) : 'Sem escola estadual'}</small></span><span class="apx-it-v"><b>${fmtN(m.es.length)}</b><small>escolas</small></span><span class="apx-it-v"><b>${fmtN(m.al)}</b><small>alunos</small></span></button>`).join('') : '<div class="apx-vazio">Nenhum município encontrado.</div>';
+  } else {
+    const L = D.dres.filter(d => !q || norm(d).includes(q));
+    el.innerHTML = L.map(d => { const es = D.E.filter(e => e.dre === d), nm = D.muns.filter(m => m.dre === d).length; return `<button class="apx-it ${d === apSel ? 'on' : ''}" style="--c:${apCorDre(D, d)}" onclick="apSel=${arg(d)};apLista();apPrevia()"><span class="apx-it-n"><b>DRE ${esc(nomeDRE(d))}</b><small>${nm} municípios · sede em ${esc(apSedeNome(d))}</small></span><span class="apx-it-v"><b>${fmtN(es.length)}</b><small>escolas</small></span><span class="apx-it-v"><b>${fmtN(alunosDe(es))}</b><small>alunos</small></span></button>`; }).join('');
+  }
+}
+function apPrevia(){
+  const el = $('#apx-prev'); if (!el) return; const D = apDados(), A = apAlvo(D);
+  if (!A) { el.innerHTML = '<div class="apx-vazio">Escolha um item na lista.</div>'; return; }
+  const box = A.tipo === 'mun' ? apCaixa([A.m.bb], .5) : apCaixa(A.ms.map(m => m.bb), .1);
+  const roteiro = apRoteiro(D, A).map(s => s[1]);
+  el.innerHTML = `<div class="apx-prev-map">${apMapaSVG(D, A, box, true)}</div>
+    <div class="apx-prev-c"><span class="apx-k" style="color:${A.cor}">${A.tipo === 'mun' ? (A.dre ? 'DRE ' + esc(nomeDRE(A.dre)) : 'Município') : 'Diretoria Regional de Educação'}</span><h3>${esc(A.nome)}</h3>
+      <div class="apx-prev-n"><div><b>${fmtN(A.es.length)}</b><small>escolas</small></div><div><b>${fmtN(A.al)}</b><small>estudantes</small></div><div><b>${A.tipo === 'mun' ? A.m.pos + 'º' : fmtN(A.ms.length)}</b><small>${A.tipo === 'mun' ? 'em alunos no estado' : 'municípios'}</small></div></div>
+      <label class="apx-campo"><span>Convidado (opcional)</span><input id="apx-conv" value="${esc(apConvidado)}" placeholder="${A.tipo === 'mun' ? 'Ex.: Prefeito(a) Fulano de Tal' : 'Ex.: Equipe da DRE'}" oninput="apConvidado=this.value" maxlength="80"><small>Aparece na capa de boas-vindas. Não é salvo.</small></label>
+      <label class="apx-campo"><span>Avançar os slides</span><select onchange="apAuto=+this.value">${[[0, 'Manualmente (setas, clique ou passador)'], [10, 'Automático a cada 10 s'], [15, 'Automático a cada 15 s'], [25, 'Automático a cada 25 s']].map(([v, t]) => `<option value="${v}" ${apAuto === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+      <div class="apx-rot"><span>Roteiro · ${roteiro.length} telas</span><ol>${roteiro.map(t => `<li>${esc(t)}</li>`).join('')}</ol></div>
+      <button class="btn btn-p apx-ir" onclick="apAbrir()"><i class="fa-solid fa-play"></i>Iniciar apresentação</button>
+      <small class="apx-dica"><i class="fa-solid fa-keyboard"></i> → ou espaço avança · ← volta · P pausa · F tela cheia · Esc sai</small></div>`;
+}
+/* ---------- mapa (SVG único, com zoom animado pelo viewBox) ---------- */
+function apMapaSVG(D, A, box, estatico){
+  const G = D.G, alvoK = new Set(A.tipo === 'mun' ? [A.m.k] : A.ms.map(m => m.k)), mesmaDre = new Set(A.tipo === 'mun' && A.dre ? D.muns.filter(m => m.dre === A.dre).map(m => m.k) : []);
+  const vb = box.map((v, i) => i < 2 ? v : v - box[i - 2]).map(v => v.toFixed(1)).join(' ');
+  const ordem = m => alvoK.has(m.k) ? 2 : mesmaDre.has(m.k) ? 1 : 0, paths = [...D.muns].sort((a, b) => ordem(a) - ordem(b)).map(m => `<path d="${m.d}" class="${alvoK.has(m.k) ? 'alvo' : mesmaDre.has(m.k) ? 'viz' : ''}"/>`).join('');
+  const fb = apFoco(D, A), r = Math.max(fb[2] - fb[0], fb[3] - fb[1]) / (A.tipo === 'mun' ? 46 : 64) / Math.max(1, Math.sqrt(A.es.length / (A.tipo === 'mun' ? 30 : 60)));
+  const pins = estatico ? '' : [...A.es].sort((a, b) => a.latitude - b.latitude).map((e, i) => { const [x, y] = G.P(e.longitude, e.latitude), gt = grupoTipo(e.tipo); return `<g transform="translate(${x.toFixed(2)} ${y.toFixed(2)}) scale(${(r / 10).toFixed(4)})"><g class="apx-pin" style="--i:${Math.min(i, 60)}">${simbolo(FORMAS_TIPO[gt] || 'ponto', 0, 0, 10, CORES_TIPO[gt] || '#38bdf8')}</g></g>`; }).join('');
+  const sede = A.dre && D.X.sedes.get(A.dre), sp = sede ? G.P(sede[1], sede[0]) : null;
+  const liga = !estatico && sp && A.tipo === 'mun' ? `<path class="apx-liga" d="M${A.m.c[0].toFixed(1)},${A.m.c[1].toFixed(1)}L${sp[0].toFixed(1)},${sp[1].toFixed(1)}" pathLength="100"/>` : '';
+  const rs = estatico ? r * 1.4 : r * 1.25;
+  const sedeG = sp ? `<g class="apx-sede"><circle cx="${sp[0].toFixed(1)}" cy="${sp[1].toFixed(1)}" r="${(rs * 2.4).toFixed(2)}" class="h"/><path transform="translate(${sp[0].toFixed(1)} ${sp[1].toFixed(1)}) scale(${(rs / 10).toFixed(3)})" d="M0,-10L2.9,-3.1L10,-3.1L4.3,1.2L6.5,8.1L0,3.8L-6.5,8.1L-4.3,1.2L-10,-3.1L-2.9,-3.1Z"/></g>` : '';
+  let rot = '';
+  if (!estatico && A.tipo === 'dre') { const fs = r * 1.25, ok = [], area = m => (m.bb[2] - m.bb[0]) * (m.bb[3] - m.bb[1]);
+    [...A.ms].sort((a, b) => area(b) - area(a)).forEach(m => { const w = m.nome.length * fs * .56, x = m.c[0], y = m.c[1] + r * 2.4, bx = [x - w / 2 - fs * .3, y - fs, x + w / 2 + fs * .3, y + fs * .3];
+      if (!ok.some(o => bx[0] < o.b[2] && bx[2] > o.b[0] && bx[1] < o.b[3] && bx[3] > o.b[1])) ok.push({ m, b:bx, x, y }); });
+    rot = `<g class="apx-rots" style="font-size:${fs.toFixed(2)}px">${ok.map(o => `<text x="${o.x.toFixed(1)}" y="${o.y.toFixed(1)}">${esc(o.m.nome)}</text>`).join('')}</g>`; }
+  return `<svg class="apx-svg" viewBox="${vb}" preserveAspectRatio="xMidYMid meet" style="--c:${A.cor}"><g class="apx-mun">${paths}</g>${liga}<g class="apx-pins">${pins}</g>${rot}${sedeG}</svg>`;
+}
+/* ---------- conteúdo das telas ---------- */
+const apCont = (v, suf) => `<b class="apx-cont" data-v="${Math.round(num(v))}" data-suf="${suf || ''}">0${suf || ''}</b>`;
+function apTipos(es){ const c = {}; es.forEach(e => { const g = grupoTipo(e.tipo); c[g] = (c[g] || 0) + 1; }); return Object.entries(c).sort((a, b) => b[1] - a[1]); }
+function apRoteiro(D, A){
+  const R = [['capa', 'Boas-vindas'], ['territorio', A.tipo === 'mun' ? 'O município no mapa' : 'A região no mapa'], ['numeros', 'A rede em números']];
+  if (A.tipo === 'dre') R.push(['municipios', 'Municípios atendidos']);
+  if (A.es.length) R.push(['perfil', 'Perfil da rede'], ['escolas', A.tipo === 'mun' ? 'Nossas escolas' : 'Maiores escolas']);
+  if (A.tipo === 'mun' && A.dre) R.push(['dre', 'A DRE que atende']);
+  R.push(['fim', 'Encerramento']); return R;
+}
+function apTela(D, A, k){
+  const hoje = new Date(), dataL = hoje.toLocaleDateString('pt-BR', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+  const urb = A.es.filter(e => e.localidade !== 'RURAL'), rur = A.es.length - urb.length, alu = A.al, media = A.es.length ? alu / A.es.length : 0;
+  const quem = apConvidado.trim();
+  if (k === 'capa') return `<div class="apx-l"><span class="apx-k apx-in" style="--i:0"><i class="fa-solid fa-landmark"></i> Secretaria de Estado de Educação de Mato Grosso</span>
+      <p class="apx-boas apx-in" style="--i:1">${quem ? `Bem-vindo(a), <b>${esc(quem)}</b>` : 'Seja bem-vindo(a)'}</p>
+      <h1 class="apx-in" style="--i:2">${esc(A.tipo === 'mun' ? A.nome : 'DRE ' + nomeDRE(A.d))}</h1>
+      <p class="apx-sub apx-in" style="--i:3">${A.tipo === 'mun' ? `A rede estadual de ensino no município${A.dre ? ` · Diretoria Regional de ${esc(nomeDRE(A.dre))}` : ''}` : `Diretoria Regional de Educação · ${A.ms.length} municípios · sede em ${esc(apSedeNome(A.d))}`}</p>
+      <div class="apx-data apx-in" style="--i:4"><i class="fa-regular fa-calendar"></i>${esc(dataL.charAt(0).toUpperCase() + dataL.slice(1))}</div></div>`;
+  if (k === 'territorio') { const tp = apTipos(A.es);
+    return `<div class="apx-card apx-flut apx-in" style="--i:0"><span class="apx-k">${A.tipo === 'mun' ? 'Território' : 'Região atendida'}</span><h2>${esc(A.nome)}</h2>
+      <p class="apx-big">${apCont(A.es.length)}<span>${A.es.length === 1 ? 'escola estadual' : 'escolas estaduais'}${A.tipo === 'dre' ? ` em ${A.ms.length} municípios` : ''}</span></p>
+      ${tp.length ? `<div class="apx-leg">${tp.map(([g, n]) => `<span>${iconeTipoSVG(g, CORES_TIPO[g], 18)}${esc(g)} <b>${n}</b></span>`).join('')}</div>` : '<p class="apx-sub">Não há escolas estaduais neste município.</p>'}
+      ${A.dre ? `<div class="apx-leg"><span><i class="fa-solid fa-star" style="color:#fbbf24"></i>Sede da DRE em ${esc(apSedeNome(A.dre))}</span></div>` : ''}</div>`; }
+  if (k === 'numeros') { const it = A.tipo === 'mun'
+      ? [['fa-school', A.es.length, 'escolas estaduais', ''], ['fa-children', alu, 'estudantes', ''], ['fa-chart-simple', media, 'alunos por escola, em média', ''], ['fa-city', urb.length, 'escolas urbanas', ''], ['fa-tractor', rur, 'escolas rurais', ''], ['fa-ranking-star', A.m.pos, `em número de alunos entre os ${D.muns.length} municípios`, 'º']]
+      : (() => { const km = D.X.lista.filter(o => o.e.dre === A.d), sv = apSv(D, A.d); return [['fa-city', A.ms.length, 'municípios atendidos', ''], ['fa-school', A.es.length, 'escolas estaduais', ''], ['fa-children', alu, 'estudantes', ''], sv ? ['fa-id-card-clip', sv, 'servidores na DRE', ''] : ['fa-tractor', rur, 'escolas rurais', ''], ['fa-route', km.length ? km.reduce((t, o) => t + o.km, 0) / km.length : 0, 'km, em média, das escolas até a sede', ''], ['fa-road', km.filter(o => o.km > 200).length, 'escolas a mais de 200 km da sede', '']]; })();
+    const pct = D.totAl ? alu / D.totAl * 100 : 0;
+    return `<div class="apx-l apx-l-larga"><span class="apx-k apx-in" style="--i:0">A rede em números</span><h2 class="apx-in" style="--i:1">${esc(A.nome)}</h2>
+      <div class="apx-nums">${it.map(([ic, v, t, suf], i) => `<div class="apx-num apx-in" style="--i:${i + 2}"><i class="fa-solid ${ic}"></i>${apCont(v, suf)}<small>${t}</small></div>`).join('')}</div>
+      <div class="apx-pct apx-in" style="--i:9"><div class="apx-pct-b"><i style="--w:${Math.max(.6, Math.min(100, pct)).toFixed(2)}%"></i></div><span><b>${pct.toLocaleString('pt-BR', { maximumFractionDigits:pct < 1 ? 2 : 1 })}%</b> de todos os estudantes da rede estadual de Mato Grosso</span></div></div>`; }
+  if (k === 'municipios') { const L = [...A.ms].sort((a, b) => b.al - a.al), mx = Math.max(1, ...L.map(m => m.al)), vis = L.slice(0, 14);
+    return `<div class="apx-l apx-l-larga"><span class="apx-k apx-in" style="--i:0">Municípios atendidos</span><h2 class="apx-in" style="--i:1">${A.ms.length} municípios, do maior ao menor em estudantes</h2>
+      <div class="apx-rank">${vis.map((m, i) => `<div class="apx-rk apx-in" style="--i:${i + 2}"><span class="p">${i + 1}</span><span class="n">${esc(m.nome)}</span><span class="b"><i style="--w:${(m.al / mx * 100).toFixed(1)}%"></i></span><span class="v"><b>${fmtN(m.al)}</b> alunos · ${m.es.length} esc.</span></div>`).join('')}</div>
+      ${L.length > vis.length ? `<p class="apx-sub apx-in" style="--i:16">e mais ${L.length - vis.length} município(s): ${esc(L.slice(vis.length).map(m => m.nome).join(', '))}</p>` : ''}</div>`; }
+  if (k === 'perfil') { const tp = apTipos(A.es), mx = Math.max(1, ...tp.map(x => x[1])), pu = A.es.length ? urb.length / A.es.length * 100 : 0;
+    const ala = {}; A.es.forEach(e => { const g = grupoTipo(e.tipo); ala[g] = (ala[g] || 0) + num(e.alunos); });
+    return `<div class="apx-l apx-l-larga"><span class="apx-k apx-in" style="--i:0">Perfil da rede</span><h2 class="apx-in" style="--i:1">Que escolas estão em ${esc(A.tipo === 'mun' ? A.nome : 'nossa região')}</h2>
+      <div class="apx-perfil"><div class="apx-tipos">${tp.map(([g, n], i) => `<div class="apx-tp apx-in" style="--i:${i + 2};--c:${CORES_TIPO[g]}"><span class="ic">${iconeTipoSVG(g, CORES_TIPO[g], 34)}</span><span class="t"><b>${esc(g)}</b><small>${fmtN(ala[g] || 0)} estudantes</small><span class="b"><i style="--w:${(n / mx * 100).toFixed(1)}%"></i></span></span><b class="v">${n}</b></div>`).join('')}</div>
+        <div class="apx-rosca apx-in" style="--i:3"><svg viewBox="0 0 42 42"><circle cx="21" cy="21" r="15.9" class="f"/><circle cx="21" cy="21" r="15.9" class="u" style="--p:${pu.toFixed(1)}"/></svg><div><b>${Math.round(pu)}%</b><small>urbanas</small></div>
+          <p><span><i style="background:#38bdf8"></i>Urbanas <b>${urb.length}</b></span><span><i style="background:#a3e635"></i>Rurais <b>${rur}</b></span></p></div></div></div>`; }
+  if (k === 'escolas') { const L = [...A.es].sort((a, b) => num(b.alunos) - num(a.alunos)), vis = L.slice(0, A.tipo === 'mun' ? 12 : 10), mx = Math.max(1, ...vis.map(e => num(e.alunos)));
+    return `<div class="apx-l apx-l-larga"><span class="apx-k apx-in" style="--i:0">${A.tipo === 'mun' ? 'Nossas escolas' : 'Maiores escolas da região'}</span><h2 class="apx-in" style="--i:1">${A.tipo === 'mun' ? `${A.es.length} ${A.es.length === 1 ? 'escola estadual' : 'escolas estaduais'} em ${esc(A.nome)}` : `As ${vis.length} escolas com mais estudantes`}</h2>
+      <div class="apx-escs">${vis.map((e, i) => { const g = grupoTipo(e.tipo); return `<div class="apx-e apx-in" style="--i:${Math.min(i + 2, 14)};--c:${CORES_TIPO[g]}"><span class="ic">${iconeTipoSVG(g, CORES_TIPO[g], 28)}</span><span class="t"><b>${esc(e.nome)}</b><small>${esc(g)} · ${e.localidade === 'RURAL' ? 'Rural' : 'Urbana'}${A.tipo === 'dre' ? ' · ' + esc(e.municipio) : ''}</small><span class="b"><i style="--w:${(num(e.alunos) / mx * 100).toFixed(1)}%"></i></span></span><span class="v"><b>${num(e.alunos) ? fmtN(e.alunos) : '—'}</b><small>alunos</small></span></div>`; }).join('')}</div>
+      ${L.length > vis.length ? `<p class="apx-sub apx-in" style="--i:15">e mais ${L.length - vis.length} escola(s)</p>` : ''}</div>`; }
+  if (k === 'dre') { const d = A.dre, es = D.E.filter(e => e.dre === d), ms = D.muns.filter(m => m.dre === d).length, sv = apSv(D, d), km = A.es.length ? A.es.reduce((t, e) => t + distEscola(e), 0) / A.es.length : 0;
+    return `<div class="apx-l"><span class="apx-k apx-in" style="--i:0">Quem atende ${esc(A.nome)}</span><h2 class="apx-in" style="--i:1">Diretoria Regional de Educação de ${esc(nomeDRE(d))}</h2>
+      <p class="apx-sub apx-in" style="--i:2"><i class="fa-solid fa-star" style="color:#fbbf24"></i> Sede em <b>${esc(apSedeNome(d))}</b>${km >= 3 ? ` · cerca de <b>${fmtKm(km)}</b> (${fmtHoras(km)} de estrada) até as escolas de ${esc(A.nome)}` : ' · no próprio município'}</p>
+      <div class="apx-nums apx-nums-3">${[['fa-city', ms, 'municípios'], ['fa-school', es.length, 'escolas'], ['fa-children', alunosDe(es), 'estudantes']].concat(sv ? [['fa-id-card-clip', sv, 'servidores']] : []).map(([ic, v, t], i) => `<div class="apx-num apx-in" style="--i:${i + 3}"><i class="fa-solid ${ic}"></i>${apCont(v)}<small>${t}</small></div>`).join('')}</div></div>`; }
+  return `<div class="apx-fim"><span class="apx-fim-ic apx-in" style="--i:0"><i class="fa-solid fa-handshake"></i></span><h1 class="apx-in" style="--i:1">Obrigado${quem ? ', ' + esc(quem.replace(/^(prefeit[oa]\(?a?\)?|sr\.?|sra\.?)\s+/i, '')) : ''}!</h1>
+    <p class="apx-sub apx-in" style="--i:2">Juntos pela educação ${A.tipo === 'mun' ? 'de ' + esc(A.nome) : 'da região de ' + esc(nomeDRE(A.d))}.</p>
+    <div class="apx-fim-n apx-in" style="--i:3"><span><b>${fmtN(A.es.length)}</b> escolas</span><span><b>${fmtN(A.al)}</b> estudantes</span>${A.dre ? `<span>DRE <b>${esc(nomeDRE(A.dre))}</b></span>` : ''}</div>
+    <div class="apx-marca apx-in" style="--i:4"><span class="ic"><i class="fa-solid fa-sitemap"></i></span><span><b>GAB<em>Org</em></b><small>SEDUC-MT · ${esc(hoje.toLocaleDateString('pt-BR'))}</small></span></div></div>`;
+}
+/* Enquadramento do mapa em cada tela: caixa, posição (cheio | direita | fundo) e o que acende */
+function apQuadro(D, A, k){
+  const G = D.G, alvo = apFoco(D, A), sede = A.dre && D.X.sedes.get(A.dre);
+  if (k === 'capa' || k === 'fim') return { box:G.todo, pos:'dir', cls:'pulsa' };
+  if (k === 'territorio') return { box:alvo, pos:'cheio', cls:'pins rots' };
+  if (k === 'dre' && sede) return { box:apCaixa([A.m.bb, apPt(G, sede[0], sede[1]), ...D.muns.filter(m => m.dre === A.dre).map(m => m.bb)], .06), pos:'dir', cls:'liga dre' };
+  if (k === 'municipios') return { box:alvo, pos:'fundo', cls:'' };
+  return { box:alvo, pos:'fundo', cls:'pins' };
+}
+/* ---------- show ---------- */
+function apAbrir(){
+  const D = apDados(), A = apAlvo(D); if (!A) return;
+  apFechar(true);
+  const R = apRoteiro(D, A), el = document.createElement('div'); el.id = 'apx-show'; el.className = 'apx-show'; el.tabIndex = -1;
+  el.innerHTML = `<div class="apx-fx"><i></i><i></i></div><div class="apx-mapa">${apMapaSVG(D, A, D.G.todo, false)}</div>
+    <header class="apx-topo"><span class="apx-logo"><span class="ic"><i class="fa-solid fa-sitemap"></i></span><b>GAB<em>Org</em></b><small>SEDUC-MT</small></span><span class="apx-tit">${esc(A.nome)}</span><span class="apx-hora" id="apx-hora"></span></header>
+    <div class="apx-telas">${R.map(([k], i) => `<section class="apx-s apx-s-${k}" data-k="${k}" data-i="${i}">${apTela(D, A, k)}</section>`).join('')}</div>
+    <footer class="apx-ctl"><div class="apx-prog">${R.map(([, t], i) => `<button title="${esc(t)}" onclick="event.stopPropagation();apIr(${i})"><i></i></button>`).join('')}</div>
+      <div class="apx-bts"><button onclick="event.stopPropagation();apIr(apEstado.i-1)" title="Anterior (←)"><i class="fa-solid fa-chevron-left"></i></button><button id="apx-play" onclick="event.stopPropagation();apPlay()" title="Avançar automaticamente (P)"><i class="fa-solid fa-play"></i></button><button onclick="event.stopPropagation();apIr(apEstado.i+1)" title="Próxima (→)"><i class="fa-solid fa-chevron-right"></i></button>
+      <span class="apx-cnt" id="apx-cnt"></span><span style="flex:1"></span><button onclick="event.stopPropagation();apTelaCheia()" title="Tela cheia (F)"><i class="fa-solid fa-expand"></i></button><button onclick="event.stopPropagation();apFechar()" title="Sair (Esc)"><i class="fa-solid fa-xmark"></i></button></div></footer>`;
+  document.body.appendChild(el);
+  apEstado = { el, D, A, R, i:-1, svg:el.querySelector('.apx-svg'), box:D.G.todo.slice(), raf:0, auto:apAuto, t:0, ocioso:0, fs:false };
+  el.addEventListener('click', e => { if (e.target.closest('button,a,input,select')) return; apIr(apEstado.i + (e.clientX < innerWidth * .25 ? -1 : 1)); });
+  el.addEventListener('mousemove', apAcordar);
+  document.addEventListener('keydown', apTecla, true);
+  document.addEventListener('fullscreenchange', apFsMudou);
+  apEstado.relogio = setInterval(apRelogio, 1000 * 15); apRelogio();
+  apTelaCheia(true); el.focus();
+  requestAnimationFrame(() => apIr(0)); apAcordar();
+}
+function apRelogio(){ const h = $('#apx-hora'); if (h) h.textContent = new Date().toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' }); }
+function apAcordar(){ if (!apEstado) return; apEstado.el.classList.remove('ocioso'); clearTimeout(apEstado.ocioso); apEstado.ocioso = setTimeout(() => apEstado && apEstado.el.classList.add('ocioso'), 2800); }
+function apTelaCheia(so){
+  const d = document; if (d.fullscreenElement) { if (!so) d.exitFullscreen().catch(() => {}); return; }
+  const r = d.documentElement.requestFullscreen; if (r) d.documentElement.requestFullscreen().then(() => { if (apEstado) apEstado.fs = true; }).catch(() => {});
+}
+function apFsMudou(){ if (apEstado && apEstado.fs && !document.fullscreenElement) apFechar(); }
+function apTecla(e){
+  if (!apEstado) return; const k = e.key;
+  if (['ArrowRight', 'PageDown', ' ', 'Enter'].includes(k)) apIr(apEstado.i + 1);
+  else if (['ArrowLeft', 'PageUp', 'Backspace'].includes(k)) apIr(apEstado.i - 1);
+  else if (k === 'Home') apIr(0); else if (k === 'End') apIr(apEstado.R.length - 1);
+  else if (k === 'p' || k === 'P') apPlay(); else if (k === 'f' || k === 'F') apTelaCheia();
+  else if (k === 'Escape') apFechar(); else return;
+  e.preventDefault(); e.stopPropagation(); apAcordar();
+}
+function apPlay(){ if (!apEstado) return; apEstado.auto = apEstado.auto ? 0 : (apAuto || 12); apAgendar(); }
+function apAgendar(){
+  const S = apEstado; clearTimeout(S.t); S.el.classList.toggle('auto', !!S.auto); S.el.style.setProperty('--dur', (S.auto || 12) + 's');
+  const pb = $('#apx-play'); if (pb) pb.innerHTML = `<i class="fa-solid fa-${S.auto ? 'pause' : 'play'}"></i>`;
+  const atual = S.el.querySelectorAll('.apx-prog button')[S.i]; if (atual) { atual.classList.remove('corre'); void atual.offsetWidth; if (S.auto) atual.classList.add('corre'); }
+  if (S.auto && S.i < S.R.length - 1) S.t = setTimeout(() => apIr(S.i + 1), S.auto * 1000);
+}
+function apIr(i){
+  const S = apEstado; if (!S) return; i = Math.max(0, Math.min(S.R.length - 1, i)); if (i === S.i) return;
+  const k = S.R[i][0], q = apQuadro(S.D, S.A, k), reduz = !animAtiva();
+  S.el.querySelectorAll('.apx-s').forEach((s, j) => { s.classList.toggle('on', j === i); s.classList.toggle('antes', j < i); });
+  S.el.querySelectorAll('.apx-prog button').forEach((b, j) => { b.classList.toggle('feito', j < i); b.classList.toggle('on', j === i); b.classList.remove('corre'); });
+  S.el.dataset.pos = q.pos; S.el.dataset.k = k;
+  const sv = S.svg; ['pins', 'rots', 'liga', 'pulsa', 'dre'].forEach(c => sv.classList.remove(c)); void sv.getBoundingClientRect();
+  q.cls.split(' ').forEach(c => c && sv.classList.add(c));
+  apZoom(q.box, reduz ? 0 : (S.i < 0 ? 2200 : 1600));
+  const tela = S.el.querySelector(`.apx-s[data-i="${i}"]`); apContar(tela, reduz);
+  $('#apx-cnt').textContent = (i + 1) + ' / ' + S.R.length + ' · ' + S.R[i][1];
+  S.i = i; apAgendar();
+}
+function apZoom(b, ms){
+  const S = apEstado, a = S.box.slice(), ease = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2, set = c => { S.svg.setAttribute('viewBox', `${c[0].toFixed(2)} ${c[1].toFixed(2)} ${(c[2] - c[0]).toFixed(2)} ${(c[3] - c[1]).toFixed(2)}`); S.box = c; };
+  cancelAnimationFrame(S.raf); if (!ms) { set(b.slice()); return; }
+  const t0 = performance.now(), step = now => { if (apEstado !== S) return; const t = Math.min(1, (now - t0) / ms), e = ease(t); set(a.map((v, j) => v + (b[j] - v) * e)); if (t < 1) S.raf = requestAnimationFrame(step); };
+  S.raf = requestAnimationFrame(step);
+}
+function apContar(tela, reduz){
+  if (!tela) return; tela.querySelectorAll('.apx-cont').forEach((el, j) => {
+    const v = +el.dataset.v, suf = el.dataset.suf || '', fim = () => { el.textContent = v.toLocaleString('pt-BR') + suf; };
+    if (reduz || !v) return fim(); const ms = 1400, t0 = performance.now() + 250 + j * 90;
+    el.textContent = '0' + suf;
+    const step = now => { if (!apEstado) return; const t = Math.max(0, Math.min(1, (now - t0) / ms)), e = 1 - Math.pow(1 - t, 4); el.textContent = Math.round(v * e).toLocaleString('pt-BR') + suf; if (t < 1) requestAnimationFrame(step); };
+    requestAnimationFrame(step);
+  });
+}
+function apFechar(semSair){
+  const S = apEstado; if (!S) return; apEstado = null;
+  clearTimeout(S.t); clearTimeout(S.ocioso); clearInterval(S.relogio); cancelAnimationFrame(S.raf);
+  document.removeEventListener('keydown', apTecla, true); document.removeEventListener('fullscreenchange', apFsMudou);
+  if (!semSair && document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  S.el.classList.add('sai'); setTimeout(() => S.el.remove(), 350);
 }
 function abrirModoTV(){
   if (vistaAtual !== 'mapa') { const v = vistaAtual; vistaAtual = 'mapa'; calcularLayout(); vistaAtual = v; } else calcularLayout();
