@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.40.0';
+const VERSAO = '1.41.0';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -2808,7 +2808,7 @@ function formAlteracao(pid, iid, tipo){
     const ms = document.querySelectorAll('.modal'), mm = ms[ms.length - 1];
     const prev = () => { const c = calcDesp({ rubricaId:mm.querySelector('#fa-rub').value, quantidade:mm.querySelector('#fa-qtd').value, valorUnitario:mm.querySelector('#fa-val').value, meses:mm.querySelector('#fa-mes').value, vinculo:mm.querySelector('#fa-vinc').value }); mm.querySelector('#fa-prev').innerHTML = `<div>Mensal<b>${fmtM(c.mensal)}</b></div><div>Anual (${c.meses.toLocaleString('pt-BR')} meses)<b>${fmtM(c.anual)}</b></div>`; const r = rubricaDe(mm.querySelector('#fa-rub').value); mm.querySelector('#fa-vinc').closest('label').style.display = r && r.percEfetivo !== '' ? '' : 'none'; };
     mm.querySelectorAll('#fa-rub,#fa-qtd,#fa-val,#fa-mes,#fa-vinc').forEach(x => x.addEventListener('input', prev)); prev();
-    tv.atualizarRubFA = () => { const s = mm.querySelector('#fa-rub'); if (s) { const v = s.value; s.innerHTML = opcoesRubricas(v); prev(); } };
+    window.gaAtualizarRubFA = () => { const s = mm.querySelector('#fa-rub'); if (s) { const v = s.value; s.innerHTML = opcoesRubricas(v); prev(); } };
   }
 }
 async function aplicarProposta(id){
@@ -2877,7 +2877,7 @@ function formBolsa(id, deDentro){
       const r = novoReg('rubricas', { id:novoId('rb'), codigo:m.querySelector('#fb-cod').value.trim() || ('BOLSA-' + (DB.rubricas.filter(x => x.categoria === 'Bolsa').length + 1)), nome, categoria:'Bolsa', valorMensal:val, encargos:'', meses:m.querySelector('#fb-mes').value || '12', ativo:'Sim', atualizadoEm:agora(), atualizadoPor:cfg.usuario || '' });
       DB.rubricas.push(r); enfileirar('rubricas', r); salvarLocal(); toast('Bolsa cadastrada.'); return true;
     }
-  }).then(ok => { if (!ok) return; if (deDentro && tv.atualizarRubFA) tv.atualizarRubFA(); else renderPropostas(); });
+  }).then(ok => { if (!ok) return; if (deDentro && window.gaAtualizarRubFA) window.gaAtualizarRubFA(); else renderPropostas(); });
 }
 
 /* ===================== MAPA POR CENÁRIO (atual × propostas) E COMPARATIVO ===================== */
@@ -6190,18 +6190,21 @@ const apCont = (v, suf, dec) => `<b class="apx-cont" data-v="${Math.round(num(v)
 function apTipos(es){ const c = {}; es.forEach(e => { const g = grupoTipo(e.tipo); c[g] = (c[g] || 0) + 1; }); return Object.entries(c).sort((a, b) => b[1] - a[1]); }
 function apRoteiro(D, A){
   if (A.tipo === 'estado') { const R = [['capa', 'Boas-vindas'], ['territorio', 'Mato Grosso no mapa'], ['numeros', 'A rede em números'], ['dres', 'As Diretorias Regionais'], ['distancias', 'Distâncias'], ['orgao', 'O órgão central']];
-    if (D.sv.length || apProf(A).tem) R.push(['pessoas', 'Pessoas']);
-    if (apObrasDe(D, A).length) R.push(['obras', 'Obras e investimentos']); if (apTemObrasDest(D, A)) R.push(['obrasdest', 'Obras em destaque']);
+    if (apTemPessoas(D, A)) R.push(['pessoas', 'Pessoas']);
+    if (apObrasDe(D, A).length) R.push(['obras', 'Obras e investimentos'], ['obrasmapa', 'Investimentos no mapa']); if (apTemObrasDest(D, A)) R.push(['obrasdest', 'Obras em destaque']);
     R.push(['perfil', 'Perfil da rede'], ['satelite', 'Maiores escolas no satélite']); if (apNoticiasDe(A).length) R.push(['noticias', 'Boas notícias']); R.push(['fim', 'Encerramento']); return R; }
   const R = [['capa', 'Boas-vindas'], ['territorio', A.tipo === 'mun' ? 'O município no mapa' : 'A região no mapa'], ['numeros', 'A rede em números']];
   if (A.tipo === 'dre') R.push(['municipios', 'Municípios atendidos']);
   if (A.es.length) R.push(['perfil', 'Perfil da rede'], ['satelite', A.tipo === 'mun' ? 'Nossas escolas no satélite' : 'Maiores escolas no satélite']);
-  if (apObrasDe(D, A).length) R.push(['obras', 'Obras e investimentos']); if (apTemObrasDest(D, A)) R.push(['obrasdest', 'Obras em destaque']);
+  if (apTemPessoas(D, A)) R.push(['pessoas', 'Pessoas']);
+  if (apObrasDe(D, A).length) R.push(['obras', 'Obras e investimentos'], ['obrasmapa', 'Investimentos no mapa']); if (apTemObrasDest(D, A)) R.push(['obrasdest', 'Obras em destaque']);
   if (A.tipo === 'mun' && A.dre) R.push(['dre', 'A DRE que atende']);
   if (apNoticiasDe(A).length) R.push(['noticias', 'Boas notícias']);
   R.push(['fim', 'Encerramento']); return R;
 }
 function apTela(D, A, k){
+  if (k === 'pessoas') return apTelaPessoas(D, A);
+  if (k === 'obrasmapa') return apTelaObrasMapa(D, A);
   if (A.tipo === 'estado') { const r = apTelaEstado(D, A, k); if (r !== null) return r; }
   const hoje = new Date(), dataL = hoje.toLocaleDateString('pt-BR', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
   const urb = A.es.filter(e => e.localidade !== 'RURAL'), rur = A.es.length - urb.length, alu = A.al, media = A.es.length ? alu / A.es.length : 0;
@@ -6240,14 +6243,14 @@ function apTela(D, A, k){
 }
 /* Enquadramento do mapa em cada tela: caixa, posição (cheio | direita | fundo) e o que acende */
 function apQuadro(D, A, k){
-  if (A.tipo === 'estado') { const T = D.G.todo; return ({ capa:{ box:T, pos:'dir', cls:'pulsa' }, territorio:{ box:T, pos:'oculto', cls:'' }, distancias:{ box:T, pos:'dir', cls:'teia' }, satelite:{ box:T, pos:'oculto', cls:'' }, perfil:{ box:T, pos:'fundo', cls:'pins' } })[k] || { box:T, pos:'fundo', cls:'' }; }
+  if (A.tipo === 'estado') { const T = D.G.todo; return ({ capa:{ box:T, pos:'dir', cls:'pulsa' }, territorio:{ box:T, pos:'oculto', cls:'' }, distancias:{ box:T, pos:'dir', cls:'teia' }, satelite:{ box:T, pos:'oculto', cls:'' }, obrasmapa:{ box:T, pos:'oculto', cls:'' }, perfil:{ box:T, pos:'fundo', cls:'pins' } })[k] || { box:T, pos:'fundo', cls:'' }; }
   const G = D.G, alvo = apFoco(D, A), sede = A.dre && D.X.sedes.get(A.dre);
   if (k === 'capa') return { box:G.todo, pos:'dir', cls:'pulsa' };
   if (k === 'fim') return { box:G.todo, pos:'fundo', cls:'pulsa' };
   if (k === 'territorio') return { box:alvo, pos:'oculto', cls:'' };
   if (k === 'dre' && sede) return { box:apCaixa([A.m.bb, apPt(G, sede[0], sede[1]), ...D.muns.filter(m => m.dre === A.dre).map(m => m.bb)], .06), pos:'dir', cls:'liga dre rots' };
   if (k === 'municipios' || k === 'noticias') return { box:alvo, pos:'fundo', cls:'' };
-  if (k === 'satelite') return { box:alvo, pos:'oculto', cls:'' };
+  if (k === 'satelite' || k === 'obrasmapa') return { box:alvo, pos:'oculto', cls:'' };
   return { box:alvo, pos:'fundo', cls:'pins' };
 }
 /* ---------- show ---------- */
@@ -6262,7 +6265,8 @@ function apAbrir(){
       <div class="apx-bts"><button onclick="event.stopPropagation();apIr(apEstado.i-1)" title="Anterior (←)"><i class="fa-solid fa-chevron-left"></i></button><button id="apx-play" onclick="event.stopPropagation();apPlay()" title="Avançar automaticamente (P)"><i class="fa-solid fa-play"></i></button><button onclick="event.stopPropagation();apIr(apEstado.i+1)" title="Próxima (→)"><i class="fa-solid fa-chevron-right"></i></button>
       <span class="apx-cnt" id="apx-cnt"></span><span style="flex:1"></span><button onclick="event.stopPropagation();apTelaCheia()" title="Tela cheia (F)"><i class="fa-solid fa-expand"></i></button><button onclick="event.stopPropagation();apFechar()" title="Sair (Esc)"><i class="fa-solid fa-xmark"></i></button></div></footer>`;
   document.body.appendChild(el);
-  apEstado = { el, D, A, R, i:-1, svg:el.querySelector('.apx-svg'), box:D.G.todo.slice(), raf:0, auto:apAuto, t:0, ocioso:0, fs:false };
+  const semAnim = document.body.classList.contains('sem-anim'); document.body.classList.remove('sem-anim');
+  apEstado = { semAnim, el, D, A, R, i:-1, svg:el.querySelector('.apx-svg'), box:D.G.todo.slice(), raf:0, auto:apAuto, t:0, ocioso:0, fs:false };
   el.addEventListener('click', e => { if (e.target.closest('button,a,input,select,#apx-ter,.apx-ter-l')) return; apIr(apEstado.i + (e.clientX < innerWidth * .25 ? -1 : 1)); });
   el.addEventListener('mousemove', apAcordar);
   document.addEventListener('keydown', apTecla, true);
@@ -6298,7 +6302,7 @@ function apAgendar(){
 }
 function apIr(i){
   const S = apEstado; if (!S) return; i = Math.max(0, Math.min(S.R.length - 1, i)); if (i === S.i) return;
-  const k = S.R[i][0], q = apQuadro(S.D, S.A, k), reduz = !animAtiva();
+  const k = S.R[i][0], q = apQuadro(S.D, S.A, k), reduz = false;
   S.el.querySelectorAll('.apx-s').forEach((s, j) => { s.classList.toggle('on', j === i); s.classList.toggle('antes', j < i); });
   S.el.querySelectorAll('.apx-prog button').forEach((b, j) => { b.classList.toggle('feito', j < i); b.classList.toggle('on', j === i); b.classList.remove('corre'); });
   S.el.dataset.pos = q.pos; S.el.dataset.k = k;
@@ -6309,6 +6313,7 @@ function apIr(i){
   $('#apx-cnt').textContent = (i + 1) + ' / ' + S.R.length + ' · ' + S.R[i][1];
   S.i = i; apAgendar();
   if (k === 'satelite') setTimeout(apSatIniciar, 80); else apSatParar();
+  if (k === 'obrasmapa') setTimeout(apObMapaIniciar, 80); else apObMapaParar();
   if (k === 'territorio') setTimeout(S.A.tipo === 'estado' ? apTerEstado : apTerIniciar, 80); else apTerParar();
 }
 function apZoom(b, ms){
@@ -6329,7 +6334,7 @@ function apContar(tela, reduz){
 function apFechar(semSair){
   const S = apEstado; if (!S) return; apEstado = null;
   clearTimeout(S.t); clearTimeout(S.ocioso); clearInterval(S.relogio); cancelAnimationFrame(S.raf); clearTimeout(S.satT);
-  clearTimeout(S.terT); [S.lf, S.lt].forEach(F => { if (F) { try { F.m.stop(); F.m.remove(); } catch (e) {} } });
+  clearTimeout(S.terT); clearTimeout(S.omT); if (S.semAnim) document.body.classList.add('sem-anim'); [S.lf, S.lt, S.lo].forEach(F => { if (F) { try { F.m.stop(); F.m.remove(); } catch (e) {} } });
   document.removeEventListener('keydown', apTecla, true); document.removeEventListener('fullscreenchange', apFsMudou);
   if (!semSair && document.fullscreenElement) document.exitFullscreen().catch(() => {});
   S.el.classList.add('sai'); setTimeout(() => S.el.remove(), 350);
@@ -6820,6 +6825,7 @@ function apTerEstFoco(d){
   const S = apEstado; if (!S || !S.lt) return; const l = S.lt.reg.get(d) || []; if (!l.length) return; S.lt.livre = true; clearTimeout(S.terT);
   const b = L.latLngBounds([]); l.forEach(p => b.extend(p.getBounds())); S.lt.m.flyToBounds(b, Object.assign({ duration:1.8 }, S.lt.pad));
 }
+
 /* ===================== OBRAS E INAUGURAÇÕES =====================
    Contratos e convênios de obras (reformas, ampliações, construções, quadras...), ligados às escolas da base,
    com execução, valores, previsão e o caminho até a inauguração. Importa a planilha "Inaugurações - Contratos e Convênios". */
@@ -7108,6 +7114,127 @@ function apTelaObrasDest(D, A){
     <div class="apx-ob3-g ${fe && pr ? '' : 'um'}">${fe}${pr}</div></div>`;
 }
 const apTemObrasDest = (D, A) => apObrasDe(D, A).some(o => ['Inaugurada', 'Agendada', 'Pronta para inaugurar'].includes(obEtapa(o)) || (obStatus(o) === 'Em execução' && /^\d{4}-\d{2}/.test(o.previsao || '') && Date.parse(o.previsao) >= Date.now() - 62 * 864e5));
+
+/* ===================== APRESENTAÇÃO: PESSOAS (todos os modos) ===================== */
+const AP_CARGO_IC = { Professor:'fa-chalkboard-user', ADES:'fa-hands-holding-child', TAE:'fa-laptop-file', AAE:'fa-utensils', 'Analista':'fa-chart-pie', 'Estagiário':'fa-graduation-cap', 'Exclusivamente comissionado':'fa-user-tie', 'Técnico':'fa-screwdriver-wrench', 'Outros cargos':'fa-user', 'Não informado':'fa-circle-question' };
+const AP_CARGO_DESC = { ADES:'apoio administrativo educacional', TAE:'técnico administrativo educacional', AAE:'apoio (nutrição, limpeza, vigilância)' };
+/* bonequinho (pictograma) para gráficos de pessoas */
+const apBoneco = (c, cls, i) => `<svg viewBox="0 0 20 36" class="bn ${cls || ''}" style="--c:${c};--i:${i || 0}"><circle cx="10" cy="5.5" r="5" fill="var(--c)"/><path d="M3,14Q3,11 6,11H14Q17,11 17,14V23H14V35H11V25H9V35H6V23H3Z" fill="var(--c)"/></svg>`;
+const apCrianca = (c, i) => `<svg viewBox="0 0 20 28" class="bn kid" style="--c:${c};--i:${i || 0}"><circle cx="10" cy="5" r="4.5" fill="var(--c)"/><path d="M4,12Q4,10 6.5,10H13.5Q16,10 16,12V19H13.5V27.5H11V21H9V27.5H6.5V19H4Z" fill="var(--c)"/></svg>`;
+function apEquipeSVG(){
+  return `<svg class="apx-turma-svg apx-equipe" viewBox="0 0 640 320" role="img" aria-label="Profissionais da educação">
+    ${apPessoa({ tipo:'profa', x:90, y:315, s:1.05, pele:'#e0ac69', cabelo:'#4a2c17', oculos:true, acena:1, d:-.2 })}
+    ${apPessoa({ tipo:'prof', x:235, y:315, s:1.08, pele:'#8d5524', cabelo:'#1a1a1a', camisa:'#7c3aed', d:-.9 })}
+    ${apPessoa({ tipo:'profa', x:385, y:315, s:1.02, pele:'#f1c27d', cabelo:'#b45309', camisa:'#ea580c', acena:2, d:-1.4 })}
+    ${apPessoa({ tipo:'prof', x:535, y:315, s:1.1, pele:'#c68642', cabelo:'#374151', camisa:'#0e7490', oculos:true, acena:1, d:-.6 })}
+    <g class="apx-eq-tags">${[[90, 'Professores'], [235, 'Gestão'], [385, 'Apoio'], [535, 'Técnicos']].map(([x, t], i) => `<g transform="translate(${x} 18)" style="--i:${i}"><rect x="-52" y="-14" width="104" height="26" rx="13" fill="rgba(11,18,34,.85)" stroke="rgba(255,255,255,.25)"/><text y="4" text-anchor="middle" font-size="13" font-weight="700" fill="#e0f2fe" font-family="Inter,system-ui,sans-serif">${t}</text></g>`).join('')}</g></svg>`;
+}
+function apSvDe(D, A){
+  if (!D.sv.length) return null;
+  const L = A.tipo === 'estado' ? D.sv : A.tipo === 'dre' ? D.sv.filter(r => svEhDRE(r) && norm(r.unidade) === norm(A.d)) : [];
+  return L.length ? svDados(L) : null;
+}
+function apTemPessoas(D, A){ return apProf(A).tem || apIncl(A).tem || !!apSvDe(D, A); }
+function apTelaPessoas(D, A){
+  const pf = apProf(A), inc = apIncl(A), sv = apSvDe(D, A), fa = n => `<i class="fa-solid ${n}"></i>`;
+  const razao = pf.razao >= 1 ? Math.round(pf.razao) : 0, kids = Math.min(razao, 28);
+  /* coluna 1: equipe + total + razão em pictogramas */
+  const c1 = `<div class="apx-pp-c1"><div class="apx-in" style="--i:2">${apEquipeSVG()}</div>
+    ${pf.tem ? `<div class="apx-pp-big apx-in" style="--i:3">${apCont(pf.n)}<span>profissionais nas escolas${pf.escolas < A.es.length ? `<small>${pf.escolas} de ${A.es.length} escolas informadas</small>` : ''}</span></div>` : sv ? `<div class="apx-pp-big apx-in" style="--i:3">${apCont(sv.n)}<span>servidores ${A.tipo === 'estado' ? 'no órgão central e nas DREs' : 'na DRE'}</span></div>` : ''}
+    ${razao ? `<div class="apx-razao apx-in" style="--i:4"><span class="t">1 profissional para cada <b>${razao}</b> estudantes</span><div class="pic">${apBoneco('#fbbf24', 'adulto', 0)}<span class="eq">=</span>${Array.from({ length:kids }, (_, i) => apCrianca(i % 3 === 0 ? '#38bdf8' : i % 3 === 1 ? '#60a5fa' : '#93c5fd', i + 1)).join('')}${razao > kids ? `<span class="mais">+${razao - kids}</span>` : ''}</div></div>` : ''}</div>`;
+  /* coluna 2: vínculos (waffle) e onde trabalham, ou escolas com mais profissionais */
+  let c2 = '';
+  const topEsc = q => { const top = A.es.filter(e => num(e.profissionais) > 0).sort((a, b) => num(b.profissionais) - num(a.profissionais)).slice(0, q), mx = Math.max(1, ...top.map(e => num(e.profissionais)));
+    return `<div class="apx-pp-card apx-in" style="--i:6"><span class="t">${fa('fa-school')} Escolas com mais profissionais</span>${top.map((e, i) => { const g = grupoTipo(e.tipo); return `<div class="apx-pp-es" style="--i:${i}"><span class="ic">${iconeTipoSVG(g, CORES_TIPO[g], 20)}</span><span class="n"><b>${esc(apNomeCurto(e.nome))}</b><span class="br"><i style="--w:${(num(e.profissionais) / mx * 100).toFixed(1)}%"></i></span></span><span class="v"><b>${fmtN(e.profissionais)}</b><small>${num(e.alunos) ? '1 p/ ' + Math.round(num(e.alunos) / Math.max(1, num(e.profissionais))) : ''}</small></span></div>`; }).join('')}</div>`; };
+  if (sv) { const pe = Math.round(sv.efet / Math.max(1, sv.n) * 100), pt = Math.round(sv.temp / Math.max(1, sv.n) * 100);
+    c2 = `<div class="apx-pp-card apx-in" style="--i:5"><span class="t">${fa('fa-id-badge')} Vínculos · cada boneco = 1%</span>
+      <div class="apx-waffle">${Array.from({ length:100 }, (_, i) => apBoneco(i < pe ? '#22c55e' : i < pe + pt ? '#f59e0b' : '#a78bfa', '', i)).join('')}</div>
+      <p class="lg"><span><i style="background:#22c55e"></i>Efetivos <b>${fmtN(sv.efet)}</b></span><span><i style="background:#f59e0b"></i>Temporários <b>${fmtN(sv.temp)}</b></span><span><i style="background:#a78bfa"></i>Outros <b>${fmtN(sv.n - sv.efet - sv.temp)}</b></span></p></div>
+      ${A.tipo === 'estado' ? `<div class="apx-pp-card apx-onde apx-in" style="--i:6"><span class="t">${fa('fa-building')} Onde trabalham</span><div class="pr">
+        <div style="--h:${(sv.oc / Math.max(sv.oc, sv.dre, 1) * 100).toFixed(0)}%"><span class="pd"><i class="fa-solid fa-building-columns"></i></span><b>${apCont(sv.oc)}</b><small>Órgão central (Cuiabá)</small></div>
+        <div style="--h:${(sv.dre / Math.max(sv.oc, sv.dre, 1) * 100).toFixed(0)}%"><span class="pd"><i class="fa-solid fa-map-location-dot"></i></span><b>${apCont(sv.dre)}</b><small>Nas ${D.dres.length} DREs</small></div></div></div>` : pf.tem ? topEsc(4) : ''}`; }
+  else if (pf.tem) { c2 = topEsc(10); }
+  else if (0) { const top = A.es.filter(e => num(e.profissionais) > 0).sort((a, b) => num(b.profissionais) - num(a.profissionais)).slice(0, 10), mx = Math.max(1, ...top.map(e => num(e.profissionais)));
+    c2 = `<div class="apx-pp-card apx-in" style="--i:5"><span class="t">${fa('fa-school')} Escolas com mais profissionais</span>${top.map((e, i) => { const g = grupoTipo(e.tipo); return `<div class="apx-pp-es" style="--i:${i}"><span class="ic">${iconeTipoSVG(g, CORES_TIPO[g], 20)}</span><span class="n"><b>${esc(apNomeCurto(e.nome))}</b><span class="br"><i style="--w:${(num(e.profissionais) / mx * 100).toFixed(1)}%"></i></span></span><span class="v"><b>${fmtN(e.profissionais)}</b><small>${num(e.alunos) ? '1 p/ ' + Math.round(num(e.alunos) / Math.max(1, num(e.profissionais))) : ''}</small></span></div>`; }).join('')}</div>`; }
+  /* coluna 3: cargos com ícones, inclusiva, escolas */
+  const cargos = sv ? Object.entries(sv.porCargo).sort((a, b) => b[1] - a[1]).slice(0, 6) : [], mxC = Math.max(1, ...cargos.map(c => c[1]));
+  /* sem cargos (município): profissionais por tipo de escola */
+  let porTipo = '';
+  if (!cargos.length && pf.tem) { const g = {}; A.es.forEach(e => { const n = num(e.profissionais); if (!n) return; const t = grupoTipo(e.tipo); g[t] = g[t] || { n:0, e:0, al:0 }; g[t].n += n; g[t].e++; g[t].al += num(e.alunos); });
+    const L = Object.entries(g).sort((a, b) => b[1].n - a[1].n).slice(0, 6), mxT = Math.max(1, ...L.map(x => x[1].n));
+    if (L.length) porTipo = `<div class="apx-pp-card apx-pp-tipo apx-in" style="--i:7"><span class="t">${fa('fa-shapes')} Equipes por tipo de escola</span><div class="apx-cargos">${L.map(([t, o], i) => `<div style="--c:${CORES_TIPO[t] || '#38bdf8'};--i:${i}"><span class="ic ict">${iconeTipoSVG(t, CORES_TIPO[t], 22)}</span><span class="n"><b>${esc(t)}</b><small>${o.e} escola${o.e > 1 ? 's' : ''} · ${Math.round(o.n / o.e)} por escola${o.al ? ' · 1 p/ ' + Math.round(o.al / o.n) + ' estudantes' : ''}</small><span class="br"><i style="--w:${(o.n / mxT * 100).toFixed(1)}%"></i></span></span><b class="v">${fmtN(o.n)}</b></div>`).join('')}</div></div>`; }
+  const c3 = `${porTipo}${cargos.length ? `<div class="apx-pp-card apx-in" style="--i:7"><span class="t">${fa('fa-briefcase')} Quem são</span><div class="apx-cargos">${cargos.map(([c, n], i) => `<div style="--c:${svCorCargo(c)};--i:${i}"><span class="ic"><i class="fa-solid ${AP_CARGO_IC[c] || 'fa-user'}"></i></span><span class="n"><b>${esc(c)}</b>${AP_CARGO_DESC[c] ? `<small>${AP_CARGO_DESC[c]}</small>` : ''}<span class="br"><i style="--w:${(n / mxC * 100).toFixed(1)}%"></i></span></span><b class="v">${fmtN(n)}</b></div>`).join('')}</div></div>` : ''}
+    <div class="apx-pp-mini">
+      <div class="apx-in" style="--i:8"><span class="ic" style="--c:#38bdf8">${fa('fa-children')}</span>${apCont(A.al)}<small>estudantes</small></div>
+      ${inc.tem || inc.esp ? `<div class="apx-in" style="--i:9"><span class="ic" style="--c:#f472b6">${AP_SVG.inclusiva}</span>${apCont(inc.tem ? inc.n : inc.esp)}<small>${inc.tem ? 'na educação inclusiva' : 'escolas de educação especial'}</small></div>` : ''}
+      ${pf.tem ? `<div class="apx-in" style="--i:10"><span class="ic" style="--c:#22c55e">${fa('fa-school')}</span>${apCont(pf.escolas ? pf.n / pf.escolas : 0)}<small>profissionais por escola, em média</small></div>` : `<div class="apx-in" style="--i:10"><span class="ic" style="--c:#22c55e">${fa('fa-school')}</span>${apCont(A.es.length)}<small>escolas</small></div>`}</div>`;
+  return `<div class="apx-pp"><div class="apx-pp-h"><span class="apx-k apx-in" style="--i:0"><i class="fa-solid fa-people-group"></i> Pessoas</span><h2 class="apx-in" style="--i:1">Quem faz a educação acontecer${A.tipo === 'mun' ? ' em ' + esc(A.nome) : A.tipo === 'dre' ? ' na região' : ''}</h2></div>
+    <div class="apx-pp-g ${c2 ? '' : 'sem2'}">${c1}${c2 ? `<div class="apx-pp-c2">${c2}</div>` : ''}<div class="apx-pp-c3">${c3}</div></div></div>`;
+}
+/* ===================== APRESENTAÇÃO: OBRAS NO MAPA (satélite interativo) ===================== */
+function apTelaObrasMapa(D, A){
+  const L = apObrasDe(D, A), tot = L.reduce((t, o) => t + obValor(o), 0), [mv, ms, md] = apMoeda(tot), tipos = {};
+  L.forEach(o => { const k = obObj(o); tipos[k] = tipos[k] || [0, 0, obObjIc(o)]; tipos[k][0]++; tipos[k][1] += obValor(o); });
+  return `<div class="apx-sat" id="apx-om"></div><div class="apx-sat-vel"></div>
+    <div class="apx-card apx-om-p apx-in" style="--i:0"><span class="apx-k"><i class="fa-solid fa-map-location-dot"></i> Investimentos no mapa</span><h2>${A.tipo === 'mun' ? esc(A.nome) : A.tipo === 'estado' ? 'Mato Grosso' : esc(A.nome)}</h2>
+      <div class="apx-om-tot"><span class="pre">R$</span>${apCont(mv, '', md)}<span class="suf">${ms}</span></div><small class="apx-om-sub">${L.length} obra${L.length === 1 ? '' : 's'} · o tamanho da bolha acompanha o valor</small>
+      <div class="apx-om-leg">${Object.entries(tipos).sort((a, b) => b[1][1] - a[1][1]).map(([k, [n, v, ic]]) => `<button data-t="${esc(k)}"><span class="ic"><i class="fa-solid ${ic}"></i></span><span class="n">${esc(k)}<small>${fmtRc(v)}</small></span><b>${n}</b></button>`).join('')}</div>
+      <div class="apx-om-st">${Object.keys(OB_ST).map(s => { const n = L.filter(o => obStatus(o) === s).length; return n ? `<span style="--c:${OB_ST[s]}"><i></i>${s} <b>${n}</b></span>` : ''; }).join('')}</div></div>
+    <div class="apx-om-foco" id="apx-om-foco"></div>
+    <div class="apx-ter-dica apx-in" style="--i:3"><i class="fa-solid fa-hand-pointer"></i> Passe o mouse nos tipos de obra · clique numa bolha · arraste e aproxime</div>`;
+}
+async function apObMapaIniciar(){
+  const S = apEstado; if (!S) return; const el = S.el.querySelector('#apx-om'); if (!el) return;
+  apObMapaParar();
+  try { await carregarLeaflet(); } catch (e) {}
+  if (apEstado !== S || S.R[S.i][0] !== 'obrasmapa') return;
+  if (!(window.L && L.map)) { el.innerHTML = '<div class="apx-sat-erro"><i class="fa-solid fa-satellite"></i>Mapa indisponível sem internet.</div>'; return; }
+  const A = S.A, D = S.D, L0 = apObrasDe(D, A);
+  if (!S.lo) {
+    const m = L.map(el, { zoomControl:false, keyboard:false, zoomSnap:0, zoomDelta:.5, wheelPxPerZoomLevel:100, minZoom:4.5, maxZoom:18.5 });
+    m.attributionControl.setPrefix(false); L.control.zoom({ position:'bottomright' }).addTo(m);
+    L.tileLayer(ESRI('World_Imagery'), { maxZoom:19, maxNativeZoom:18, attribution:'Imagens de satélite: Esri, Maxar, Earthstar Geographics' }).addTo(m);
+    L.tileLayer(ESRI('Reference/World_Boundaries_and_Places'), { maxZoom:19, maxNativeZoom:18, opacity:.5 }).addTo(m);
+    const alvo = A.tipo === 'mun' ? [A.m] : A.tipo === 'dre' ? A.ms : D.muns;
+    alvo.forEach(x => L.polygon(apAneis(x.geo), { color:A.tipo === 'estado' && x.dre ? apCorDre(D, x.dre) : '#fbbf24', weight:A.tipo === 'mun' ? 3 : 1, opacity:.7, fill:A.tipo === 'estado', fillOpacity:.08, interactive:false }).addTo(m));
+    const mx = Math.max(1, ...L0.map(obValor)), porMun = new Map(), mk = [], b = L.latLngBounds([]);
+    [...L0].sort((a, b) => obValor(b) - obValor(a)).forEach((o, i) => { const k = chaveMun(o.municipio), j = porMun.get(k) || 0; porMun.set(k, j + 1); const p = obPos(o, j); if (!p) return;
+      const st = obStatus(o), r = Math.round(16 + Math.sqrt(obValor(o) / mx) * (A.tipo === 'estado' ? 26 : 34));
+      const ic = L.divIcon({ className:'apx-om-w', iconSize:[0, 0], html:`<div class="apx-om-b ${st === 'Em execução' ? 'exec' : ''}" style="--c:${OB_ST[st]};--r:${r}px;--i:${Math.min(i, 50)}"><span class="bo"><i class="fa-solid ${obObjIc(o)}"></i></span>${st === 'Concluída' ? '<span class="ok"><i class="fa-solid fa-check"></i></span>' : ''}${obEtapa(o) === 'Inaugurada' ? '<span class="fx"><i class="fa-solid fa-ribbon"></i></span>' : ''}</div>` });
+      const mm = L.marker([p[0], p[1]], { icon:ic, keyboard:false, riseOnHover:true, zIndexOffset:Math.round(obValor(o) / mx * 1000) }).addTo(m);
+      mm.on('click', () => { S.lo.livre = true; clearTimeout(S.omT); apObFoco(o, true); });
+      mm.on('mouseover', () => { if (S.lo.livre) apObFoco(o, false); });
+      mk.push({ o, mm, t:obObj(o) }); b.extend([p[0], p[1]]); });
+    S.lo = { m, mk, b:b.isValid() ? b : L.latLngBounds(alvo.flatMap(x => apAneis(x.geo).map(q => q[0])).flat()), livre:false };
+    ['mousedown', 'wheel', 'touchstart'].forEach(ev => el.addEventListener(ev, () => { if (S.lo) { S.lo.livre = true; clearTimeout(S.omT); } }, { passive:true }));
+    S.el.querySelectorAll('.apx-om-leg button').forEach(bt => { bt.onmouseenter = () => apObTipo(bt.dataset.t); bt.onmouseleave = () => apObTipo(''); bt.onclick = () => { S.lo.livre = true; clearTimeout(S.omT); const l = S.lo.mk.filter(x => x.t === bt.dataset.t); if (l.length) { const bb = L.latLngBounds(l.map(x => x.mm.getLatLng())); S.lo.m.flyToBounds(bb.pad(.2), Object.assign({ duration:1.6, maxZoom:15 }, S.lo.pad)); } }; });
+  }
+  const F = S.lo, m = F.m, W = el.clientWidth || innerWidth, card = S.el.querySelector('.apx-s.on .apx-om-p'); m.invalidateSize(); F.livre = false;
+  F.pad = { paddingTopLeft:[card ? card.getBoundingClientRect().right + 40 : 480, 100], paddingBottomRight:[Math.min(460, W * .3), 120] };
+  el.classList.remove('vivo'); $('#apx-om-foco') && ($('#apx-om-foco').className = 'apx-om-foco');
+  m.setView(F.b.getCenter(), Math.max(4, m.getBoundsZoom(F.b) - 3), { animate:false });
+  S.omT = setTimeout(() => { if (apEstado !== S) return; m.flyToBounds(F.b.pad(.05), Object.assign({ duration:2.6, maxZoom:15 }, F.pad));
+    S.omT = setTimeout(() => { el.classList.add('vivo'); S.omT = setTimeout(passo, 3200); }, 2700); }, 300);
+  const tour = [...L0].sort((a, b) => obValor(b) - obValor(a)).slice(0, 6); let j = -1;
+  function passo(){
+    if (apEstado !== S || S.R[S.i][0] !== 'obrasmapa' || F.livre) return; j++;
+    if (j >= tour.length) { j = -1; apObFoco(null); m.flyToBounds(F.b.pad(.05), Object.assign({ duration:2.4, maxZoom:15 }, F.pad)); S.omT = setTimeout(passo, 6000); return; }
+    apObFoco(tour[j], true); S.omT = setTimeout(passo, 6500);
+  }
+}
+function apObTipo(t){ const S = apEstado; if (!S || !S.lo) return; S.lo.mk.forEach(x => { const e = x.mm.getElement(); if (e) e.firstChild.classList.toggle('apagada', !!t && x.t !== t); }); }
+function apObFoco(o, voar){
+  const S = apEstado; if (!S || !S.lo) return; const el = $('#apx-om-foco');
+  S.lo.mk.forEach(x => { const e = x.mm.getElement(); if (e) e.firstChild.classList.toggle('foco', !!o && x.o === o); });
+  if (!o) { if (el) el.className = 'apx-om-foco'; return; }
+  const x = S.lo.mk.find(q => q.o === o); if (voar && x) S.lo.m.flyTo(x.mm.getLatLng(), Math.max(S.lo.m.getZoom(), 15.4), { duration:2.4 });
+  const st = obStatus(o), et = OB_ETAPAS.find(e => e[0] === obEtapa(o)) || OB_ETAPAS[5];
+  if (el) { el.innerHTML = `<div class="ic">${OB_ANIM[obObj(o)] || OB_ANIM.Outro}</div><span class="tp"><i class="fa-solid ${obObjIc(o)}"></i>${esc(obObj(o))}</span><b class="nm">${esc(obNome(o))}</b><small>${esc(apNomeCurto(o.municipio))}${o.empresa ? ' · ' + esc(apNomeCurto(o.empresa)) : ''}</small>
+      <div class="vl">${fmtRc(obValor(o))}</div><div class="pg"><span><i style="width:${obExec(o).toFixed(0)}%;background:${OB_ST[st]}"></i></span><b>${Math.round(obExec(o))}%</b></div>
+      <div class="rd"><span class="ob-stt" style="--c:${OB_ST[st]}">${st}</span><span class="et" style="--c:${et[1]}"><i class="fa-solid ${et[2]}"></i>${et[0]}</span>${o.salas ? `<span><i class="fa-solid fa-chalkboard"></i>${o.salas} salas</span>` : ''}${o.alunos ? `<span><i class="fa-solid fa-children"></i>${fmtN(o.alunos)} alunos</span>` : ''}${st === 'Em execução' && obPrev(o) !== '—' ? `<span><i class="fa-solid fa-calendar"></i>${esc(obPrev(o))}</span>` : ''}</div>`;
+    el.className = 'apx-om-foco'; void el.offsetWidth; el.className = 'apx-om-foco on'; }
+}
+function apObMapaParar(){ const S = apEstado; if (!S) return; clearTimeout(S.omT); if (S.lo) S.lo.m.stop(); }
 
 /* Erros inesperados depois de aberto: avisa em vez de falhar em silêncio */
 window.addEventListener('error', e => { if (window.GABORG_INICIADO && e.message && typeof toast === 'function') toast('Erro: ' + e.message + ' — recarregue a página. Se repetir, envie esta mensagem ao suporte.', 'erro'); });
