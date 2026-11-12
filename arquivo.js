@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.41.2';
+const VERSAO = '1.42.1';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -6064,10 +6064,10 @@ aplicarLado();
    que dá zoom no território, as escolas que "caem" no mapa, números com contagem e a DRE que atende.
    Só lê dados (escolas, alunos, DREs; servidores apenas em número). Nada é gravado; o nome do convidado não é guardado.
    Fontes externas (só leitura): imagens de satélite Esri, bandeira/brasão do Wikidata/Wikimedia Commons e notícias do Google Notícias (via Codigo.gs). */
-let apModo = 'mun', apSel = '', apBusca = '', apConvidado = '', apAuto = 0, apEstado = null;
+let apModo = 'mun', apSel = '', apBusca = '', apConvidado = '', apAuto = 0, apEstado = null, apZeroPrimeiro = false, apRepetir = !!store.get('gaborg_ap_repetir', false);
 /* malha municipal: a do IBGE atual (142 municípios, inclui Boa Esperança do Norte) quando disponível; senão a embutida (141) */
 function apMalhaTopo(){
-  const n = t => { try { return t.objects[Object.keys(t.objects)[0]].geometries.length; } catch (e) { return 0; } }, emb = n(MALHA_MT);
+  const n = t => { try { const q = t.objects[Object.keys(t.objects)[0]].geometries.length; return q <= 200 ? q : 0; } catch (e) { return 0; } }, emb = n(MALHA_MT);   /* MT tem 142; acima de 200 não é a malha esperada */
   if (mt.malha && mt.malha.topo && n(mt.malha.topo) > emb) return mt.malha.topo;
   if (apMalhaTopo.c) return apMalhaTopo.c;
   try { const c = JSON.parse(localStorage.getItem('gaborg_ibge_mt3') || 'null');
@@ -6081,7 +6081,7 @@ function apMalhaIBGE(){
     fetch('https://servicodados.ibge.gov.br/api/v3/malhas/estados/51?formato=application/json&qualidade=intermediaria&intrarregiao=municipio').then(r => { if (!r.ok) throw new Error('IBGE ' + r.status); return r.json(); }),
     fetch('https://servicodados.ibge.gov.br/api/v1/localidades/estados/51/municipios').then(r => r.json())
   ]).then(([t, m]) => { const obj = t && t.type === 'Topology' && t.objects[Object.keys(t.objects)[0]];
-    if (!obj || !obj.geometries || obj.geometries.length < 140) return;
+    if (!obj || !obj.geometries || obj.geometries.length < 140 || obj.geometries.length > 200) return;
     const nomes = {}; m.forEach(x => { nomes[String(x.id)] = x.nome; });
     try { localStorage.setItem('gaborg_ibge_mt3', JSON.stringify({ topo:t, nomes, em:Date.now() })); } catch (e) {}
     obj.geometries.forEach(g => { g.properties = g.properties || {}; g.properties.nome = nomes[String(g.properties.codarea)] || g.properties.nome || ''; }); apMalhaTopo.c = t;
@@ -6089,6 +6089,9 @@ function apMalhaIBGE(){
     if (vistaAtual === 'apresentacao' && !apEstado) renderApresentacao();
   }).catch(e => console.info('GABOrg: apresentação com os limites embutidos (' + e.message + ')'));
 }
+/* Municípios de MT que faltam na malha embutida (criados depois dela). Sem o limite oficial, o contorno
+   é um círculo aproximado em volta da sede, só para o município aparecer e poder ser escolhido. */
+const MUN_MT_NOVOS = [{ nome:'Boa Esperança do Norte', lat:-13.5141, lon:-55.1482, raio:.22 }];
 function apGeo(){
   const topo = apMalhaTopo();
   if (apGeo.c && apGeo.c.topo === topo) return apGeo.c;
@@ -6100,6 +6103,12 @@ function apGeo(){
   const muns = fc.features.map(f => { const b = [1e9, 1e9, -1e9, -1e9];
     const d = anel(f.geometry).map(pl => pl.map(r => 'M' + r.map(([lo, la]) => { const p = P(lo, la); if (p[0] < b[0]) b[0] = p[0]; if (p[1] < b[1]) b[1] = p[1]; if (p[0] > b[2]) b[2] = p[0]; if (p[1] > b[3]) b[3] = p[1]; return p[0].toFixed(1) + ',' + p[1].toFixed(1); }).join('L') + 'Z').join('')).join('');
     return { k:chaveMun(f.properties.nome), nome:f.properties.nome, cod:String(f.properties.codarea || ''), geo:f.geometry, d, bb:b, c:[(b[0] + b[2]) / 2, (b[1] + b[3]) / 2] }; });
+  const tem = new Set(muns.map(m => m.k));
+  MUN_MT_NOVOS.forEach(n => { const k = chaveMun(n.nome); if (tem.has(k)) return;
+    const ring = Array.from({ length:33 }, (_, i) => { const a = i / 32 * 2 * Math.PI; return [+(n.lon + Math.cos(a) * n.raio / kx).toFixed(4), +(n.lat + Math.sin(a) * n.raio).toFixed(4)]; });
+    const geo = { type:'Polygon', coordinates:[ring] }, b = [1e9, 1e9, -1e9, -1e9];
+    const d = 'M' + ring.map(([lo, la]) => { const p = P(lo, la); b[0] = Math.min(b[0], p[0]); b[1] = Math.min(b[1], p[1]); b[2] = Math.max(b[2], p[0]); b[3] = Math.max(b[3], p[1]); return p[0].toFixed(1) + ',' + p[1].toFixed(1); }).join('L') + 'Z';
+    muns.push({ k, nome:n.nome, cod:'', geo, d, bb:b, c:[(b[0] + b[2]) / 2, (b[1] + b[3]) / 2], aprox:true }); });
   return apGeo.c = { topo, W, H, P, muns, todo:[0, 0, W, H] };
 }
 /* Dados vivos (escolas e alunos podem ter sido editados) */
@@ -6143,7 +6152,7 @@ function renderApresentacao(){
       <div class="apx-hero-f"><div class="seg apx-seg">${[['mun', 'Município', 'fa-city'], ['dre', 'DRE', 'fa-route'], ['est', 'Estado · SEDUC', 'fa-landmark']].map(([k, t, ic]) => `<button class="${apModo === k ? 'on' : ''}" onclick="apModo='${k}';apSel='';apBusca='';renderApresentacao()"><i class="fa-solid ${ic}"></i>${t}</button>`).join('')}</div>
         ${apModo === 'est' ? '' : `<label class="apx-busca"><i class="fa-solid fa-magnifying-glass"></i><input id="apx-q" value="${esc(apBusca)}" placeholder="${apModo === 'mun' ? 'Buscar entre os ' + D.muns.length + ' municípios...' : 'Buscar DRE...'}" oninput="apBusca=this.value;apLista()"></label>`}</div></header>
     <div class="apx-grid">
-      <div class="apx-col"><div class="apx-col-h"><b>${apModo === 'mun' ? 'Municípios' : 'Diretorias regionais'}</b><small>${apModo === 'mun' ? D.muns.length : D.dres.length}</small></div>${apModo === 'est' ? '<p class="apx-col-d">A apresentação do estado reúne todas as regionais. Clique numa DRE para apresentar só ela.</p>' : ''}<div class="apx-lista" id="apx-lista"></div></div>
+      <div class="apx-col"><div class="apx-col-h"><b>${apModo === 'mun' ? 'Municípios' : 'Diretorias regionais'}</b><small>${apModo === 'mun' ? D.muns.length : D.dres.length}</small>${apModo === 'mun' && D.muns.some(m => !m.es.length) ? `<small class="apx-zero" title="Municípios sem nenhuma escola vinculada: confira o nome do município dessas escolas em Mapa de MT › Editar escolas" onclick="apBusca='';apZeroPrimeiro=!apZeroPrimeiro;apLista()"><i class="fa-solid fa-triangle-exclamation"></i> ${D.muns.filter(m => !m.es.length).length} sem escola</small>` : ''}</div>${apModo === 'est' ? '<p class="apx-col-d">A apresentação do estado reúne todas as regionais. Clique numa DRE para apresentar só ela.</p>' : ''}<div class="apx-lista" id="apx-lista"></div></div>
       <div class="apx-mesc" id="apx-mesc"></div>
       <aside class="apx-prev" id="apx-prev"></aside>
     </div></div>`;
@@ -6158,7 +6167,7 @@ function apMapaEscolha(){
   const svg = el.querySelector('svg'), tip = $('#apx-mtip');
   svg.addEventListener('mousemove', e => { const p = e.target.closest('path'); if (!p) { tip.classList.remove('on'); return; }
     const m = D.muns.find(x => x.k === p.dataset.k); if (!m) return; const r = el.getBoundingClientRect();
-    if (apModo === 'mun') tip.innerHTML = `<b>${esc(m.nome)}</b><small>${m.dre ? 'DRE ' + esc(nomeDRE(m.dre)) : 'Sem escola estadual'}</small><span>${fmtN(m.es.length)} escolas · ${fmtN(m.al)} estudantes</span>`;
+    if (apModo === 'mun') tip.innerHTML = `<b>${esc(m.nome)}</b><small>${m.dre ? 'DRE ' + esc(nomeDRE(m.dre)) : '<i class="fa-solid fa-triangle-exclamation"></i> Nenhuma escola vinculada · confira o município das escolas'}</small><span>${fmtN(m.es.length)} escolas · ${fmtN(m.al)} estudantes</span>`;
     else { const ms = D.muns.filter(x => x.dre === m.dre), es = D.E.filter(x => x.dre === m.dre); tip.innerHTML = m.dre ? `<b>DRE ${esc(nomeDRE(m.dre))}</b><small>${esc(m.nome)}</small><span>${ms.length} municípios · ${fmtN(es.length)} escolas · ${fmtN(alunosDe(es))} estudantes</span>` : `<b>${esc(m.nome)}</b><small>Sem escola estadual</small>`; }
     tip.style.left = Math.min(r.width - 230, e.clientX - r.left + 16) + 'px'; tip.style.top = (e.clientY - r.top + 16) + 'px'; tip.classList.add('on');
     svg.querySelectorAll('path.hov').forEach(x => x.classList.remove('hov'));
@@ -6176,8 +6185,8 @@ function apMapaMarcar(){
 function apLista(){
   const el = $('#apx-lista'); if (!el) return; const D = apDados(), q = norm(apBusca);
   if (apModo === 'mun') {
-    const L = D.muns.filter(m => !q || norm(m.nome).includes(q) || norm(nomeDRE(m.dre)).includes(q)).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
-    el.innerHTML = L.length ? L.map(m => `<button class="apx-it ${m.k === apSel ? 'on' : ''}" style="--c:${m.dre ? apCorDre(D, m.dre) : '#94a3b8'}" onclick="apSel='${m.k}';apLista();apPrevia();apMapaMarcar()"><span class="apx-it-n"><b>${esc(m.nome)}</b><small>${m.dre ? 'DRE ' + esc(nomeDRE(m.dre)) : 'Sem escola estadual'}</small></span><span class="apx-it-v"><b>${fmtN(m.es.length)}</b><small>escolas</small></span><span class="apx-it-v"><b>${fmtN(m.al)}</b><small>alunos</small></span></button>`).join('') : '<div class="apx-vazio">Nenhum município encontrado.</div>';
+    const L = D.muns.filter(m => !q || norm(m.nome).includes(q) || norm(nomeDRE(m.dre)).includes(q)).sort((a, b) => (apZeroPrimeiro ? (!!a.es.length - !!b.es.length) : 0) || a.nome.localeCompare(b.nome, 'pt-BR'));
+    el.innerHTML = L.length ? L.map(m => `<button class="apx-it ${m.k === apSel ? 'on' : ''} ${m.es.length ? '' : 'zero'}" style="--c:${m.dre ? apCorDre(D, m.dre) : '#f59e0b'}" onclick="apSel='${m.k}';apLista();apPrevia();apMapaMarcar()"><span class="apx-it-n"><b>${esc(m.nome)}</b><small>${m.dre ? 'DRE ' + esc(nomeDRE(m.dre)) : '<i class="fa-solid fa-triangle-exclamation"></i> Nenhuma escola vinculada'}</small></span><span class="apx-it-v"><b>${fmtN(m.es.length)}</b><small>escolas</small></span><span class="apx-it-v"><b>${fmtN(m.al)}</b><small>alunos</small></span></button>`).join('') : '<div class="apx-vazio">Nenhum município encontrado.</div>';
   } else {
     const L = D.dres.filter(d => apModo === 'est' || !q || norm(d).includes(q));
     el.innerHTML = L.map(d => { const es = D.E.filter(e => e.dre === d), nm = D.muns.filter(m => m.dre === d).length; return `<button class="apx-it ${d === apSel ? 'on' : ''}" style="--c:${apCorDre(D, d)}" onclick="${apModo === 'est' ? `apModo='dre';apSel=${esc(JSON.stringify(d))};apBusca='';renderApresentacao()` : `apSel=${arg(d)};apLista();apPrevia();apMapaMarcar()`}"><span class="apx-it-n"><b>DRE ${esc(nomeDRE(d))}</b><small>${nm} municípios · sede em ${esc(apSedeNome(d))}</small></span><span class="apx-it-v"><b>${fmtN(es.length)}</b><small>escolas</small></span><span class="apx-it-v"><b>${fmtN(alunosDe(es))}</b><small>alunos</small></span></button>`; }).join('');
@@ -6195,10 +6204,11 @@ function apPrevia(){
       ${(() => { const i = apIncl(A); return i.tem ? `<small class="apx-incl ok">${AP_SVG.inclusiva}<span><b>${fmtN(i.n)}</b> estudantes da educação inclusiva informados</span></small>` : `<small class="apx-incl">${AP_SVG.inclusiva}<span>Sem dados de educação inclusiva ${A.tipo === 'mun' ? 'deste município' : A.tipo === 'estado' ? 'nas escolas' : 'desta DRE'}${i.esp ? ` (a apresentação mostra as ${i.esp} escola(s) de educação especial)` : ''}. Preencha em <b>Mapa de MT › Editar escolas</b>, coluna <b>Inclusiva</b>.</span></small>`; })()}
       <label class="apx-campo"><span>Convidado (opcional)</span><input id="apx-conv" value="${esc(apConvidado)}" placeholder="${A.tipo === 'mun' ? 'Ex.: Prefeito(a) Fulano de Tal' : A.tipo === 'estado' ? 'Ex.: Comitiva do Ministério da Educação' : 'Ex.: Equipe da DRE'}" oninput="apConvidado=this.value" maxlength="80"><small>Aparece na capa de boas-vindas. Não é salvo.</small></label>
       <label class="apx-campo"><span>Avançar os slides</span><select onchange="apAuto=+this.value">${[[0, 'Manualmente (setas, clique ou passador)'], [10, 'Automático a cada 10 s'], [15, 'Automático a cada 15 s'], [25, 'Automático a cada 25 s']].map(([v, t]) => `<option value="${v}" ${apAuto === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+      <label class="apx-campo apx-rep"><input type="checkbox" ${apRepetir ? 'checked' : ''} onchange="apRepetir=this.checked;store.set('gaborg_ap_repetir',apRepetir)"><span><b><i class="fa-solid fa-repeat"></i> Repetir em loop</b><small>Ao terminar, volta ao início e recomeça sozinha (bom para telões e recepção). Se o avanço estiver manual, passa a cada 15 s.</small></span></label>
       <div class="apx-not" id="apx-not"></div>
       <div class="apx-rot" id="apx-rot"><span>Roteiro · ${roteiro.length} telas</span><ol>${roteiro.map(t => `<li>${esc(t)}</li>`).join('')}</ol></div>
       <button class="btn btn-p apx-ir" onclick="apAbrir()"><i class="fa-solid fa-play"></i>Iniciar apresentação</button>
-      <small class="apx-dica"><i class="fa-solid fa-keyboard"></i> → ou espaço avança · ← volta · P pausa · F tela cheia · Esc sai</small></div>`;
+      <small class="apx-dica"><i class="fa-solid fa-keyboard"></i> → ou espaço avança · ← volta · P pausa · R repete · F tela cheia · Esc sai</small></div>`;
   apPreencherSimb(el); apBuscarNoticias(A);
 }
 /* ---------- mapa (SVG único, com zoom animado pelo viewBox) ---------- */
@@ -6302,11 +6312,11 @@ function apAbrir(){
     <div class="apx-telas">${R.map(([k], i) => `<section class="apx-s apx-s-${k}" data-k="${k}" data-i="${i}">${apTela(D, A, k)}</section>`).join('')}</div>
     <footer class="apx-ctl"><div class="apx-prog">${R.map(([, t], i) => `<button title="${esc(t)}" onclick="event.stopPropagation();apIr(${i})"><i></i></button>`).join('')}</div>
       <div class="apx-bts"><button onclick="event.stopPropagation();apIr(apEstado.i-1)" title="Anterior (←)"><i class="fa-solid fa-chevron-left"></i></button><button id="apx-play" onclick="event.stopPropagation();apPlay()" title="Avançar automaticamente (P)"><i class="fa-solid fa-play"></i></button><button onclick="event.stopPropagation();apIr(apEstado.i+1)" title="Próxima (→)"><i class="fa-solid fa-chevron-right"></i></button>
-      <span class="apx-cnt" id="apx-cnt"></span><span style="flex:1"></span><button onclick="event.stopPropagation();apTelaCheia()" title="Tela cheia (F)"><i class="fa-solid fa-expand"></i></button><button onclick="event.stopPropagation();apFechar()" title="Sair (Esc)"><i class="fa-solid fa-xmark"></i></button></div></footer>`;
+      <span class="apx-cnt" id="apx-cnt"></span><span style="flex:1"></span><button id="apx-rep" class="${apRepetir ? 'on' : ''}" onclick="event.stopPropagation();apRepAlternar()" title="Repetir em loop (R)"><i class="fa-solid fa-repeat"></i></button><button onclick="event.stopPropagation();apTelaCheia()" title="Tela cheia (F)"><i class="fa-solid fa-expand"></i></button><button onclick="event.stopPropagation();apFechar()" title="Sair (Esc)"><i class="fa-solid fa-xmark"></i></button></div></footer>`;
   document.body.appendChild(el);
   const semAnim = document.body.classList.contains('sem-anim'); document.body.classList.remove('sem-anim');
-  apEstado = { semAnim, el, D, A, R, i:-1, svg:el.querySelector('.apx-svg'), box:D.G.todo.slice(), raf:0, auto:apAuto, t:0, ocioso:0, fs:false };
-  el.addEventListener('click', e => { if (e.target.closest('button,a,input,select,#apx-ter,.apx-ter-l')) return; apIr(apEstado.i + (e.clientX < innerWidth * .25 ? -1 : 1)); });
+  apEstado = { semAnim, el, D, A, R, i:-1, svg:el.querySelector('.apx-svg'), box:D.G.todo.slice(), raf:0, auto:apAuto || (apRepetir ? 15 : 0), rep:apRepetir, t:0, ocioso:0, fs:false };
+  el.addEventListener('click', e => { if (e.target.closest('button,a,input,select,#apx-ter,.apx-ter-l')) return; const d = e.clientX < innerWidth * .25 ? -1 : 1; apIr(apEstado.rep && d > 0 && apEstado.i >= apEstado.R.length - 1 ? 0 : apEstado.i + d); });
   el.addEventListener('mousemove', apAcordar);
   document.addEventListener('keydown', apTecla, true);
   document.addEventListener('fullscreenchange', apFsMudou);
@@ -6325,19 +6335,25 @@ function apTelaCheia(so){
 function apFsMudou(){ if (apEstado && apEstado.fs && !document.fullscreenElement) apFechar(); }
 function apTecla(e){
   if (!apEstado) return; const k = e.key;
-  if (['ArrowRight', 'PageDown', ' ', 'Enter'].includes(k)) apIr(apEstado.i + 1);
+  if (['ArrowRight', 'PageDown', ' ', 'Enter'].includes(k)) apIr(apEstado.rep && apEstado.i >= apEstado.R.length - 1 ? 0 : apEstado.i + 1);
   else if (['ArrowLeft', 'PageUp', 'Backspace'].includes(k)) apIr(apEstado.i - 1);
   else if (k === 'Home') apIr(0); else if (k === 'End') apIr(apEstado.R.length - 1);
-  else if (k === 'p' || k === 'P') apPlay(); else if (k === 'f' || k === 'F') apTelaCheia();
+  else if (k === 'p' || k === 'P') apPlay(); else if (k === 'r' || k === 'R') apRepAlternar(); else if (k === 'f' || k === 'F') apTelaCheia();
   else if (k === 'Escape') apFechar(); else return;
   e.preventDefault(); e.stopPropagation(); apAcordar();
 }
+function apRepAlternar(){ const S = apEstado; if (!S) return; S.rep = !S.rep; apRepetir = S.rep; store.set('gaborg_ap_repetir', apRepetir);
+  const b = $('#apx-rep'); if (b) b.classList.toggle('on', S.rep);
+  if (S.rep && !S.auto) S.auto = apAuto || 15; apAgendar(); apAviso(S.rep ? 'Repetição ligada: ao terminar, recomeça do início' : 'Repetição desligada'); }
+function apAviso(t){ const S = apEstado; if (!S) return; let a = S.el.querySelector('.apx-aviso'); if (!a) { a = document.createElement('div'); a.className = 'apx-aviso'; S.el.appendChild(a); }
+  a.textContent = t; a.classList.remove('on'); void a.offsetWidth; a.classList.add('on'); }
 function apPlay(){ if (!apEstado) return; apEstado.auto = apEstado.auto ? 0 : (apAuto || 12); apAgendar(); }
 function apAgendar(){
   const S = apEstado; clearTimeout(S.t); S.el.classList.toggle('auto', !!S.auto); S.el.style.setProperty('--dur', (S.auto || 12) + 's');
   const pb = $('#apx-play'); if (pb) pb.innerHTML = `<i class="fa-solid fa-${S.auto ? 'pause' : 'play'}"></i>`;
   const atual = S.el.querySelectorAll('.apx-prog button')[S.i]; if (atual) { atual.classList.remove('corre'); void atual.offsetWidth; if (S.auto) atual.classList.add('corre'); }
   if (S.auto && S.i < S.R.length - 1) S.t = setTimeout(() => apIr(S.i + 1), S.auto * 1000);
+  else if (S.auto && S.rep && S.R.length > 1) S.t = setTimeout(() => apIr(0), Math.max(S.auto, 12) * 1000);   /* fim: volta à capa */
 }
 function apIr(i){
   const S = apEstado; if (!S) return; i = Math.max(0, Math.min(S.R.length - 1, i)); if (i === S.i) return;
