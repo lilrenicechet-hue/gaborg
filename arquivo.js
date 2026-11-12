@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.41.1';
+const VERSAO = '1.41.2';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -6065,9 +6065,34 @@ aplicarLado();
    Só lê dados (escolas, alunos, DREs; servidores apenas em número). Nada é gravado; o nome do convidado não é guardado.
    Fontes externas (só leitura): imagens de satélite Esri, bandeira/brasão do Wikidata/Wikimedia Commons e notícias do Google Notícias (via Codigo.gs). */
 let apModo = 'mun', apSel = '', apBusca = '', apConvidado = '', apAuto = 0, apEstado = null;
+/* malha municipal: a do IBGE atual (142 municípios, inclui Boa Esperança do Norte) quando disponível; senão a embutida (141) */
+function apMalhaTopo(){
+  const n = t => { try { return t.objects[Object.keys(t.objects)[0]].geometries.length; } catch (e) { return 0; } }, emb = n(MALHA_MT);
+  if (mt.malha && mt.malha.topo && n(mt.malha.topo) > emb) return mt.malha.topo;
+  if (apMalhaTopo.c) return apMalhaTopo.c;
+  try { const c = JSON.parse(localStorage.getItem('gaborg_ibge_mt3') || 'null');
+    if (c && c.topo && c.nomes && n(c.topo) > emb) { apMalhaTopo.c = c.topo; c.topo.objects[Object.keys(c.topo.objects)[0]].geometries.forEach(g => { g.properties = g.properties || {}; g.properties.nome = c.nomes[String(g.properties.codarea)] || g.properties.nome || ''; }); return c.topo; } } catch (e) {}
+  return MALHA_MT;
+}
+/* busca a malha do IBGE uma vez (sem abrir o mapa) e redesenha a escolha */
+function apMalhaIBGE(){
+  if (apMalhaIBGE.p || apMalhaTopo() !== MALHA_MT) return;
+  apMalhaIBGE.p = Promise.all([
+    fetch('https://servicodados.ibge.gov.br/api/v3/malhas/estados/51?formato=application/json&qualidade=intermediaria&intrarregiao=municipio').then(r => { if (!r.ok) throw new Error('IBGE ' + r.status); return r.json(); }),
+    fetch('https://servicodados.ibge.gov.br/api/v1/localidades/estados/51/municipios').then(r => r.json())
+  ]).then(([t, m]) => { const obj = t && t.type === 'Topology' && t.objects[Object.keys(t.objects)[0]];
+    if (!obj || !obj.geometries || obj.geometries.length < 140) return;
+    const nomes = {}; m.forEach(x => { nomes[String(x.id)] = x.nome; });
+    try { localStorage.setItem('gaborg_ibge_mt3', JSON.stringify({ topo:t, nomes, em:Date.now() })); } catch (e) {}
+    obj.geometries.forEach(g => { g.properties = g.properties || {}; g.properties.nome = nomes[String(g.properties.codarea)] || g.properties.nome || ''; }); apMalhaTopo.c = t;
+    apGeo.c = null; if (typeof obMunCentro !== 'undefined') obMunCentro.c = null;
+    if (vistaAtual === 'apresentacao' && !apEstado) renderApresentacao();
+  }).catch(e => console.info('GABOrg: apresentação com os limites embutidos (' + e.message + ')'));
+}
 function apGeo(){
-  if (apGeo.c) return apGeo.c;
-  const obj = MALHA_MT.objects[Object.keys(MALHA_MT.objects)[0]], fc = topojson.feature(MALHA_MT, obj);
+  const topo = apMalhaTopo();
+  if (apGeo.c && apGeo.c.topo === topo) return apGeo.c;
+  const obj = topo.objects[Object.keys(topo.objects)[0]], fc = topojson.feature(topo, obj);
   const kx = Math.cos(-13 * Math.PI / 180), anel = g => g.type === 'Polygon' ? [g.coordinates] : g.coordinates;
   let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
   fc.features.forEach(f => anel(f.geometry).forEach(pl => pl[0].forEach(([lo, la]) => { const x = lo * kx, y = -la; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; })));
@@ -6075,7 +6100,7 @@ function apGeo(){
   const muns = fc.features.map(f => { const b = [1e9, 1e9, -1e9, -1e9];
     const d = anel(f.geometry).map(pl => pl.map(r => 'M' + r.map(([lo, la]) => { const p = P(lo, la); if (p[0] < b[0]) b[0] = p[0]; if (p[1] < b[1]) b[1] = p[1]; if (p[0] > b[2]) b[2] = p[0]; if (p[1] > b[3]) b[3] = p[1]; return p[0].toFixed(1) + ',' + p[1].toFixed(1); }).join('L') + 'Z').join('')).join('');
     return { k:chaveMun(f.properties.nome), nome:f.properties.nome, cod:String(f.properties.codarea || ''), geo:f.geometry, d, bb:b, c:[(b[0] + b[2]) / 2, (b[1] + b[3]) / 2] }; });
-  return apGeo.c = { W, H, P, muns, todo:[0, 0, W, H] };
+  return apGeo.c = { topo, W, H, P, muns, todo:[0, 0, W, H] };
 }
 /* Dados vivos (escolas e alunos podem ter sido editados) */
 function apDados(){
@@ -6109,6 +6134,7 @@ function apAlvo(D){
 /* ---------- tela de escolha ---------- */
 function renderApresentacao(){
   const el = $('#v-apresentacao'); if (!el) return;
+  apMalhaIBGE();
   const D = apDados();
   if (!apSel) { const top = apModo === 'mun' ? [...D.muns].sort((a, b) => b.al - a.al)[0] : null; apSel = apModo === 'mun' ? (top ? top.k : '') : D.dres[0]; }
   el.innerHTML = `<div class="apx-esc">
