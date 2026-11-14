@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.51.0';
+const VERSAO = '1.51.2';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -8148,7 +8148,7 @@ function rxPaginas(uma){
     : uma === 'meio' ? [['intro', 'gerais', 'terr', 'conv'], ['obras', 'acoes']] : uma === 'meio2' ? [['intro', 'gerais', 'terr', 'obras'], ['conv', 'acoes']] : uma === 'tres' ? [['intro', 'gerais'], ['terr', 'obras'], ['conv', 'acoes']] : [['intro', 'gerais', 'terr'], ['obras', 'conv', 'acoes']];
   ordem[ordem.length - 1].push('conc');
   const pags = rlNumerar(rlPags(ordem.map(p => p.map(k => X[k])), true)), t = pags.length, simbMun = g && g.cod ? `<div class="apx-simb rx-simb" data-cod="${esc(g.cod)}"></div>` : '';
-  const capa = `<div class="rx-tit" style="--c:${A.cor || '#1d4ed8'}"><div><small>${A.tipo === 'mun' ? (A.dre ? 'DRE ' + esc(nomeDRE(A.dre)) : 'Município') : A.tipo === 'dre' ? `${A.ms.length} municípios` : `${D.dres.length} Diretorias Regionais · ${D.muns.filter(m => m.es.length).length} municípios`}</small><h1>${esc(titulo)}</h1><p>${hoje}</p></div><div class="rx-tit-d">${simbMun}<div class="rl-tit-3d">${rl3D(D, A)}</div></div></div>`;
+  const capa = `<div class="rx-tit" style="--c:${A.cor || '#1d4ed8'}"><div><small>${A.tipo === 'mun' ? (A.dre ? 'DRE ' + esc(nomeDRE(A.dre)) : 'Município') : A.tipo === 'dre' ? `${A.ms.length} municípios` : `${D.dres.length} Diretorias Regionais · ${D.muns.filter(m => m.es.length).length} municípios`}</small><h1>${esc(titulo)}</h1><p>${hoje}</p></div><div class="rx-tit-d"><div class="rx-tit-w">${simbMun}<div class="rl-tit-3d">${rl3D(D, A)}</div></div></div></div>`;
   return pags.map((c, i) => `<div class="rx-a4 rl-a4">${rlMarca(D, A)}<div class="rx-dagua" aria-hidden="true"><b>SEDUC-MT</b><span>Governo de Mato Grosso · Secretaria de Estado de Educação</span></div><div class="rx-in">${rxCab(A, i + 1, t, titulo)}<div class="rx-c">${i === 0 ? capa : ''}${c}${i === t - 1 ? rlAssin(ass) : ''}</div>${rlPe(i + 1, t, ass, 'bases de escolas, obras e convênios', 'Relatório executivo', titulo)}</div></div>`);
 }
 function rxPrevia(){
@@ -8215,13 +8215,17 @@ const RX_CSS = `.rx-a4{--f:1;width:794px;height:1123px;background:#fff;color:#0f
 .rx-pe{position:absolute;left:36px;right:36px;bottom:16px;display:flex;justify-content:space-between;align-items:flex-end;gap:16px;border-top:1px solid #e2e8f0;padding-top:8px}
 .rx-pe>small{color:#94a3b8;font-size:8px;max-width:440px;text-align:right}.rx-ass{text-align:center;min-width:220px}.rx-ass i{display:block;border-top:1px solid #334155;margin-bottom:3px}.rx-ass b{display:block;font-size:10.5px}.rx-ass small{color:#475569;font-size:9px}
 .rx-bras{height:38px!important}.rx-bras-alt{width:34px!important;height:38px!important}.rx-band{width:40px!important;height:28px!important}
-.rx-a4 .rx-tit{position:relative;border:0;border-radius:12px;padding:calc(12px * var(--f)) 14px calc(12px * var(--f)) 20px;overflow:hidden;color:#fff;background:#1e293b;background:linear-gradient(115deg,#111827 0%,#1e293b 55%,#334155 100%);box-shadow:inset 5px 0 0 var(--c),0 2px 8px rgba(15,23,42,.18);-webkit-print-color-adjust:exact;print-color-adjust:exact}
-.rx-a4 .rx-tit::after{content:'';position:absolute;left:5px;right:0;bottom:0;height:3px;background:linear-gradient(90deg,#f7c600,#f59e0b 40%,transparent)}
+.rx-a4 .rx-tit{position:relative;display:flex;align-items:stretch;justify-content:space-between;gap:0;border:0;border-radius:14px;padding:0;overflow:hidden;color:#fff;background:#1e293b;background:linear-gradient(115deg,#0b1222 0%,#1e293b 60%,#334155 100%);box-shadow:inset 5px 0 0 var(--c),0 3px 10px rgba(15,23,42,.2);-webkit-print-color-adjust:exact;print-color-adjust:exact;min-height:calc(78px * var(--f))}
+.rx-a4 .rx-tit>div:first-child{position:relative;z-index:2;padding:calc(12px * var(--f)) 10px calc(12px * var(--f)) 22px;display:flex;flex-direction:column;justify-content:center;min-width:0}
+.rx-a4 .rx-tit::before{content:'';position:absolute;left:-40px;top:-60px;width:220px;height:220px;border-radius:50%;background:radial-gradient(circle,color-mix(in srgb,var(--c) 35%,transparent),transparent 70%);opacity:.55;pointer-events:none}
+.rx-a4 .rx-tit::after{content:'';position:absolute;left:5px;right:0;bottom:0;height:3px;background:linear-gradient(90deg,#f7c600,#f59e0b 40%,transparent 75%);z-index:1}
 .rx-a4 .rx-tit small{color:#fcd34d}.rx-a4 .rx-tit h1{color:#fff;font-size:calc(22px * var(--f))}.rx-a4 .rx-tit p{color:#cbd5e1}
-.rx-a4 .rx-tit-d{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:10px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16)}
-.rx-a4 .rx-tit .rl-tit-3d{background:none;border:0;padding:0;margin:0}.rx-a4 .rx-tit .rl-3d{width:calc(92px * var(--f));height:calc(62px * var(--f))}
-.rx-a4 .rx-tit .rx-simb,.rx-a4 .rx-tit .apx-simb{gap:6px}.rx-a4 .rx-tit .apx-simb img{filter:none;box-shadow:none}
-.rx-a4 .rx-tit .apx-simb img.c{height:calc(40px * var(--f));width:auto}.rx-a4 .rx-tit .apx-simb img.b{height:calc(26px * var(--f));width:auto;border-radius:3px;box-shadow:0 0 0 1px rgba(255,255,255,.3)}
+.rx-a4 .rx-tit-d{position:relative;z-index:3;flex:none;display:flex;filter:drop-shadow(-3px 0 0 #f7c600) drop-shadow(-4px 0 0 #16a34a)}
+.rx-a4 .rx-tit-w{display:flex;align-items:center;gap:0;padding:6px 16px 6px 46px;background:#fff;clip-path:polygon(34px 0,100% 0,100% 100%,0 100%);-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.rx-a4 .rx-tit-w>*{padding:0 12px}.rx-a4 .rx-tit-w>*+*{border-left:1px solid #e2e8f0}.rx-a4 .rx-tit-w>*:last-child{padding-right:0}
+.rx-a4 .rx-tit .rl-tit-3d{background:none;border:0;padding:0 0 0 12px;margin:0}.rx-a4 .rx-tit .rl-3d{width:calc(96px * var(--f));height:calc(66px * var(--f))}
+.rx-a4 .rx-tit .rx-simb,.rx-a4 .rx-tit .apx-simb{gap:10px}.rx-a4 .rx-tit .apx-simb:empty{display:none}.rx-a4 .rx-tit .apx-simb img{filter:none;box-shadow:none}
+.rx-a4 .rx-tit .apx-simb img.c{height:calc(46px * var(--f));width:auto}.rx-a4 .rx-tit .apx-simb img.b{height:calc(30px * var(--f));width:auto;border-radius:3px;box-shadow:0 0 0 1px #cbd5e1,0 2px 5px rgba(15,23,42,.18)}
 .rx-dagua{position:absolute;left:50%;top:54%;width:1100px;transform:translate(-50%,-50%) rotate(-32deg);text-align:center;pointer-events:none;z-index:0;color:#1c3f94;opacity:.04;line-height:1;white-space:nowrap}
 .rx-dagua b{display:block;font-size:150px;font-weight:900;letter-spacing:.04em}.rx-dagua span{display:block;font-size:24px;font-weight:800;letter-spacing:.3em;text-transform:uppercase;margin-top:10px}
 .rx-in{z-index:1}
@@ -8557,23 +8561,32 @@ async function verificarAtualizacao(manual){
     else if (manual) toast(`Você já está na versão mais recente (${VERSAO}).`);
   } catch (e) { if (manual) toast('Não foi possível verificar agora: ' + e.message, 'aviso'); }
 }
+/* novidades: só as versões entre a atual e a nova, uma por item, curtas */
+function novidadesAtu(txt, nova){
+  const L = String(txt || '').replace(/\\n/g, '\n').split(/\n+/).map(x => x.trim()).filter(Boolean), it = [];
+  L.forEach(x => { const m = x.match(/^(\d+\.\d+\.\d+)\s*[—–-]\s*(.+)$/); if (m) { if (compararVersao(m[1], VERSAO) > 0 && compararVersao(m[1], nova) <= 0) it.push([m[1], m[2]]); } });
+  return it;
+}
 function mostrarAtualizacao(nova, novidades, manual){
   if (!manual && atu.dispensadaEm && Date.now() - atu.dispensadaEm < 30 * 60 * 1000) return;
   let el = $('#atu-app');
   if (!el) { el = document.createElement('div'); el.id = 'atu-app'; el.className = 'atu-app'; el.setAttribute('role', 'alert'); document.body.appendChild(el); }
-  const pend = (typeof fila !== 'undefined' && fila.length) ? fila.length : 0;
-  el.innerHTML = `<div class="ic"><i class="fa-solid fa-rotate"></i></div>
-    <div class="tx"><b>Nova versão do GABOrg disponível</b><small>Versão ${esc(nova)} · você está na ${esc(VERSAO)}</small>
-      ${novidades ? `<p>${esc(novidades)}</p>` : ''}
-      ${pend ? `<p class="pd"><i class="fa-solid fa-cloud-arrow-up"></i>${pend} alteração(ões) ainda não enviada(s) ficam guardadas e são enviadas depois de atualizar.</p>` : ''}</div>
-    <div class="bt"><button class="btn btn-p btn-sm" onclick="atualizarApp()"><i class="fa-solid fa-rotate"></i>Atualizar agora</button><button class="btn btn-s btn-sm" onclick="dispensarAtualizacao()">Depois</button></div>`;
+  const pend = (typeof fila !== 'undefined' && fila.length) ? fila.length : 0, N = novidadesAtu(novidades, nova);
+  el.innerHTML = `<div class="atu-in">
+    <div class="atu-top"><span class="atu-ic"><i class="fa-solid fa-rocket"></i><i class="fa-solid fa-star s1"></i><i class="fa-solid fa-star s2"></i></span>
+      <div class="atu-t"><b>Nova versão no ar</b><span class="atu-v"><em>${esc(VERSAO)}</em><i class="fa-solid fa-arrow-right-long"></i><em class="n">${esc(nova)}</em></span></div>
+      <button class="atu-x" onclick="dispensarAtualizacao()" title="Depois" aria-label="Fechar"><i class="fa-solid fa-xmark"></i></button></div>
+    ${N.length ? `<details class="atu-nov"><summary><i class="fa-solid fa-wand-magic-sparkles"></i>O que há de novo <small>${N.length}</small><i class="fa-solid fa-chevron-down sv"></i></summary><ul>${N.slice(0, 6).map(([v, t]) => `<li><em>${esc(v)}</em><span>${esc(t.length > 150 ? t.slice(0, 147).replace(/\s+\S*$/, '') + '…' : t)}</span></li>`).join('')}${N.length > 6 ? `<li class="mais">e mais ${N.length - 6} versões</li>` : ''}</ul></details>` : ''}
+    ${pend ? `<p class="atu-pd"><i class="fa-solid fa-cloud-arrow-up"></i>${pend} alteração(ões) não enviada(s) ficam guardadas.</p>` : ''}
+    <div class="atu-bt"><button class="atu-go" onclick="atualizarApp()"><span class="atu-bar"></span><i class="fa-solid fa-bolt"></i><span class="tx">Atualizar agora</span></button><button class="atu-dp" onclick="dispensarAtualizacao()">Depois</button></div></div>`;
   requestAnimationFrame(() => el.classList.add('on'));
 }
-function dispensarAtualizacao(){ atu.dispensadaEm = Date.now(); const el = $('#atu-app'); if (el) { el.classList.remove('on'); setTimeout(() => el.remove(), 300); } }
+function dispensarAtualizacao(){ atu.dispensadaEm = Date.now(); const el = $('#atu-app'); if (el) { el.classList.remove('on'); setTimeout(() => el.remove(), 350); } }
 function atualizarApp(){
-  const el = $('#atu-app'); if (el) el.querySelector('.bt').innerHTML = '<span class="s"><i class="fa-solid fa-spinner fa-spin"></i> Atualizando...</span>';
+  const el = $('#atu-app'), b = el && el.querySelector('.atu-go');
+  if (b) { b.classList.add('vai'); b.disabled = true; b.querySelector('.tx').textContent = 'Atualizando…'; const d = el.querySelector('.atu-dp'); if (d) d.hidden = true; }
   try { if (typeof salvarLocal === 'function') salvarLocal(); } catch (e) {}
-  window.GABORG_LIMPAR();
+  setTimeout(() => window.GABORG_LIMPAR(), b ? 900 : 0);
 }
 setTimeout(() => verificarAtualizacao(false), 8000);
 setInterval(() => { if (!document.hidden) verificarAtualizacao(false); }, 15 * 60 * 1000);
