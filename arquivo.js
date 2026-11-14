@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.49.8';
+const VERSAO = '1.50.1';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -6069,7 +6069,7 @@ aplicarLado();
    que dá zoom no território, as escolas que "caem" no mapa, números com contagem e a DRE que atende.
    Só lê dados (escolas, alunos, DREs; servidores apenas em número). Nada é gravado; o nome do convidado não é guardado.
    Fontes externas (só leitura): imagens de satélite Esri, bandeira/brasão do Wikidata/Wikimedia Commons e notícias do Google Notícias (via Codigo.gs). */
-let apModo = 'mun', apSel = '', apBusca = '', apConvidado = '', apAuto = 0, apEstado = null, apZeroPrimeiro = false, apRepetir = !!store.get('gaborg_ap_repetir', false);
+let apModo = 'mun', apSel = '', apBusca = '', apConvidado = '', apAuto = 0, apEstado = null, apZeroPrimeiro = false, apFDre = '', apOrd = store.get('gaborg_ap_ord', 'az'), apCur = -1, apRepetir = !!store.get('gaborg_ap_repetir', false);
 /* malha municipal: a do IBGE atual (142 municípios, inclui Boa Esperança do Norte) quando disponível; senão a embutida (141) */
 function apMalhaTopo(){
   const n = t => { try { const q = t.objects[Object.keys(t.objects)[0]].geometries.length; return q <= 200 ? q : 0; } catch (e) { return 0; } }, emb = n(MALHA_MT);   /* MT tem 142; acima de 200 não é a malha esperada */
@@ -6155,13 +6155,18 @@ function renderApresentacao(){
     <header class="apx-hero"><div class="apx-hero-ic"><i class="fa-solid fa-person-chalkboard"></i></div>
       <div class="apx-hero-t"><span class="apx-k">Receber prefeitos e equipes</span><h2>Apresentação do território</h2><p>Escolha no mapa ou na lista e abra uma apresentação animada em tela cheia.</p></div>
       <div class="apx-hero-f"><div class="seg apx-seg">${[['mun', 'Município', 'fa-city'], ['dre', 'DRE', 'fa-route'], ['est', 'Estado · SEDUC', 'fa-landmark']].map(([k, t, ic]) => `<button class="${apModo === k ? 'on' : ''}" onclick="apModo='${k}';apSel='';apBusca='';renderApresentacao()"><i class="fa-solid ${ic}"></i>${t}</button>`).join('')}</div>
-        ${apModo === 'est' ? '' : `<label class="apx-busca"><i class="fa-solid fa-magnifying-glass"></i><input id="apx-q" value="${esc(apBusca)}" placeholder="${apModo === 'mun' ? 'Buscar entre os ' + D.muns.length + ' municípios...' : 'Buscar DRE...'}" oninput="apBusca=this.value;apLista()"></label>`}</div></header>
+</div></header>
     <div class="apx-grid">
-      <div class="apx-col"><div class="apx-col-h"><b>${apModo === 'mun' ? 'Municípios' : 'Diretorias regionais'}</b><small>${apModo === 'mun' ? D.muns.length : D.dres.length}</small>${apModo === 'mun' && D.muns.some(m => !m.es.length) ? `<small class="apx-zero" title="Municípios sem nenhuma escola vinculada: confira o nome do município dessas escolas em Mapa de MT › Editar escolas" onclick="apBusca='';apZeroPrimeiro=!apZeroPrimeiro;apLista()"><i class="fa-solid fa-triangle-exclamation"></i> ${D.muns.filter(m => !m.es.length).length} sem escola</small>` : ''}</div>${apModo === 'est' ? '<p class="apx-col-d">A apresentação do estado reúne todas as regionais. Clique numa DRE para apresentar só ela.</p>' : ''}<div class="apx-lista" id="apx-lista"></div></div>
+      <div class="apx-col"><div class="apx-col-h"><b>${apModo === 'mun' ? 'Municípios' : 'Diretorias regionais'}</b><small>${apModo === 'mun' ? D.muns.length : D.dres.length}</small>${apModo === 'mun' && D.muns.some(m => !m.es.length) ? `<small class="apx-zero" title="Municípios sem nenhuma escola vinculada: confira o nome do município dessas escolas em Mapa de MT › Editar escolas" onclick="apBusca='';apZeroPrimeiro=!apZeroPrimeiro;apLista()"><i class="fa-solid fa-triangle-exclamation"></i> ${D.muns.filter(m => !m.es.length).length} sem escola</small>` : ''}</div>${apModo === 'est' ? '<p class="apx-col-d">A apresentação do estado reúne todas as regionais. Clique numa DRE para apresentar só ela.</p>' : `<div class="apx-fil">
+        <label class="apx-q"><i class="fa-solid fa-magnifying-glass"></i><input id="apx-q" value="${esc(apBusca)}" autocomplete="off" spellcheck="false" placeholder="${apModo === 'mun' ? 'Digite o município ou a DRE...' : 'Digite a DRE ou a sede...'}" oninput="apBusca=this.value;apCur=-1;apLista()" onkeydown="apTeclaBusca(event)"><button type="button" class="apx-q-x" title="Limpar" onclick="apBusca='';apCur=-1;const q=$('#apx-q');q.value='';q.focus();apLista()" ${apBusca ? '' : 'hidden'}><i class="fa-solid fa-xmark"></i></button></label>
+        <div class="apx-fil-l">${apModo === 'mun' ? `<select class="apx-sel" title="Filtrar por DRE" onchange="apFDre=this.value;apCur=-1;apLista()"><option value="">Todas as DREs</option>${[...D.dres].sort((a, b) => nomeDRE(a).localeCompare(nomeDRE(b), 'pt-BR')).map(d => `<option value="${esc(d)}" ${apFDre === d ? 'selected' : ''}>DRE ${esc(nomeDRE(d))}</option>`).join('')}</select>` : ''}
+          <select class="apx-sel" title="Ordenar" onchange="apOrd=this.value;store.set('gaborg_ap_ord',apOrd);apLista()">${[['az', 'A–Z'], ['al', 'Mais estudantes'], ['es', 'Mais escolas']].map(([v, t]) => `<option value="${v}" ${apOrd === v ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
+        <div class="apx-cont"><span id="apx-cont"></span><small><kbd>↑</kbd><kbd>↓</kbd> <kbd>Enter</kbd> escolhe · duplo clique apresenta</small></div>
+        <div class="apx-rec" id="apx-rec"></div></div>`}<div class="apx-lista" id="apx-lista"></div></div>
       <div class="apx-mesc" id="apx-mesc"></div>
       <aside class="apx-prev" id="apx-prev"></aside>
     </div></div>`;
-  apLista(); apMapaEscolha(); apPrevia();
+  apMapaEscolha(); apPrevia();
 }
 /* Mapa grande para escolher: cor da DRE, intensidade pelo número de estudantes; passe o mouse para ver, clique para escolher */
 function apMapaEscolha(){
@@ -6179,23 +6184,60 @@ function apMapaEscolha(){
     (apModo === 'mun' ? [p] : m.dre ? svg.querySelectorAll(`path[data-d="${CSS.escape(m.dre)}"]`) : []).forEach(x => x.classList.add('hov')); });
   svg.addEventListener('mouseleave', () => { tip.classList.remove('on'); svg.querySelectorAll('path.hov').forEach(x => x.classList.remove('hov')); });
   svg.addEventListener('click', e => { const p = e.target.closest('path'); if (!p || apModo === 'est') return; const v = apModo === 'mun' ? p.dataset.k : p.dataset.d; if (!v) return;
-    apSel = v; apLista(); apPrevia(); apMapaMarcar(); const it = $('#apx-lista .apx-it.on'); if (it) it.scrollIntoView({ block:'nearest', behavior:'smooth' }); });
-  apMapaMarcar();
+    if (apModo === 'mun' && (apBusca || apFDre) && !apFiltrados(D).some(m => m.k === v)) { apBusca = ''; apFDre = ''; const q = $('#apx-q'); if (q) q.value = ''; const sl = $('.apx-fil .apx-sel'); if (sl) sl.value = ''; }
+    apEscolher(v, 1); });
+  svg.addEventListener('dblclick', e => { const p = e.target.closest('path'); if (p && apModo !== 'est' && apSel) apAbrir(); });
+  apMapaMarcar(); apLista();
 }
 function apMapaMarcar(){
   const svg = $('#apx-mesc svg'); if (!svg) return; const sel = [];
   svg.querySelectorAll('path').forEach(p => { const on = apModo === 'est' ? false : apModo === 'mun' ? p.dataset.k === apSel : p.dataset.d === apSel; p.classList.toggle('sel', on); if (on) sel.push(p); });
   sel.forEach(p => svg.appendChild(p));
 }
+/* destaca o trecho buscado, sem diferenciar acentos */
+function apMarcaTxt(t, q){
+  t = String(t || ''); if (!q) return esc(t); let n = '', mp = [];
+  [...t].forEach((c, i) => { const x = c.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); for (const y of x) { n += y; mp.push(i); } });
+  const a = n.indexOf(q); if (a < 0) return esc(t); const ch = [...t], ini = mp[a], fim = mp[a + q.length - 1] + 1;
+  return esc(ch.slice(0, ini).join('')) + '<mark>' + esc(ch.slice(ini, fim).join('')) + '</mark>' + esc(ch.slice(fim).join(''));
+}
+const apRecentes = () => (store.get('gaborg_ap_rec_' + apModo, []) || []).filter(Boolean);
+function apGuardarRecente(){ if (apModo === 'est' || !apSel) return; store.set('gaborg_ap_rec_' + apModo, [apSel, ...apRecentes().filter(k => k !== apSel)].slice(0, 6)); }
+function apEscolher(v, rolar){ apSel = v; apLista(); apPrevia(); apMapaMarcar(); if (rolar) { const it = $('#apx-lista .apx-it.on'); if (it) it.scrollIntoView({ block:'nearest', behavior:'smooth' }); } }
+function apFiltrados(D){
+  const q = norm(apBusca), ord = (a, b, nA, nB) => apOrd === 'al' ? b.al - a.al : apOrd === 'es' ? b.es - a.es : nA.localeCompare(nB, 'pt-BR');
+  if (apModo === 'mun') return D.muns.filter(m => (!apFDre || m.dre === apFDre) && (!q || norm(m.nome).includes(q) || norm(nomeDRE(m.dre)).includes(q)))
+    .sort((a, b) => (apZeroPrimeiro ? (!!a.es.length - !!b.es.length) : 0) || (q ? (norm(b.nome).startsWith(q) - norm(a.nome).startsWith(q)) : 0) || ord({ al:a.al, es:a.es.length }, { al:b.al, es:b.es.length }, a.nome, b.nome));
+  const X = D.dres.map(d => { const es = D.E.filter(e => e.dre === d); return { d, es, al:alunosDe(es), nm:D.muns.filter(m => m.dre === d).length, sede:apSedeNome(d) }; });
+  return X.filter(x => apModo === 'est' || !q || norm(nomeDRE(x.d)).includes(q) || norm(x.sede).includes(q)).sort((a, b) => ord({ al:a.al, es:a.es.length }, { al:b.al, es:b.es.length }, nomeDRE(a.d), nomeDRE(b.d)));
+}
 function apLista(){
-  const el = $('#apx-lista'); if (!el) return; const D = apDados(), q = norm(apBusca);
+  const el = $('#apx-lista'); if (!el) return; const D = apDados(), q = norm(apBusca), L = apFiltrados(D);
+  if (apCur >= L.length) apCur = L.length - 1;
+  const cx = $('.apx-q-x'); if (cx) cx.hidden = !apBusca;
   if (apModo === 'mun') {
-    const L = D.muns.filter(m => !q || norm(m.nome).includes(q) || norm(nomeDRE(m.dre)).includes(q)).sort((a, b) => (apZeroPrimeiro ? (!!a.es.length - !!b.es.length) : 0) || a.nome.localeCompare(b.nome, 'pt-BR'));
-    el.innerHTML = L.length ? L.map(m => `<button class="apx-it ${m.k === apSel ? 'on' : ''} ${m.es.length ? '' : 'zero'}" style="--c:${m.dre ? apCorDre(D, m.dre) : '#f59e0b'}" onclick="apSel='${m.k}';apLista();apPrevia();apMapaMarcar()"><span class="apx-it-n"><b>${esc(m.nome)}</b><small>${m.dre ? 'DRE ' + esc(nomeDRE(m.dre)) : '<i class="fa-solid fa-triangle-exclamation"></i> Nenhuma escola vinculada'}</small></span><span class="apx-it-v"><b>${fmtN(m.es.length)}</b><small>escolas</small></span><span class="apx-it-v"><b>${fmtN(m.al)}</b><small>alunos</small></span></button>`).join('') : '<div class="apx-vazio">Nenhum município encontrado.</div>';
+    el.innerHTML = L.length ? L.map((m, i) => `<button class="apx-it ${m.k === apSel ? 'on' : ''} ${i === apCur ? 'cur' : ''} ${m.es.length ? '' : 'zero'}" style="--c:${m.dre ? apCorDre(D, m.dre) : '#f59e0b'}" title="Clique para escolher · duplo clique para apresentar" onclick="apEscolher('${m.k}')" ondblclick="apEscolher('${m.k}');apAbrir()"><span class="apx-it-n"><b>${apMarcaTxt(m.nome, q)}</b><small>${m.dre ? 'DRE ' + apMarcaTxt(nomeDRE(m.dre), q) : '<i class="fa-solid fa-triangle-exclamation"></i> Nenhuma escola vinculada'}</small></span><span class="apx-it-v"><b>${fmtN(m.es.length)}</b><small>escolas</small></span><span class="apx-it-v"><b>${fmtN(m.al)}</b><small>alunos</small></span></button>`).join('')
+      : `<div class="apx-vazio"><i class="fa-solid fa-magnifying-glass"></i><b>Nenhum município encontrado</b><small>Confira a grafia ou ${apFDre ? `<a href="#" onclick="event.preventDefault();apFDre='';renderApresentacao()">mostre todas as DREs</a>` : 'busque pelo nome da DRE'}.</small></div>`;
   } else {
-    const L = D.dres.filter(d => apModo === 'est' || !q || norm(d).includes(q));
-    el.innerHTML = L.map(d => { const es = D.E.filter(e => e.dre === d), nm = D.muns.filter(m => m.dre === d).length; return `<button class="apx-it ${d === apSel ? 'on' : ''}" style="--c:${apCorDre(D, d)}" onclick="${apModo === 'est' ? `apModo='dre';apSel=${esc(JSON.stringify(d))};apBusca='';renderApresentacao()` : `apSel=${arg(d)};apLista();apPrevia();apMapaMarcar()`}"><span class="apx-it-n"><b>DRE ${esc(nomeDRE(d))}</b><small>${nm} municípios · sede em ${esc(apSedeNome(d))}</small></span><span class="apx-it-v"><b>${fmtN(es.length)}</b><small>escolas</small></span><span class="apx-it-v"><b>${fmtN(alunosDe(es))}</b><small>alunos</small></span></button>`; }).join('');
+    el.innerHTML = L.length ? L.map((x, i) => `<button class="apx-it ${x.d === apSel ? 'on' : ''} ${i === apCur ? 'cur' : ''}" style="--c:${apCorDre(D, x.d)}" ${apModo === 'est' ? `onclick="apModo='dre';apSel=${esc(JSON.stringify(x.d))};apBusca='';renderApresentacao()"` : `title="Clique para escolher · duplo clique para apresentar" onclick="apEscolher(${arg(x.d)})" ondblclick="apEscolher(${arg(x.d)});apAbrir()"`}><span class="apx-it-n"><b>DRE ${apMarcaTxt(nomeDRE(x.d), q)}</b><small>${x.nm} municípios · sede em ${apMarcaTxt(x.sede, q)}</small></span><span class="apx-it-v"><b>${fmtN(x.es.length)}</b><small>escolas</small></span><span class="apx-it-v"><b>${fmtN(x.al)}</b><small>alunos</small></span></button>`).join('')
+      : '<div class="apx-vazio"><i class="fa-solid fa-magnifying-glass"></i><b>Nenhuma DRE encontrada</b><small>Busque pelo nome da DRE ou da cidade-sede.</small></div>';
   }
+  const ct = $('#apx-cont'); if (ct) { const tot = apModo === 'mun' ? D.muns.length : D.dres.length; ct.innerHTML = L.length === tot ? `<b>${tot}</b> ${apModo === 'mun' ? 'municípios' : 'DREs'}` : `<b>${L.length}</b> de ${tot} ${apModo === 'mun' ? 'municípios' : 'DREs'}`; }
+  const rc = $('#apx-rec'); if (rc) { const R = apRecentes().map(k => apModo === 'mun' ? D.muns.find(m => m.k === k) : D.dres.includes(k) ? k : null).filter(Boolean);
+    rc.innerHTML = R.length && !q ? `<span><i class="fa-solid fa-clock-rotate-left"></i>Recentes</span>${R.map(r => apModo === 'mun' ? `<button class="${r.k === apSel ? 'on' : ''}" style="--c:${r.dre ? apCorDre(D, r.dre) : '#f59e0b'}" onclick="apEscolher('${r.k}',1)">${esc(r.nome)}</button>` : `<button class="${r === apSel ? 'on' : ''}" style="--c:${apCorDre(D, r)}" onclick="apEscolher(${arg(r)},1)">${esc(nomeDRE(r))}</button>`).join('')}` : ''; rc.hidden = !rc.innerHTML; }
+  apMapaFiltro(L);
+}
+/* no mapa, apaga o que ficou de fora da busca/filtro */
+function apMapaFiltro(L){
+  const svg = $('#apx-mesc svg'); if (!svg) return; const ativo = apModo !== 'est' && (norm(apBusca) || apFDre);
+  const ok = new Set(apModo === 'mun' ? L.map(m => m.k) : L.map(x => x.d));
+  svg.querySelectorAll('path').forEach(p => p.classList.toggle('fora', !!ativo && !ok.has(apModo === 'mun' ? p.dataset.k : p.dataset.d)));
+}
+function apTeclaBusca(e){
+  const L = apFiltrados(apDados()); if (!L.length) return; const val = x => apModo === 'mun' ? x.k : x.d;
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); apCur = Math.max(0, Math.min(L.length - 1, apCur + (e.key === 'ArrowDown' ? 1 : -1))); apLista(); const it = $('#apx-lista .apx-it.cur'); if (it) it.scrollIntoView({ block:'nearest' }); }
+  else if (e.key === 'Enter') { e.preventDefault(); const v = val(L[Math.max(0, apCur)]); if (e.ctrlKey || e.metaKey || v === apSel) { apEscolher(v); apAbrir(); } else apEscolher(v, 1); }
+  else if (e.key === 'Escape' && apBusca) { e.preventDefault(); apBusca = ''; apCur = -1; e.target.value = ''; apLista(); }
 }
 function apPrevia(){
   const el = $('#apx-prev'); if (!el) return; const D = apDados(), A = apAlvo(D);
@@ -6210,7 +6252,7 @@ function apPrevia(){
       <label class="apx-campo"><span>Convidado (opcional)</span><input id="apx-conv" value="${esc(apConvidado)}" placeholder="${A.tipo === 'mun' ? 'Ex.: Prefeito(a) Fulano de Tal' : A.tipo === 'estado' ? 'Ex.: Comitiva do Ministério da Educação' : 'Ex.: Equipe da DRE'}" oninput="apConvidado=this.value" maxlength="80"><small>Aparece na capa de boas-vindas. Não é salvo.</small></label>
       <label class="apx-campo"><span>Avançar os slides</span><select onchange="apAuto=+this.value">${[[0, 'Manualmente (setas, clique ou passador)'], [10, 'Automático a cada 10 s'], [15, 'Automático a cada 15 s'], [25, 'Automático a cada 25 s']].map(([v, t]) => `<option value="${v}" ${apAuto === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
       <label class="apx-campo apx-rep"><input type="checkbox" ${apRepetir ? 'checked' : ''} onchange="apRepetir=this.checked;store.set('gaborg_ap_repetir',apRepetir)"><span><b><i class="fa-solid fa-repeat"></i> Repetir em loop</b><small>Ao terminar, volta ao início e recomeça sozinha (bom para telões e recepção). Se o avanço estiver manual, passa a cada 15 s.</small></span></label>
-      ${cvLista().length ? `<label class="apx-campo apx-rep"><input type="checkbox" ${store.get('gaborg_ap_cvnota', false) ? 'checked' : ''} onchange="store.set('gaborg_ap_cvnota',this.checked)"><span><b><i class="fa-solid fa-star-half-stroke"></i> Mostrar a nota dos convênios</b><small>Inclui a classificação (Ótima, Boa, Regular, Fraca) no slide de convênios. Desligado, o slide mostra só valores, execução e vigência.</small></span></label>` : ''}
+      
       <div class="apx-not" id="apx-not"></div>
       <div class="apx-rot" id="apx-rot"><span>Roteiro · ${roteiro.length} telas</span><ol>${roteiro.map(t => `<li>${esc(t)}</li>`).join('')}</ol></div>
       <button class="btn btn-p apx-ir" onclick="apAbrir()"><i class="fa-solid fa-play"></i>Iniciar apresentação</button>
@@ -6312,7 +6354,7 @@ function apQuadro(D, A, k){
 /* ---------- show ---------- */
 function apAbrir(){
   const D = apDados(), A = apAlvo(D); if (!A) return;
-  apFechar(true);
+  apGuardarRecente(); apFechar(true);
   const R = apRoteiro(D, A), el = document.createElement('div'); el.id = 'apx-show'; el.className = 'apx-show'; el.tabIndex = -1;
   el.innerHTML = `<div class="apx-fx"><i></i><i></i></div><div class="apx-mapa">${apMapaSVG(D, A, D.G.todo, false)}</div>
     <header class="apx-topo"><span class="apx-logo"><span class="ic"><i class="fa-solid fa-sitemap"></i></span><b>GAB<em>Org</em></b><small>SEDUC-MT</small></span><span class="apx-tit">${esc(A.nome)}</span><span class="apx-hora" id="apx-hora"></span></header>
@@ -7638,7 +7680,7 @@ const cvFisReal = x => x.obra && x.obra.execFisica !== '' ? obExec(x.obra) : x.f
 function apTelaConvenios(D, A){
   const L = apConvDe(D, A), X = L.map(cvK), som = k => X.reduce((t, x) => t + x[k], 0), conc = som('conc'), rep = som('rep'), exe = som('exe'), [mv, ms, md] = apMoeda(conc);
   const pr = conc ? rep / conc : 0, pe = conc ? exe / conc : 0, fisM = (() => { const q = X.filter(x => cvFisReal(x) !== null && x.conc); const t = q.reduce((s, x) => s + x.conc, 0); return t ? q.reduce((s, x) => s + cvFisReal(x) * x.conc, 0) / t : null; })();
-  const nc = L.filter(c => c.situacao === 'Concluído').length, ne = L.filter(c => c.situacao === 'Em execução').length, mostraNota = !!store.get('gaborg_ap_cvnota', false);
+  const nc = L.filter(c => c.situacao === 'Concluído').length, ne = L.filter(c => c.situacao === 'Em execução').length, mostraNota = true;
   const tanque = (rot, ic, v, p, cor, i) => `<div class="cv-tq apx-in" style="--i:${i};--c:${cor};--p:${(p * 100).toFixed(1)}"><div class="cv-tq-v"><span class="ag"></span><span class="ag b"></span>${[0, 1, 2].map(j => `<i class="moeda" style="--j:${j}"></i>`).join('')}<b>${apCont(Math.round(p * 100), '%')}</b></div><span class="cv-tq-r"><i class="fa-solid ${ic}"></i>${rot}</span><small>${fmtRc(v)}</small></div>`;
   let dir = '';
   if (A.tipo === 'mun') {
@@ -7920,7 +7962,7 @@ const CV_REL_CSS = `.r-a4{--f:1;width:794px;height:1123px;background:#fff;color:
    Documento de 1 a 2 páginas A4, com identidade da Secretaria de Estado de Educação (brasão e bandeira de MT),
    textos editáveis, prévia fiel e impressão/PDF. Usa os dados já carregados: escolas, obras, convênios e servidores. */
 let rxModo = store.get('gaborg_rx_modo', 'mun'), rxSel = store.get('gaborg_rx_sel', ''), rxBusca = '';
-const RX_SECOES = [['rede', 'A rede em números', true], ['mapa', 'Mapa do território', true], ['perfil', 'Perfil das escolas', true], ['escolas', 'Maiores escolas', true], ['territorio', 'Municípios ou DREs', true], ['pessoas', 'Pessoas', true], ['obras', 'Obras e investimentos', true], ['convenios', 'Convênios', true], ['textos', 'Considerações ou encaminhamentos', true]];
+const RX_SECOES = [['rede', 'A rede em números', true], ['mapa', 'Mapa do território', true], ['perfil', 'Perfil das escolas', true], ['escolas', 'Maiores escolas', true], ['territorio', 'Municípios ou DREs', true], ['pessoas', 'Pessoas', true], ['obras', 'Obras e investimentos', true], ['convenios', 'Convênios', true], ['textos', 'Considerações ou encaminhamentos', true], ['conclusao', 'Conclusão (agradecimento)', true]];
 /* bandeira de Mato Grosso desenhada (não depende de internet) */
 const RX_BANDEIRA_MT = `<svg viewBox="0 0 100 70" class="rx-band" role="img" aria-label="Bandeira de Mato Grosso"><rect width="100" height="70" fill="#1c3f94"/><path d="M50,6L94,35L50,64L6,35Z" fill="#fff"/><circle cx="50" cy="35" r="14.5" fill="#1c3f94"/><path d="M50,24.5L52.6,32.2H60.7L54.2,37L56.6,44.8L50,40L43.4,44.8L45.8,37L39.3,32.2H47.4Z" fill="#f7c600"/></svg>`;
 const rxBrasao = () => `<img class="rx-bras" src="${esc(AP_UF_SIMB.c)}" alt="Brasão de Mato Grosso" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'rx-bras rx-bras-alt',innerHTML:'<i>MT</i>'}))">`;
@@ -7949,7 +7991,9 @@ function rxPadrao(D, A){
   const venc = cv.filter(c => { const x = cvK(c); return cvAberto(c) && x.dias !== null && x.dias <= 90; }).length; if (venc) prox.push(`Acompanhar ${venc} convênio${venc === 1 ? '' : 's'} com vigência terminando em até 90 dias.`);
   if (pront) prox.push('Agendar as inaugurações das obras prontas.');
   prox.push('Manter atualizados os dados de estudantes, profissionais e obras no GABOrg.');
-  return { sintese, destaques:dest.join('\n'), proximos:prox.join('\n') };
+  const quem = A.tipo === 'mun' ? `ao Município de ${A.nome}` : A.tipo === 'dre' ? `aos ${A.ms.length} municípios atendidos pela DRE ${nomeDRE(A.d)}` : `aos municípios de Mato Grosso e às ${D.dres.length} Diretorias Regionais de Educação`;
+  const agradecimento = `A Secretaria de Estado de Educação de Mato Grosso agradece ${quem} pela parceria construída com o Estado em favor da educação pública. O trabalho conjunto entre gestores, equipes das escolas e comunidade tem sido essencial para garantir infraestrutura, atendimento e aprendizagem ${al ? `aos ${fmtN(al)} estudantes` : 'aos estudantes'} da rede estadual${A.tipo === 'mun' ? ' no município' : A.tipo === 'dre' ? ' na regional' : ''}.\nSeguimos juntos, com diálogo e compromisso, para que cada estudante mato-grossense tenha acesso a uma educação de qualidade.`;
+  return { sintese, destaques:dest.join('\n'), proximos:prox.join('\n'), agradecimento };
 }
 /* ---------- tela ---------- */
 function renderExecutivo(){
@@ -7968,6 +8012,7 @@ function renderExecutivo(){
         <label><span class="rot">Síntese</span><textarea class="campo" name="sintese" rows="6" oninput="rxTexto()">${esc(P.sintese)}</textarea></label>
         <label><span class="rot">Destaques</span><textarea class="campo" name="destaques" rows="4" oninput="rxTexto()">${esc(P.destaques)}</textarea><small class="s">Um item por linha.</small></label>
         <label><span class="rot">Próximos passos</span><textarea class="campo" name="proximos" rows="4" oninput="rxTexto()">${esc(P.proximos)}</textarea><small class="s">Um item por linha.</small></label>
+        <label><span class="rot">Conclusão (agradecimento)</span><textarea class="campo" name="agradecimento" rows="5" oninput="rxTexto()">${esc(P.agradecimento)}</textarea><small class="s">Um parágrafo por linha.</small></label>
         <div class="g2"><label><span class="rot">Assinatura</span><input class="campo" name="assNome" value="${esc(ass.nome || '')}" placeholder="Nome" oninput="rxTexto()"></label><label><span class="rot">Cargo</span><input class="campo" name="assCargo" value="${esc(ass.cargo || '')}" placeholder="Cargo" oninput="rxTexto()"></label></div>
         <button type="button" class="btn btn-g btn-sm" onclick="store.set('gaborg_rx_txt_${esc(rxChave(A))}',{});renderExecutivo()"><i class="fa-solid fa-rotate-left"></i>Voltar aos textos automáticos</button></form></details>
       <button class="btn btn-p rx-imp" onclick="rxImprimir()"><i class="fa-solid fa-print"></i>Imprimir ou salvar PDF</button>
@@ -7980,7 +8025,7 @@ function rxListar(){ const D = apDados(), q = norm(rxBusca), el = $('#rx-lst'); 
   el.innerHTML = rxLista(rxModo === 'mun' ? D.muns.filter(m => !q || norm(m.nome).includes(q)).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')).map(m => [m.k, m.nome, `${m.es.length} escolas · ${fmtN(m.al)} estudantes`, m.dre ? apCorDre(D, m.dre) : '#94a3b8'])
     : D.dres.filter(d => !q || norm(d).includes(q)).map(d => [d, 'DRE ' + nomeDRE(d), `${D.muns.filter(m => m.dre === d).length} municípios`, apCorDre(D, d)])); }
 function rxSec(k, v){ const s = store.get('gaborg_rx_sec', {}) || {}; s[k] = v; store.set('gaborg_rx_sec', s); rxPrevia(); }
-function rxTexto(){ const f = $('.rx-tx'); if (!f) return; const D = apDados(), A = rxAlvo(D); store.set('gaborg_rx_txt_' + rxChave(A), { sintese:f.elements.sintese.value, destaques:f.elements.destaques.value, proximos:f.elements.proximos.value });
+function rxTexto(){ const f = $('.rx-tx'); if (!f) return; const D = apDados(), A = rxAlvo(D); store.set('gaborg_rx_txt_' + rxChave(A), { sintese:f.elements.sintese.value, destaques:f.elements.destaques.value, proximos:f.elements.proximos.value, agradecimento:f.elements.agradecimento.value });
   store.set('gaborg_cv_rel_ass', { nome:f.elements.assNome.value, cargo:f.elements.assCargo.value }); clearTimeout(rxTexto.t); rxTexto.t = setTimeout(rxPrevia, 120); }
 /* ---------- documento ---------- */
 function rxMapa(D, A){
@@ -8038,14 +8083,16 @@ function rxPaginas(uma){
       <div class="rx-fun">${rxBarras([['Pactuado', cc, '#1d4ed8'], ['Repassado', cr, '#0d9488'], ['Executado', ce, '#f59e0b']], fmtRc)}</div>
       <div class="rx-mini">${[['Em execução', cv.filter(c => c.situacao === 'Em execução').length], ['Concluídos', cv.filter(c => c.situacao === 'Concluído').length], ['Vencem em 90 dias', cv.filter((c, i) => cvAberto(c) && cX[i].dias !== null && cX[i].dias >= 0 && cX[i].dias <= 90).length]].map(([t, n]) => `<span><b>${n}</b>${t}</span>`).join('')}</div></div><p class="abnt-fonte">Fonte: SEDUC-MT, monitoramento de convênios (${new Date().getFullYear()}).</p>` : '';
   const manual = store.get('gaborg_rx_manual', true) !== false;
-  const acoesH = on('textos') ? (manual ? rlPauta(8) : `<div class="abnt-sub"><b>{{SEC}}.1 Destaques</b></div>${abntAlineas(P.destaques)}<div class="abnt-sub"><b>{{SEC}}.2 Próximos passos</b></div>${abntAlineas(P.proximos)}`) : '';
+  const acoesH = on('textos') ? (manual ? rlPauta(on('conclusao') ? 6 : 8) : `<div class="abnt-sub"><b>{{SEC}}.1 Destaques</b></div>${abntAlineas(P.destaques)}<div class="abnt-sub"><b>{{SEC}}.2 Próximos passos</b></div>${abntAlineas(P.proximos)}`) : '';
+  const concH = on('conclusao') && String(P.agradecimento || '').trim() ? `<div class="rx-agr"><i class="fa-solid fa-handshake-angle"></i><div>${abntPars(P.agradecimento)}<p class="rx-agr-a">Secretaria de Estado de Educação de Mato Grosso</p></div></div>` : '';
   const X = { intro:['fa-book-open', 'Introdução', abntPars(P.sintese)], gerais:['fa-circle-info', 'Informações gerais', gerais], terr:['fa-map-location-dot', 'Território', terrH],
-    obras:['fa-helmet-safety', 'Obras e investimentos', obrasH], conv:['fa-handshake', 'Convênios', convH], acoes:['fa-list-check', 'Considerações ou encaminhamentos', acoesH] };
+    obras:['fa-helmet-safety', 'Obras e investimentos', obrasH], conv:['fa-handshake', 'Convênios', convH], acoes:['fa-list-check', 'Considerações ou encaminhamentos', acoesH], conc:['fa-handshake-angle', 'Conclusão', concH] };
   const tem2 = temObras || temConv, ordem = !tem2 || uma === true ? [['intro', 'gerais', 'terr', 'obras', 'conv', 'acoes']]
     : uma === 'meio' ? [['intro', 'gerais', 'terr', 'conv'], ['obras', 'acoes']] : uma === 'meio2' ? [['intro', 'gerais', 'terr', 'obras'], ['conv', 'acoes']] : uma === 'tres' ? [['intro', 'gerais'], ['terr', 'obras'], ['conv', 'acoes']] : [['intro', 'gerais', 'terr'], ['obras', 'conv', 'acoes']];
+  ordem[ordem.length - 1].push('conc');
   const pags = rlNumerar(rlPags(ordem.map(p => p.map(k => X[k])), true)), t = pags.length, simbMun = g && g.cod ? `<div class="apx-simb rx-simb" data-cod="${esc(g.cod)}"></div>` : '';
   const capa = `<div class="rx-tit" style="--c:${A.cor || '#1d4ed8'}"><div><small>${A.tipo === 'mun' ? (A.dre ? 'DRE ' + esc(nomeDRE(A.dre)) : 'Município') : A.tipo === 'dre' ? `${A.ms.length} municípios` : `${D.dres.length} Diretorias Regionais · ${D.muns.filter(m => m.es.length).length} municípios`}</small><h1>${esc(titulo)}</h1><p>${hoje}</p></div><div class="rx-tit-d">${simbMun}<div class="rl-tit-3d">${rl3D(D, A)}</div></div></div>`;
-  return pags.map((c, i) => `<div class="rx-a4 rl-a4">${rlMarca(D, A)}<div class="rx-in">${rxCab(A, i + 1, t, titulo)}<div class="rx-c">${i === 0 ? capa : ''}${c}${i === t - 1 ? rlAssin(ass) : ''}</div>${rlPe(i + 1, t, ass, 'bases de escolas, obras e convênios', 'Relatório executivo', titulo)}</div></div>`);
+  return pags.map((c, i) => `<div class="rx-a4 rl-a4">${rlMarca(D, A)}<div class="rx-dagua" aria-hidden="true"><b>SEDUC-MT</b><span>Governo de Mato Grosso · Secretaria de Estado de Educação</span></div><div class="rx-in">${rxCab(A, i + 1, t, titulo)}<div class="rx-c">${i === 0 ? capa : ''}${c}${i === t - 1 ? rlAssin(ass) : ''}</div>${rlPe(i + 1, t, ass, 'bases de escolas, obras e convênios', 'Relatório executivo', titulo)}</div></div>`);
 }
 function rxPrevia(){
   const box = $('#rx-pgs'); if (!box) return; rlCSS();
@@ -8117,7 +8164,13 @@ const RX_CSS = `.rx-a4{--f:1;width:794px;height:1123px;background:#fff;color:#0f
 .rx-a4 .rx-tit-d{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:10px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16)}
 .rx-a4 .rx-tit .rl-tit-3d{background:none;border:0;padding:0;margin:0}.rx-a4 .rx-tit .rl-3d{width:calc(92px * var(--f));height:calc(62px * var(--f))}
 .rx-a4 .rx-tit .rx-simb,.rx-a4 .rx-tit .apx-simb{gap:6px}.rx-a4 .rx-tit .apx-simb img{filter:none;box-shadow:none}
-.rx-a4 .rx-tit .apx-simb img.c{height:calc(40px * var(--f));width:auto}.rx-a4 .rx-tit .apx-simb img.b{height:calc(26px * var(--f));width:auto;border-radius:3px;box-shadow:0 0 0 1px rgba(255,255,255,.3)}`;
+.rx-a4 .rx-tit .apx-simb img.c{height:calc(40px * var(--f));width:auto}.rx-a4 .rx-tit .apx-simb img.b{height:calc(26px * var(--f));width:auto;border-radius:3px;box-shadow:0 0 0 1px rgba(255,255,255,.3)}
+.rx-dagua{position:absolute;left:50%;top:54%;width:1100px;transform:translate(-50%,-50%) rotate(-32deg);text-align:center;pointer-events:none;z-index:0;color:#1c3f94;opacity:.04;line-height:1;white-space:nowrap}
+.rx-dagua b{display:block;font-size:150px;font-weight:900;letter-spacing:.04em}.rx-dagua span{display:block;font-size:24px;font-weight:800;letter-spacing:.3em;text-transform:uppercase;margin-top:10px}
+.rx-in{z-index:1}
+.rx-agr{display:flex;gap:14px;align-items:flex-start;padding:calc(9px * var(--f)) 14px;border-radius:12px;background:linear-gradient(120deg,#eff6ff,#fefce8);border:1px solid #dbe4f3;box-shadow:inset 4px 0 0 #f7c600;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.rx-agr>i{flex:none;display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:#1c3f94;color:#fff;font-size:14px;margin-top:2px}
+.rx-agr>div{flex:1}.rx-a4 .rx-agr .abnt-p{margin:0 0 4px;text-indent:0;font-size:calc(11.5px * var(--f));line-height:1.45;font-style:italic;color:#1e293b}.rx-agr-a{text-align:right;font-style:italic;font-weight:700;color:#1c3f94;font-size:calc(11px * var(--f));margin:4px 0 0}`;
 
 /* ===================== RELATÓRIOS DE OBRAS E DE CONVÊNIOS (município, DRE ou estado) =====================
    Mesma identidade do relatório executivo (Secretaria de Estado de Educação, brasão e bandeira de MT),
