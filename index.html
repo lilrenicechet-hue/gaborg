@@ -1020,6 +1020,7 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background
   .nav-b[data-vista="implantacao"] span:not(.qt){font-size:0}.nav-b[data-vista="implantacao"] span:not(.qt)::after{content:'Implant.';font-size:10px}
   .nav-b[data-vista="resultados"] span{font-size:0}.nav-b[data-vista="resultados"] span::after{content:'Metas';font-size:10px}
   .nav-b[data-vista="relatorios"] span{font-size:0}.nav-b[data-vista="relatorios"] span::after{content:'Relatórios';font-size:10px}
+  .nav-b[data-vista="executivo"] span{font-size:0}.nav-b[data-vista="executivo"] span::after{content:'Executivo';font-size:10px}
   .nav-b[data-vista="apresentacao"] span{font-size:0}.nav-b[data-vista="apresentacao"] span::after{content:'Apresentar';font-size:10px}
   .nav-b[data-vista="obras"] span{font-size:0}.nav-b[data-vista="obras"] span::after{content:'Obras';font-size:10px}
   .nav-b[data-vista="convenios"] span{font-size:0}.nav-b[data-vista="convenios"] span::after{content:'Convênios';font-size:10px}
@@ -1931,13 +1932,35 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background
 .cv-rel-pg .r-a4{transform:scale(var(--z));transform-origin:top left;box-shadow:0 12px 40px rgba(15,23,42,.25);border-radius:2px}
 .cv-rel-pg .r-a4.apertado{outline:3px solid #dc2626}
 
+/* ===== Relatório executivo ===== */
+.rx-g{display:grid;grid-template-columns:330px minmax(0,1fr);gap:16px;align-items:start}
+@media (max-width:1000px){.rx-g{grid-template-columns:1fr}}
+.rx-f{position:sticky;top:0;display:flex;flex-direction:column;gap:10px;max-height:calc(100vh - 150px);overflow:auto}
+.rx-modos{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;padding:4px;border-radius:12px;background:var(--marca-bg)}
+.rx-modos button{border:0;background:none;border-radius:9px;padding:8px 4px;font:inherit;font-size:12px;font-weight:700;color:var(--mut);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px}
+.rx-modos button.on{background:var(--sup,#fff);color:var(--marca);box-shadow:0 2px 8px rgba(15,23,42,.1)}
+.rx-lst{max-height:240px;overflow:auto;display:flex;flex-direction:column;gap:3px}
+.rx-it{display:flex;flex-direction:column;align-items:flex-start;text-align:left;border:0;border-left:3px solid var(--c);background:none;padding:6px 8px;border-radius:6px;font:inherit;color:inherit;cursor:pointer}
+.rx-it:hover{background:var(--marca-bg)}.rx-it.on{background:color-mix(in srgb,var(--c) 14%,transparent)}.rx-it b{font-size:13px}.rx-it small{color:var(--mut);font-size:11.5px}
+.rx-det{border-top:1px solid var(--linha);padding-top:8px}.rx-det summary{cursor:pointer;font-weight:700;font-size:13px;margin-bottom:6px}.rx-det summary i{color:var(--marca);margin-right:6px}
+.rx-secs{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;font-size:12.5px}.rx-secs label{display:flex;gap:6px;align-items:center;cursor:pointer}
+.rx-tx{display:flex;flex-direction:column;gap:8px}.rx-tx label{display:flex;flex-direction:column;gap:3px}.rx-tx textarea{resize:vertical;font-size:12.5px;line-height:1.4}
+.rx-imp{justify-content:center}
+.rx-v{min-width:0;padding:10px;border-radius:14px;background:repeating-linear-gradient(45deg,transparent 0 12px,rgba(148,163,184,.1) 12px 24px)}
+.rx-pgs{--z:1;display:flex;flex-direction:column;align-items:center;gap:18px}
+.rx-pg{width:calc(794px * var(--z));height:calc(1123px * var(--z));flex:none;animation:cvEntra .45s ease both}
+.rx-pg:nth-child(2){animation-delay:.12s}
+.rx-pg .rx-a4{transform:scale(var(--z));transform-origin:top left;box-shadow:0 14px 40px rgba(15,23,42,.22);border-radius:3px}
+.rx-pg .rx-a4.apertado{outline:3px solid #dc2626}
+.rx-f>*{flex-shrink:0}
+
 </style>
 </head>
 <body>
 <!-- Vigia de inicialização: se o arquivo.js não carregar ou falhar, mostra o motivo em vez de uma tela vazia -->
 <script>
-window.GABORG_VERSAO_HTML = '1.44.0'; window.GABORG_ERROS = [];
-window.GABORG_NOVIDADES = "Convênios: painel animado (caminho do recurso, classificação em rosca, vigência por trimestre), mapa interativo dos municípios e relatório de 1 página para o prefeito, editável, com prévia e impressão/PDF. Nova seção Convênios: monitoramento dos convênios com municípios (repasse, execução, vigência, prestação de contas, nota e ranking), ligada às Obras pelo nº do convênio, com modelo de planilha para importar e exportar; novo slide de convênios na Apresentação (requer Codigo.gs 1.20.0). Apresentação: sempre os 142 municípios de MT (Boa Esperança do Norte incluída mesmo sem a malha do IBGE); municípios sem escola vinculada aparecem destacados para conferência. Apresentação: opção Repetir em loop (volta ao início ao terminar e recomeça; botão e tecla R). Apresentação: usa os limites municipais atuais do IBGE (142 municípios, com Boa Esperança do Norte). Escolas: cada escola usa o município oficial (base 2026), corrigindo a contagem para 142 municípios; Campos de Júlio com o nome completo. Apresentação: animações sempre ativas no modo apresentação; nova tela Pessoas (equipe ilustrada, pictogramas de estudantes por profissional, vínculos e cargos com ícones) também para municípios e DREs; nova tela Investimentos no mapa, com bolhas animadas por tipo de obra e passeio pelas maiores obras.";
+window.GABORG_VERSAO_HTML = '1.45.0'; window.GABORG_ERROS = [];
+window.GABORG_NOVIDADES = "Nova seção Relatório executivo: relatório da Secretaria de Estado de Educação por município, DRE ou estado, com brasão e bandeira de MT, rede em números, mapa, obras e convênios; textos editáveis, prévia e PDF. Convênios: painel animado (caminho do recurso, classificação em rosca, vigência por trimestre), mapa interativo dos municípios e relatório de 1 página para o prefeito, editável, com prévia e impressão/PDF. Nova seção Convênios: monitoramento dos convênios com municípios (repasse, execução, vigência, prestação de contas, nota e ranking), ligada às Obras pelo nº do convênio, com modelo de planilha para importar e exportar; novo slide de convênios na Apresentação (requer Codigo.gs 1.20.0). Apresentação: sempre os 142 municípios de MT (Boa Esperança do Norte incluída mesmo sem a malha do IBGE); municípios sem escola vinculada aparecem destacados para conferência. Apresentação: opção Repetir em loop (volta ao início ao terminar e recomeça; botão e tecla R). Apresentação: usa os limites municipais atuais do IBGE (142 municípios, com Boa Esperança do Norte). Escolas: cada escola usa o município oficial (base 2026), corrigindo a contagem para 142 municípios; Campos de Júlio com o nome completo. Apresentação: animações sempre ativas no modo apresentação; nova tela Pessoas (equipe ilustrada, pictogramas de estudantes por profissional, vínculos e cargos com ícones) também para municípios e DREs; nova tela Investimentos no mapa, com bolhas animadas por tipo de obra e passeio pelas maiores obras.";
 window.addEventListener('error', function (e) {
   var alvo = e.target || {};
   if (alvo.tagName === 'SCRIPT') window.GABORG_ERROS.push('Não foi possível baixar o arquivo ' + (alvo.getAttribute('src') || '') + '.');
@@ -2028,6 +2051,7 @@ window.addEventListener('load', function () { setTimeout(function () { window.GA
       <h6>ANÁLISE</h6>
       <button class="nav-b" data-vista="painel"><i class="fa-solid fa-chart-simple"></i><span>Indicadores</span></button>
       <button class="nav-b" data-vista="relatorios"><i class="fa-solid fa-file-lines"></i><span>Relatórios e minutas</span></button>
+      <button class="nav-b" data-vista="executivo"><i class="fa-solid fa-file-invoice"></i><span>Relatório executivo</span></button>
       <button class="nav-b" data-vista="financeiro"><i class="fa-solid fa-sack-dollar"></i><span>Financeiro</span></button>
       <button class="nav-b" data-vista="propostas"><i class="fa-solid fa-lightbulb"></i><span>Propostas</span></button>
       <button class="nav-b" data-vista="validacoes"><i class="fa-solid fa-stamp"></i><span>Validações</span><span class="qt hidden" id="nav-val"></span></button>
@@ -2190,6 +2214,10 @@ window.addEventListener('load', function () { setTimeout(function () { window.GA
     </section>
 
     <!-- RELATÓRIOS E MINUTAS -->
+    <section class="vista fora" id="v-executivo">
+      <div class="topo"><div><h1><i class="fa-solid fa-file-invoice"></i>Relatório executivo</h1><p>Relatório da Secretaria de Estado de Educação por município, DRE ou para toda a rede, com a rede em números, o território, as obras e os convênios. Textos editáveis, prévia e PDF.</p></div></div>
+      <div class="rolagem" id="rx-corpo"></div>
+    </section>
     <section class="vista fora" id="v-relatorios">
       <div class="topo"><div><h1><i class="fa-solid fa-file-lines"></i>Relatórios e minutas</h1><p>Relatório em PDF montado por você, minutas de portaria e de decreto por proposta, com código de verificação, data e selo do sistema.</p></div></div>
       <div class="rolagem" id="rm-corpo"></div>
@@ -2287,6 +2315,6 @@ window.addEventListener('load', function () { setTimeout(function () { window.GA
 
 <div id="toast"><i class="fa-solid fa-check"></i><span></span></div>
 
-<script src="arquivo.js?v=1.44.0" onerror="window.GABORG_ERROS.push('O arquivo arquivo.js não foi encontrado no servidor (erro 404).');GABORG_DIAGNOSTICO()"></script>
+<script src="arquivo.js?v=1.45.0" onerror="window.GABORG_ERROS.push('O arquivo arquivo.js não foi encontrado no servidor (erro 404).');GABORG_DIAGNOSTICO()"></script>
 </body>
 </html>
