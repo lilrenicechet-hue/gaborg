@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.46.0';
+const VERSAO = '1.47.0';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -7980,36 +7980,37 @@ function rxPaginas(uma){
   const tipos = apTipos(es).slice(0, 7).map(([t, n]) => [t, n, CORES_TIPO[t] || '#64748b', iconeTipoSVG(t, CORES_TIPO[t] || '#64748b', 13), fmtN(alunosDe(es.filter(e => grupoTipo(e.tipo) === t))) + ' est.']);
   const maiores = [...es].sort((a, b) => num(b.alunos) - num(a.alunos)).slice(0, A.tipo === 'mun' ? 8 : 6);
   const terr = A.tipo === 'dre' ? A.ms.map(m => [m.nome, m.es.length, m.al]).sort((a, b) => b[2] - a[2]) : A.tipo === 'estado' ? D.dres.map(d => { const e2 = D.E.filter(e => e.dre === d); return ['DRE ' + nomeDRE(d), e2.length, alunosDe(e2), D.muns.filter(m => m.dre === d).length, apCorDre(D, d)]; }).sort((a, b) => b[2] - a[2]) : [];
-  /* página 1: panorama */
-  const p1 = `${on('rede') ? `<section class="rx-kpi">${kpi.map(([ic, t, v, s, c]) => `<div style="--c:${c}"><i class="fa-solid ${ic}"></i><small>${t}</small><b>${v}</b><span>${esc(s)}</span></div>`).join('')}</section>` : ''}
-    <section class="rx-g2">${on('mapa') ? `<div class="rx-box"><h3>Território</h3>${rxMapa(D, A)}<p class="rx-leg">${A.tipo === 'estado' ? 'Cores: Diretorias Regionais · pontos: escolas' : `Pontos: escolas por tipo${A.dre ? ' · estrela: sede da DRE' : ''}`}</p></div>` : ''}
-      ${on('perfil') ? `<div class="rx-box"><h3>Perfil das escolas</h3>${rxBarras(tipos)}${inc.tem || pf.tem ? `<div class="rx-mini">${pf.tem ? `<span><b>${fmtN(pf.n)}</b>profissionais em ${pf.escolas} escola${pf.escolas === 1 ? '' : 's'}</span>` : ''}${inc.tem ? `<span><b>${fmtN(inc.n)}</b>na educação inclusiva</span>` : ''}</div>` : ''}</div>` : ''}</section>
-    ${on('escolas') && maiores.length ? `<section class="rx-box"><h3>${A.tipo === 'mun' ? 'Escolas estaduais' : 'Maiores escolas'}</h3><table class="rx-tab"><thead><tr><th>Escola</th>${A.tipo !== 'mun' ? '<th>Município</th>' : ''}<th>Tipo</th><th class="n">Estudantes</th><th class="n">Inclusiva</th><th class="n">Profissionais</th></tr></thead><tbody>
-      ${maiores.map(e => `<tr><td><b>${esc(apNomeCurto(e.nome))}</b></td>${A.tipo !== 'mun' ? `<td>${esc(apNomeCurto(e.municipio))}</td>` : ''}<td><span class="rx-tp">${iconeTipoSVG(grupoTipo(e.tipo), CORES_TIPO[grupoTipo(e.tipo)] || '#64748b', 11)}${esc(grupoTipo(e.tipo))}</span></td><td class="n">${fmtN(num(e.alunos))}</td><td class="n">${String(e.inclusiva ?? '') === '' ? '—' : fmtN(num(e.inclusiva))}</td><td class="n">${String(e.profissionais ?? '') === '' ? '—' : fmtN(num(e.profissionais))}</td></tr>`).join('')}</tbody></table>${es.length > maiores.length ? `<p class="rx-mais">e mais ${es.length - maiores.length} escola${es.length - maiores.length === 1 ? '' : 's'}.</p>` : ''}</section>` : ''}
-    ${on('territorio') && terr.length ? `<section class="rx-box"><h3>${A.tipo === 'dre' ? 'Municípios atendidos' : 'Diretorias Regionais de Educação'}</h3><div class="rx-terr">${terr.slice(0, A.tipo === 'estado' ? 16 : 18).map(([n, e, a, nm, c]) => `<div style="--c:${c || A.cor}"><b>${esc(/^DRE /.test(n) ? n : apNomeCurto(n))}</b><small>${e} escola${e === 1 ? '' : 's'} · ${fmtN(a)} est.${nm ? ` · ${nm} mun.` : ''}</small></div>`).join('')}</div>${terr.length > 18 ? `<p class="rx-mais">e mais ${terr.length - 18}.</p>` : ''}</section>` : ''}
-    ${on('pessoas') && sv && A.tipo !== 'mun' ? `<section class="rx-box"><h3>Pessoas</h3>${rxBarras([['Efetivos', sv.efet, '#1d4ed8'], ['Temporários / contratados', sv.temp, '#0e7490'], ['Professores', sv.prof, '#7c3aed']].filter(x => x[1]))}<p class="rx-leg">${fmtN(sv.n)} servidores ${A.tipo === 'estado' ? `· ${fmtN(sv.oc)} no órgão central e ${fmtN(sv.dre)} nas DREs` : 'lotados na regional'} (somente totais).</p></section>` : ''}`;
-  /* página 2: investimentos e ações */
+  /* seções do relatório (numeradas na ordem em que aparecem) */
+  const kpiH = `<section class="rx-kpi">${kpi.map(([ic, t, v, s, c]) => `<div style="--c:${c}"><i class="fa-solid ${ic}"></i><small>${t}</small><b>${v}</b><span>${esc(s)}</span></div>`).join('')}</section>`;
+  const perfilH = on('perfil') ? `<div class="rx-box"><h3><i class="fa-solid fa-shapes"></i>Perfil das escolas</h3>${rxBarras(tipos)}</div>` : '';
+  const pessoasH = sv && on('pessoas') && A.tipo !== 'mun' ? `<div class="rx-box"><h3><i class="fa-solid fa-people-group"></i>Pessoas</h3>${rxBarras([['Efetivos', sv.efet, '#1d4ed8'], ['Temporários / contratados', sv.temp, '#0e7490'], ['Professores', sv.prof, '#7c3aed']].filter(x => x[1]))}<p class="rx-leg">${fmtN(sv.n)} servidores ${A.tipo === 'estado' ? `· ${fmtN(sv.oc)} no órgão central e ${fmtN(sv.dre)} nas DREs` : 'lotados na regional'} (somente totais).</p></div>`
+    : (inc.tem || pf.tem) ? `<div class="rx-box"><h3><i class="fa-solid fa-heart-pulse"></i>Atendimento</h3><div class="rl-fatos">${pf.tem ? `<div><i class="fa-solid fa-chalkboard-user"></i><b>${fmtN(pf.n)}</b><small>profissionais em ${pf.escolas} escola${pf.escolas === 1 ? '' : 's'}</small></div>` : ''}${inc.tem ? `<div><i class="fa-solid fa-wheelchair"></i><b>${fmtN(inc.n)}</b><small>estudantes na educação inclusiva</small></div>` : ''}</div></div>` : '';
+  const escolasH = on('escolas') && maiores.length ? `<div class="rx-box"><h3><i class="fa-solid fa-school"></i>${A.tipo === 'mun' ? 'Escolas estaduais' : 'Maiores escolas'}</h3><table class="rx-tab"><thead><tr><th>Escola</th>${A.tipo !== 'mun' ? '<th>Município</th>' : ''}<th>Tipo</th><th class="n">Estudantes</th><th class="n">Inclusiva</th><th class="n">Profissionais</th></tr></thead><tbody>
+      ${maiores.map(e => `<tr><td><b>${esc(apNomeCurto(e.nome))}</b></td>${A.tipo !== 'mun' ? `<td>${esc(apNomeCurto(e.municipio))}</td>` : ''}<td><span class="rx-tp">${iconeTipoSVG(grupoTipo(e.tipo), CORES_TIPO[grupoTipo(e.tipo)] || '#64748b', 11)}${esc(grupoTipo(e.tipo))}</span></td><td class="n">${fmtN(num(e.alunos))}</td><td class="n">${String(e.inclusiva ?? '') === '' ? '—' : fmtN(num(e.inclusiva))}</td><td class="n">${String(e.profissionais ?? '') === '' ? '—' : fmtN(num(e.profissionais))}</td></tr>`).join('')}</tbody></table>${es.length > maiores.length ? `<p class="rx-mais">e mais ${es.length - maiores.length} escola${es.length - maiores.length === 1 ? '' : 's'}.</p>` : ''}</div>` : '';
+  const gerais = (on('rede') ? kpiH : '') + (perfilH || pessoasH ? `<div class="rx-g2">${perfilH}${pessoasH}</div>` : '') + escolasH;
+  const dist = A.tipo === 'mun' && es.length ? Math.round(es.reduce((t, e) => t + distEscola(e), 0) / es.length) : 0;
+  const local = A.tipo === 'mun' ? `<div class="rl-fatos">${[['fa-route', A.dre ? 'DRE ' + nomeDRE(A.dre) : 'Sem DRE', 'Diretoria Regional que atende'], ['fa-location-dot', A.dre ? apSedeNome(A.dre) : '—', 'sede da DRE'], ['fa-road', dist ? fmtN(dist) + ' km' : '—', 'distância média das escolas à sede'], ['fa-tree-city', `${es.filter(e => e.localidade !== 'RURAL').length} urbana(s) · ${es.filter(e => e.localidade === 'RURAL').length} rural(is)`, 'localização das escolas'], ['fa-ranking-star', A.m.pos ? A.m.pos + 'º' : '—', 'posição no estado em nº de estudantes']].map(([ic, b, sm]) => `<div><i class="fa-solid ${ic}"></i><b>${esc(b)}</b><small>${sm}</small></div>`).join('')}</div>`
+    : `<div class="rx-terr">${terr.slice(0, A.tipo === 'estado' ? 16 : 18).map(([n, e, a, nm, c]) => `<div style="--c:${c || A.cor}"><b>${esc(/^DRE /.test(n) ? n : apNomeCurto(n))}</b><small>${e} escola${e === 1 ? '' : 's'} · ${fmtN(a)} est.${nm ? ` · ${nm} mun.` : ''}</small></div>`).join('')}</div>${terr.length > 18 ? `<p class="rx-mais">e mais ${terr.length - 18}.</p>` : ''}`;
+  const terrH = on('mapa') || on('territorio') ? `<div class="rx-g2 rl-terr">${on('mapa') ? `<div class="rx-box"><h3><i class="fa-solid fa-map"></i>Mapa</h3>${rxMapa(D, A)}<p class="rx-leg">${A.tipo === 'estado' ? 'Cores: Diretorias Regionais · pontos: escolas' : `Pontos: escolas por tipo${A.dre ? ' · estrela: sede da DRE' : ''}`}</p></div>` : ''}${on('territorio') ? `<div class="rx-box"><h3><i class="fa-solid ${A.tipo === 'mun' ? 'fa-compass' : 'fa-city'}"></i>${A.tipo === 'mun' ? 'Localização' : A.tipo === 'dre' ? 'Municípios atendidos' : 'Diretorias Regionais de Educação'}</h3>${local}</div>` : ''}</div>` : '';
   const invT = ob.reduce((t, o) => t + obValor(o), 0), st = Object.keys(OB_ST).map(s => [s, ob.filter(o => obStatus(o) === s).length, OB_ST[s]]).filter(x => x[1]);
   const tob = {}; ob.forEach(o => { const k = obObj(o); tob[k] = (tob[k] || 0) + obValor(o); });
   const topOb = [...ob].sort((a, b) => obValor(b) - obValor(a)).slice(0, 7);
   const cX = cv.map(cvK), cc = cX.reduce((t, x) => t + x.conc, 0), cr = cX.reduce((t, x) => t + x.rep, 0), ce = cX.reduce((t, x) => t + x.exe, 0);
   const temObras = on('obras') && ob.length, temConv = on('convenios') && cv.length;
-  const p2a = `${temObras ? `<section class="rx-box"><h3>Obras e investimentos</h3><div class="rx-g3"><div class="rx-big" style="--c:#ea580c"><small>Investimento total</small><b>${fmtRc(invT)}</b><span>${ob.length} obra${ob.length === 1 ? '' : 's'} · ${ob.filter(o => obEtapa(o) === 'Inaugurada').length} inaugurada(s)</span></div>
-        <div>${rxBarras(st)}</div><div>${rxBarras(Object.entries(tob).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([k, v]) => [k, v, '#0f766e']), fmtRc)}</div></div>
+  const obrasH = temObras ? `<div class="rx-g3"><div class="rx-big" style="--c:#ea580c"><small>Investimento total</small><b>${fmtRc(invT)}</b><span>${ob.length} obra${ob.length === 1 ? '' : 's'} · ${ob.filter(o => obEtapa(o) === 'Inaugurada').length} inaugurada(s)</span></div><div>${rxBarras(st)}</div><div>${rxBarras(Object.entries(tob).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([k, v]) => [k, v, '#0f766e']), fmtRc)}</div></div>
       <table class="rx-tab"><thead><tr><th>Obra</th>${A.tipo !== 'mun' ? '<th>Município</th>' : ''}<th>Tipo</th><th class="n">Valor</th><th>Execução</th><th>Situação</th></tr></thead><tbody>
-      ${topOb.map(o => `<tr><td><b>${esc(obNome(o))}</b></td>${A.tipo !== 'mun' ? `<td>${esc(apNomeCurto(o.municipio))}</td>` : ''}<td>${esc(obObj(o))}</td><td class="n">${fmtRc(obValor(o))}</td><td><span class="rx-pb"><i style="width:${obExec(o).toFixed(0)}%;background:${OB_ST[obStatus(o)]}"></i></span>${Math.round(obExec(o))}%</td><td><span class="rx-st" style="--c:${OB_ST[obStatus(o)]}">${obStatus(o)}</span></td></tr>`).join('')}</tbody></table>${ob.length > topOb.length ? `<p class="rx-mais">e mais ${ob.length - topOb.length} obra${ob.length - topOb.length === 1 ? '' : 's'}.</p>` : ''}</section>` : ''}`;
-  const p2b = `${temConv ? `<section class="rx-box"><h3>Convênios com ${A.tipo === 'mun' ? 'o município' : 'municípios'}</h3><div class="rx-g3"><div class="rx-big" style="--c:#0e7490"><small>Valor pactuado</small><b>${fmtRc(cc)}</b><span>${cv.length} convênio${cv.length === 1 ? '' : 's'}${A.tipo !== 'mun' ? ` · ${new Set(cv.map(c => chaveMun(c.municipio))).size} municípios` : ''}</span></div>
+      ${topOb.map(o => `<tr><td><b>${esc(obNome(o))}</b></td>${A.tipo !== 'mun' ? `<td>${esc(apNomeCurto(o.municipio))}</td>` : ''}<td>${esc(obObj(o))}</td><td class="n">${fmtRc(obValor(o))}</td><td class="nw"><span class="rx-pb"><i style="width:${obExec(o).toFixed(0)}%;background:${OB_ST[obStatus(o)]}"></i></span>${Math.round(obExec(o))}%</td><td><span class="rx-st" style="--c:${OB_ST[obStatus(o)]}">${obStatus(o)}</span></td></tr>`).join('')}</tbody></table>${ob.length > topOb.length ? `<p class="rx-mais">e mais ${ob.length - topOb.length} obra${ob.length - topOb.length === 1 ? '' : 's'}.</p>` : ''}` : '';
+  const convH = temConv ? `<div class="rx-g3"><div class="rx-big" style="--c:#0e7490"><small>Valor pactuado</small><b>${fmtRc(cc)}</b><span>${cv.length} convênio${cv.length === 1 ? '' : 's'}${A.tipo !== 'mun' ? ` · ${new Set(cv.map(c => chaveMun(c.municipio))).size} municípios` : ''}</span></div>
       <div class="rx-fun">${rxBarras([['Pactuado', cc, '#1d4ed8'], ['Repassado', cr, '#0d9488'], ['Executado', ce, '#f59e0b']], fmtRc)}</div>
-      <div class="rx-mini">${[['Em execução', cv.filter(c => c.situacao === 'Em execução').length], ['Concluídos', cv.filter(c => c.situacao === 'Concluído').length], ['Vencem em 90 dias', cv.filter((c, i) => cvAberto(c) && cX[i].dias !== null && cX[i].dias >= 0 && cX[i].dias <= 90).length]].map(([t, n]) => `<span><b>${n}</b>${t}</span>`).join('')}</div></div></section>` : ''}`;
-  const p2c = `${on('textos') ? `<section class="rx-g2 rx-acoes"><div class="rx-box rx-dest"><h3><span>★</span>Destaques</h3><ul>${rxLis(P.destaques)}</ul></div><div class="rx-box rx-prox"><h3><span>→</span>Próximos passos</h3><ul>${rxLis(P.proximos)}</ul></div></section>` : ''}`;
-  const p2 = p2a + p2b + p2c;
-  const tem2 = temObras || temConv;
-  const pe = (n, t) => `<footer class="rx-pe">${n === t && (ass.nome || ass.cargo) ? `<div class="rx-ass"><i></i><b>${esc(ass.nome || '')}</b><small>${esc(ass.cargo || '')}</small></div>` : '<span></span>'}<small>Secretaria de Estado de Educação de Mato Grosso · gerado pelo GABOrg em ${new Date().toLocaleDateString('pt-BR')} · dados das bases de escolas, obras e convênios${t > 1 ? ` · página ${n} de ${t}` : ''}</small></footer>`;
-  const t = tem2 && uma !== true ? 2 : 1, simbMun = g && g.cod ? `<div class="apx-simb rx-simb" data-cod="${esc(g.cod)}"></div>` : '';
-  const capa = `<div class="rx-tit" style="--c:${A.cor || '#1d4ed8'}"><div><small>${A.tipo === 'mun' ? (A.dre ? 'DRE ' + esc(nomeDRE(A.dre)) : 'Município') : A.tipo === 'dre' ? `${A.ms.length} municípios` : `${D.dres.length} Diretorias Regionais · ${D.muns.filter(m => m.es.length).length} municípios`}</small><h1>${esc(titulo)}</h1><p>${hoje}</p></div><div class="rx-tit-d">${simbMun}<div class="rl-tit-3d">${rl3D(D, A)}</div></div></div><p class="rx-sint">${esc(P.sintese)}</p>`;
-  const pg1 = `<div class="rx-a4 rl-a4">${rlMarca(D, A)}<div class="rx-in">${rxCab(A, 1, t, titulo)}<div class="rx-c">${capa}${p1}${!tem2 || uma === true ? p2 : uma === 'meio' ? p2a : uma === 'meio2' ? p2c : ''}</div>${pe(1, t)}</div></div>`;
-  const pg2 = tem2 && uma !== true ? `<div class="rx-a4 rl-a4">${rlMarca(D, A)}<div class="rx-in">${rxCab(A, 2, t, titulo)}<div class="rx-c"><div class="rx-tit p2" style="--c:${A.cor || '#1d4ed8'}"><div><small>Investimentos e ações</small><h1>${esc(A.tipo === 'mun' ? A.nome : A.tipo === 'dre' ? A.nome : 'Mato Grosso')}</h1></div></div>${uma === 'meio' ? p2b + p2c : uma === 'meio2' ? p2a + p2b : p2}</div>${pe(2, t)}</div></div>` : '';
-  return [pg1, pg2].filter(Boolean);
+      <div class="rx-mini">${[['Em execução', cv.filter(c => c.situacao === 'Em execução').length], ['Concluídos', cv.filter(c => c.situacao === 'Concluído').length], ['Vencem em 90 dias', cv.filter((c, i) => cvAberto(c) && cX[i].dias !== null && cX[i].dias >= 0 && cX[i].dias <= 90).length]].map(([t, n]) => `<span><b>${n}</b>${t}</span>`).join('')}</div></div>` : '';
+  const acoesH = on('textos') ? `<div class="rx-g2 rx-acoes"><div class="rx-box rx-dest"><h3><span>★</span>Destaques</h3><ul>${rxLis(P.destaques)}</ul></div><div class="rx-box rx-prox"><h3><span>→</span>Próximos passos</h3><ul>${rxLis(P.proximos)}</ul></div></div>` : '';
+  const X = { intro:['fa-book-open', 'Introdução', `<p class="rx-sint">${esc(P.sintese)}</p>`], gerais:['fa-circle-info', 'Informações gerais', gerais], terr:['fa-map-location-dot', 'Território', terrH],
+    obras:['fa-helmet-safety', 'Obras e investimentos', obrasH], conv:['fa-handshake', 'Convênios', convH], acoes:['fa-list-check', 'Destaques e próximos passos', acoesH] };
+  const tem2 = temObras || temConv, ordem = !tem2 || uma === true ? [['intro', 'gerais', 'terr', 'obras', 'conv', 'acoes']]
+    : uma === 'meio' ? [['intro', 'gerais', 'terr', 'conv'], ['obras', 'acoes']] : uma === 'meio2' ? [['intro', 'gerais', 'terr', 'obras'], ['conv', 'acoes']] : [['intro', 'gerais', 'terr'], ['obras', 'conv', 'acoes']];
+  const pags = rlPags(ordem.map(p => p.map(k => X[k]))), t = pags.length, simbMun = g && g.cod ? `<div class="apx-simb rx-simb" data-cod="${esc(g.cod)}"></div>` : '';
+  const capa = `<div class="rx-tit" style="--c:${A.cor || '#1d4ed8'}"><div><small>${A.tipo === 'mun' ? (A.dre ? 'DRE ' + esc(nomeDRE(A.dre)) : 'Município') : A.tipo === 'dre' ? `${A.ms.length} municípios` : `${D.dres.length} Diretorias Regionais · ${D.muns.filter(m => m.es.length).length} municípios`}</small><h1>${esc(titulo)}</h1><p>${hoje}</p></div><div class="rx-tit-d">${simbMun}<div class="rl-tit-3d">${rl3D(D, A)}</div></div></div>`;
+  return pags.map((c, i) => `<div class="rx-a4 rl-a4">${rlMarca(D, A)}<div class="rx-in">${rxCab(A, i + 1, t, titulo)}<div class="rx-c">${i === 0 ? capa : ''}${c}${i === t - 1 ? rlAssin(ass) : ''}</div>${rlPe(i + 1, t, ass, 'bases de escolas, obras e convênios', 'Relatório executivo', titulo)}</div></div>`);
 }
 function rxPrevia(){
   const box = $('#rx-pgs'); if (!box) return; rlCSS();
@@ -8018,7 +8019,7 @@ function rxPrevia(){
     while (inn.offsetTop + inn.scrollHeight > lim() && f > .68) { f -= .02; a.style.setProperty('--f', f.toFixed(3)); } const ap = inn.offsetTop + inn.scrollHeight > lim(); a.classList.toggle('apertado', ap); pior = Math.min(pior, ap ? 0 : f); }); return pior; };
   /* tudo numa página quando cabe sem apertar a letra; senão, duas páginas */
   const pinta = pp => { box.innerHTML = pp.map(p => `<div class="rx-pg">${p}</div>`).join(''); return encaixa(); };
-  if (pinta(rxPaginas(true)) < .94 && rxPaginas(false).length > 1) { if (!(pinta(rxPaginas('meio')) >= .92) && !(pinta(rxPaginas('meio2')) >= .92)) pinta(rxPaginas(false)); }
+  if (pinta(rxPaginas(true)) < .94 && rxPaginas(false).length > 1) { if (!(pinta(rxPaginas('meio')) >= .94) && !(pinta(rxPaginas('meio2')) >= .94)) pinta(rxPaginas(false)); }
   apPreencherSimb(box);
 }
 function rxImprimir(){
@@ -8077,7 +8078,7 @@ const RX_CSS = `.rx-a4{--f:1;width:794px;height:1123px;background:#fff;color:#0f
 
 /* ===================== RELATÓRIOS DE OBRAS E DE CONVÊNIOS (município, DRE ou estado) =====================
    Mesma identidade do relatório executivo (Secretaria de Estado de Educação, brasão e bandeira de MT),
-   com marca d'água, miniatura 3D do território, textos editáveis, prévia fiel e impressão/PDF. */
+   com marca d'água, mapa de localização do território, seções numeradas, textos editáveis, prévia fiel e impressão/PDF. */
 const rlCSS = () => { [['rx-css', RX_CSS], ['rl-css', RL_CSS]].forEach(([id, c]) => { if (!$('#' + id)) { const s = document.createElement('style'); s.id = id; s.textContent = c; document.head.appendChild(s); } }); };
 let rlCfg = { tipo:'obras', modo:'mun', sel:'' }, rl3dN = 0;
 function relAlvo(D, modo, sel){
@@ -8086,23 +8087,28 @@ function relAlvo(D, modo, sel){
   if (!D.dres.includes(sel)) return null; const ms = D.muns.filter(m => m.dre === sel), es = D.E.filter(e => e.dre === sel);
   return { tipo:'dre', d:sel, nome:'DRE ' + nomeDRE(sel), ms, es, al:alunosDe(es), dre:sel, cor:apCorDre(D, sel) };
 }
-/* ---------- miniatura 3D do território (extrusão com <use>, leve mesmo para o estado inteiro) ---------- */
+
+/* ---------- mini mapa de localização (2D, moderno): MT inteiro com o território em destaque ---------- */
 function rl3D(D, A, opc){
-  const o = Object.assign({ w:210, h:150, prof:9, pino:true }, opc || {}), ms = A.tipo === 'estado' ? D.muns : A.tipo === 'dre' ? A.ms : [A.m]; if (!ms.length) return '';
-  const id = 'rl3d' + (++rl3dN), b = apCaixa(ms.map(m => m.bb), .01), w = b[2] - b[0], h = b[3] - b[1], cx = b[0] + w / 2, cy = b[1] + h / 2;
-  const sk = -.34, sy = .6, s = Math.min((o.w - 30) / (w + Math.abs(sk) * h * sy), (o.h - o.prof - 26) / (h * sy));
-  const base = A.cor || '#2563eb', topo = m => A.tipo === 'estado' ? (m.dre ? apCorDre(D, m.dre) : base) : base;
-  const M = `translate(${o.w / 2} ${o.h / 2 - o.prof / 2 - 4}) matrix(1 0 ${sk} ${sy} 0 0) scale(${s.toFixed(5)}) translate(${(-cx).toFixed(1)} ${(-cy).toFixed(1)})`;
-  const camadas = Array.from({ length:o.prof }, (_, i) => o.prof - i).map(k => `<use href="#${id}" transform="translate(0 ${k})" fill="${k === o.prof ? '#0f172a' : `color-mix(in srgb, ${base} ${Math.round(45 + 25 * (1 - k / o.prof))}%, #0b1222)`}" ${k === o.prof ? 'opacity=".35" filter="url(#' + id + 'b)"' : ''}/>`).join('');
-  const sede = A.dre && D.X.sedes.get(A.dre), sp = A.tipo !== 'estado' && sede ? D.G.P(sede[1], sede[0]) : null;
-  const alvoC = A.tipo === 'mun' ? A.m.c : [cx, cy], pin = (x, y, c) => `<g transform="translate(${x.toFixed(1)} ${y.toFixed(1)})"><ellipse cx="0" cy="0" rx="5" ry="2" fill="#0f172a" opacity=".35"/><path d="M0,0C-1,-6 -7,-9 -7,-15A7,7 0 1 1 7,-15C7,-9 1,-6 0,0Z" fill="${c}" stroke="#fff" stroke-width="1.4"/><circle cx="0" cy="-15" r="2.6" fill="#fff"/></g>`;
-  const tela = (x, y) => { const dx = (x - cx) * s, dy = (y - cy) * s; return [o.w / 2 + dx + sk * dy * sy, o.h / 2 - o.prof / 2 - 4 + dy * sy]; };
-  return `<svg class="rl-3d" viewBox="0 0 ${o.w} ${o.h}" role="img" aria-label="${esc(A.nome)} em 3D"><defs><g id="${id}">${ms.map(m => `<path d="${m.d}"/>`).join('')}</g>
-      <linearGradient id="${id}g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset=".45" stop-color="#fff" stop-opacity=".08"/><stop offset="1" stop-color="#000" stop-opacity=".18"/></linearGradient><filter id="${id}b" x="-20%" y="-20%" width="140%" height="160%"><feGaussianBlur stdDeviation="3"/></filter></defs>
-    <g transform="${M}">${camadas}</g>
-    <g transform="${M}">${ms.map(m => `<path d="${m.d}" fill="${topo(m)}" stroke="#fff" stroke-width="${(.7 / s).toFixed(3)}" stroke-opacity="${A.tipo === 'mun' ? 0 : .7}"/>`).join('')}<use href="#${id}" fill="url(#${id}g)"/></g>
-    ${o.pino ? (sp && A.tipo === 'dre' ? pin(...tela(sp[0], sp[1]), '#f59e0b') : pin(...tela(alvoC[0], alvoC[1]), '#f59e0b')) : ''}</svg>`;
+  const o = Object.assign({ w:190, h:150 }, opc || {}), G = D.G, id = 'rlm' + (++rl3dN), est = A.tipo === 'estado';
+  const alvo = new Set(A.tipo === 'mun' ? [A.m.k] : A.tipo === 'dre' ? A.ms.map(m => m.k) : D.muns.map(m => m.k)), cor = A.cor || '#2563eb';
+  const pad = 14, vb = [G.todo[0] - pad, G.todo[1] - pad, G.todo[2] - G.todo[0] + pad * 2, G.todo[3] - G.todo[1] + pad * 2].map(v => v.toFixed(0)).join(' ');
+  const fundo = D.muns.map(m => `<path d="${m.d}" fill="${est ? (m.dre ? apCorDre(D, m.dre) : '#94a3b8') : alvo.has(m.k) ? 'none' : '#c3cfdd'}"/>`).join('');
+  const alvoP = est ? '' : D.muns.filter(m => alvo.has(m.k)).map(m => `<path d="${m.d}"/>`).join('');
+  const sede = A.dre && D.X.sedes.get(A.dre), sp = !est && sede ? G.P(sede[1], sede[0]) : null, c = A.tipo === 'mun' ? A.m.c : sp, rr = A.tipo === 'mun' ? Math.max(26, Math.max(A.m.bb[2] - A.m.bb[0], A.m.bb[3] - A.m.bb[1]) * .9) : 0;
+  return `<svg class="rl-3d rl-loc" viewBox="${vb}" role="img" aria-label="Localização de ${esc(A.nome)}"><defs><linearGradient id="${id}g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${cor}" stop-opacity=".75"/><stop offset="1" stop-color="${cor}"/></linearGradient>
+      <filter id="${id}s" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="6" stdDeviation="7" flood-color="#0f172a" flood-opacity=".35"/></filter></defs>
+    <g stroke="#fff" stroke-width="${est ? 1.4 : .9}" stroke-linejoin="round">${fundo}</g>
+    ${alvoP ? `<g fill="url(#${id}g)" stroke="#fff" stroke-width="2" filter="url(#${id}s)">${alvoP}</g>` : ''}
+    ${rr ? `<circle cx="${c[0].toFixed(0)}" cy="${c[1].toFixed(0)}" r="${rr.toFixed(0)}" fill="none" stroke="${cor}" stroke-width="5" stroke-dasharray="3 9" stroke-linecap="round" opacity=".9"/>` : ''}
+    ${c ? `<g transform="translate(${c[0].toFixed(0)} ${(c[1]).toFixed(0)}) scale(2.6)"><path d="M0,0C-1,-6 -7,-9 -7,-15A7,7 0 1 1 7,-15C7,-9 1,-6 0,0Z" fill="#f59e0b" stroke="#fff" stroke-width="1.6"/><circle cx="0" cy="-15" r="2.8" fill="#fff"/></g>` : ''}</svg>`;
 }
+/* seções numeradas em romanos (I, II, III...) com ícone */
+function rlPags(paginas){
+  let n = 0;
+  return paginas.map(pg => pg.filter(x => x && x[2]).map(([ic, t, h]) => `<section class="rl-s"><div class="rl-sec"><span class="n">${romano(++n)}</span><span class="ic"><i class="fa-solid ${ic}"></i></span><b>${esc(t)}</b><span class="ln"></span></div>${h}</section>`).join('')).filter(Boolean);
+}
+const rlAssin = ass => ass && (ass.nome || ass.cargo) ? `<div class="rl-ass"><i></i><b>${esc(ass.nome || '')}</b><small>${esc(ass.cargo || '')}</small></div>` : '';
 /* marca d'água: brasão de MT e o contorno do território, bem claros, atrás do conteúdo */
 function rlMarca(D, A){
   const ms = A.tipo === 'estado' ? D.muns : A.tipo === 'dre' ? A.ms : [A.m], b = apCaixa(ms.map(m => m.bb), .02);
@@ -8115,7 +8121,9 @@ const rlTit = (D, A, chapeu, titulo, data) => `<div class="rl-tit" style="--c:${
 const rlRos = (fatias, centro, sub) => { const tot = fatias.reduce((t, f) => t + f[1], 0) || 1; let ac = 0;
   return `<div class="rl-ros"><svg viewBox="0 0 42 42"><circle cx="21" cy="21" r="15.915" fill="none" stroke="#eef2f7" stroke-width="6"/>${fatias.map(([n, v, c]) => { const p = v / tot * 100, d = `<circle cx="21" cy="21" r="15.915" fill="none" stroke="${c}" stroke-width="6" stroke-dasharray="${p.toFixed(2)} ${(100 - p).toFixed(2)}" stroke-dashoffset="${(25 - ac).toFixed(2)}"/>`; ac += p; return d; }).join('')}</svg><div><b>${centro}</b><small>${sub}</small></div></div>
     <div class="rl-leg">${fatias.map(([n, v, c]) => `<span><i style="background:${c}"></i>${esc(n)} <b>${v}</b></span>`).join('')}</div>`; };
-const rlPe = (n, t, ass, fonte) => `<footer class="rx-pe">${n === t && (ass.nome || ass.cargo) ? `<div class="rx-ass"><i></i><b>${esc(ass.nome || '')}</b><small>${esc(ass.cargo || '')}</small></div>` : '<span></span>'}<small>Secretaria de Estado de Educação de Mato Grosso · gerado pelo GABOrg em ${new Date().toLocaleDateString('pt-BR')} · ${fonte}${t > 1 ? ` · página ${n} de ${t}` : ''}</small></footer>`;
+const rlPe = (n, t, ass, fonte, doc, alvo) => `<footer class="rx-pe rl-pe"><div class="rl-pe-l">${RX_BANDEIRA_MT}<span><b>Secretaria de Estado de Educação</b><small>Governo de Mato Grosso</small></span></div>
+  <div class="rl-pe-c"><b><i class="fa-solid fa-file-lines"></i>${esc(doc || 'Relatório')}${alvo ? ' · ' + esc(alvo) : ''}</b><small><i class="fa-solid fa-database"></i>${esc(fonte)} · gerado pelo GABOrg em ${new Date().toLocaleDateString('pt-BR')}</small></div>
+  <div class="rl-pe-r"><b>${n}</b><small>de ${t}</small></div></footer>`;
 const rlHoje = () => new Date().toLocaleDateString('pt-BR', { day:'2-digit', month:'long', year:'numeric' });
 const rlNomeAlvo = A => A.tipo === 'estado' ? 'Rede Estadual de Mato Grosso' : A.tipo === 'mun' ? 'Município de ' + A.nome : 'DRE ' + nomeDRE(A.d);
 /* ---------- conteúdo: OBRAS ---------- */
@@ -8157,7 +8165,9 @@ const REL_TIPOS = {
       const porT = G.length ? `<section class="rx-box"><h3>Investimento por ${A.tipo === 'estado' ? 'Diretoria Regional' : 'município'}</h3><div class="rl-cols2">${G.map(([k, [n, val]]) => `<div class="rx-b"><span class="t">${esc(A.tipo === 'estado' && k !== 'Sem DRE' ? nomeDRE(k) : k)}</span><span class="br"><i style="width:${Math.max(1.5, val / mxG * 100).toFixed(1)}%;background:${A.tipo === 'estado' && k !== 'Sem DRE' ? apCorDre(D, k) : A.cor || '#0f766e'}"></i></span><span class="v">${fmtRc(val)}<small>${n} obra${n === 1 ? '' : 's'}</small></span></div>`).join('')}</div></section>` : '';
       const ina = L.filter(o => ['Pronta para inaugurar', 'Agendada', 'Inaugurada'].includes(obEtapa(o))).sort((a, b) => (Date.parse(b.dataInauguracao) || 0) - (Date.parse(a.dataInauguracao) || 0) || obValor(b) - obValor(a)).slice(0, 8);
       const inaT = ina.length ? `<section class="rx-box"><h3>Inaugurações</h3><div class="rl-ina">${ina.map(o => { const e = OB_ETAPAS.find(x => x[0] === obEtapa(o)) || OB_ETAPAS[0]; return `<div style="--c:${e[1]}"><span class="ic">${OB_ANIM[obObj(o)] || OB_ANIM.Outro}</span><span><b>${esc(obNome(o))}</b><small>${A.tipo !== 'mun' ? esc(apNomeCurto(o.municipio)) + ' · ' : ''}${esc(obObj(o))} · ${fmtRc(obValor(o))}</small></span><em><i class="fa-solid ${e[2]}"></i>${e[0] === 'Pronta para inaugurar' ? 'Pronta' : e[0]}${o.dataInauguracao ? ' · ' + fmtDia(o.dataInauguracao) : ''}</em></div>`; }).join('')}</div></section>` : '';
-      return uma ? [[tit + sint + kpi + graf + tab + entregas + acoes]] : [[tit + sint + kpi + graf + tab], [rlTit(D, A, 'Investimentos e entregas', rlNomeAlvo(A), '') + porT + entregas + inaT + acoes]]; },
+      const sem = h => h.replace(/<h3>[^<]*<\/h3>/, ''), SX = { intro:['fa-book-open', 'Introdução', sint], gerais:['fa-circle-info', 'Informações gerais', kpi + graf], tab:['fa-list-ol', 'Obras por investimento', sem(tab)], terr:['fa-map-location-dot', A.tipo === 'estado' ? 'Investimento por Diretoria Regional' : 'Investimento por município', sem(porT)], ent:['fa-calendar-days', 'Próximas entregas', sem(entregas)], ina:['fa-ribbon', 'Inaugurações', sem(inaT)], acoes:['fa-list-check', 'Destaques e próximos passos', acoes] };
+      const ord = uma === true ? [['intro', 'gerais', 'tab', 'terr', 'ent', 'ina', 'acoes']] : uma === 'alt' ? [['intro', 'gerais', 'tab', 'ent'], ['terr', 'ina', 'acoes']] : [['intro', 'gerais', 'tab'], ['terr', 'ent', 'ina', 'acoes']];
+      return { tit, pags:ord.map(p => p.map(k => SX[k])) }; },
     fonte:'dados da seção Obras' },
   convenios:{ titulo:'Relatório de convênios', icone:'fa-handshake', doc:'RELATÓRIO DE CONVÊNIOS', dados:(D, A) => apConvDe(D, A),
     padrao(D, A, L){
@@ -8188,7 +8198,9 @@ const REL_TIPOS = {
       const dest = A.tipo === 'mun' && v.destinatario ? `<div class="rl-dest"><p><b>A/C:</b> ${esc(v.destinatario)}</p></div>` : '';
       const acoes = `<section class="rx-g2 rx-acoes"><div class="rx-box rl-aten"><h3><span>!</span>Pontos de atenção</h3><ul>${rxLis(v.destaques)}</ul></div><div class="rx-box rx-prox"><h3><span>→</span>Próximos passos</h3><ul>${rxLis(v.proximos)}</ul></div></section>`;
       const tit = rlTit(D, A, A.tipo === 'mun' && A.dre ? 'DRE ' + esc(nomeDRE(A.dre)) : A.tipo === 'dre' ? A.ms.length + ' municípios' : 'Rede estadual', 'Convênios · ' + rlNomeAlvo(A), rlHoje()), sint = `<p class="rx-sint">${esc(v.sintese)}</p>`;
-      return uma ? [[tit + dest + sint + kpi + graf + tab + acoes]] : [[tit + dest + sint + kpi + graf + acoes], [rlTit(D, A, 'Continuação', rlNomeAlvo(A), '') + tab]]; },
+      const sem = h => h.replace(/<h3>[^<]*<\/h3>/, ''), SX = { intro:['fa-book-open', 'Introdução', dest + sint], gerais:['fa-circle-info', 'Informações gerais', kpi], rec:['fa-filter-circle-dollar', 'Execução dos recursos', graf], tab:['fa-table-list', A.tipo === 'mun' ? 'Convênios' : 'Municípios parceiros', sem(tab)], acoes:['fa-list-check', 'Pontos de atenção e próximos passos', acoes] };
+      const ord = uma === true ? [['intro', 'gerais', 'rec', 'tab', 'acoes']] : uma === 'alt' ? [['intro', 'gerais', 'rec', 'tab'], ['acoes']] : [['intro', 'gerais', 'rec', 'acoes'], ['tab']];
+      return { tit, pags:ord.map(p => p.map(k => SX[k])) }; },
     fonte:'monitoramento de convênios e seção Obras' }
 };
 /* ---------- tela (sobreposição com formulário à esquerda e prévia à direita) ---------- */
@@ -8214,7 +8226,7 @@ function relAbrir(tipo, modo, sel){
       <label><span class="rot">Próximos passos</span><textarea class="campo" name="proximos" rows="4" oninput="relPrevia()">${esc(P.proximos)}</textarea></label>
       <div class="g2"><label><span class="rot">Assinatura</span><input class="campo" name="assNome" value="${esc(ass.nome || '')}" placeholder="Nome" oninput="relPrevia()"></label><label><span class="rot">Cargo</span><input class="campo" name="assCargo" value="${esc(ass.cargo || '')}" placeholder="Cargo" oninput="relPrevia()"></label></div>
       <div class="cv-rel-op">${T.opcoes.map(([k, t, d]) => typeof d === 'boolean' ? `<label><input type="checkbox" name="${k}" ${opc(k) ? 'checked' : ''} onchange="relPrevia()">${t}</label>` : `<label>${t}: <input class="campo" type="number" name="${k}" min="3" max="30" value="${opc(k)}" style="width:72px" oninput="relPrevia()"></label>`).join('')}
-        <label><input type="checkbox" name="marca" ${op.marca !== false ? 'checked' : ''} onchange="relPrevia()">Marca d'água</label><label><input type="checkbox" name="d3" ${op.d3 !== false ? 'checked' : ''} onchange="relPrevia()">Miniatura 3D do território</label></div>
+        <label><input type="checkbox" name="marca" ${op.marca !== false ? 'checked' : ''} onchange="relPrevia()">Marca d'água</label><label><input type="checkbox" name="d3" ${op.d3 !== false ? 'checked' : ''} onchange="relPrevia()">Mapa de localização no título</label></div>
       <p class="s"><i class="fa-solid fa-floppy-disk"></i> Textos guardados neste navegador para cada território.</p></form>
     <div class="cv-rel-v rx-v"><div class="rx-pgs" id="rl-pgs"></div></div></div></div>`;
   document.body.appendChild(el); el.addEventListener('keydown', e => { if (e.key === 'Escape') el.remove(); }); relPrevia();
@@ -8230,11 +8242,11 @@ function relValores(){
 function relPrevia(){
   clearTimeout(relPrevia.t); relPrevia.t = setTimeout(() => {
     const box = $('#rl-pgs'), r = relValores(); if (!box || !r) return; const { v, D, A } = r, T = REL_TIPOS[rlCfg.tipo], L = T.dados(D, A), ass = store.get('gaborg_cv_rel_ass', {}) || {};
-    const monta = uma => { const pgs = T.paginas(D, A, L, v, uma); return pgs.map((c, i) => `<div class="rx-pg"><div class="rx-a4 rl-a4 ${v.d3 ? '' : 'sem3d'}">${v.marca ? rlMarca(D, A) : ''}<div class="rx-in">${rlCab(T.doc, rlNomeAlvo(A), i + 1, pgs.length)}<div class="rx-c">${c.join('')}</div>${rlPe(i + 1, pgs.length, ass, T.fonte)}</div></div></div>`).join(''); };
+    const monta = uma => { const r = T.paginas(D, A, L, v, uma), pgs = rlPags(r.pags); return pgs.map((c, i) => `<div class="rx-pg"><div class="rx-a4 rl-a4 ${v.d3 ? '' : 'sem3d'}">${v.marca ? rlMarca(D, A) : ''}<div class="rx-in">${rlCab(T.doc, rlNomeAlvo(A), i + 1, pgs.length)}<div class="rx-c">${i === 0 ? r.tit : ''}${c}${i === pgs.length - 1 ? rlAssin(ass) : ''}</div>${rlPe(i + 1, pgs.length, ass, T.fonte, T.titulo, rlNomeAlvo(A))}</div></div></div>`).join(''); };
     const z = Math.min(1, (box.parentElement.clientWidth - 30) / 794); box.style.setProperty('--z', z.toFixed(3));
     const encaixa = () => { let pior = 1; box.querySelectorAll('.rx-a4').forEach(a => { const inn = a.querySelector('.rx-c'); let f = 1; a.style.setProperty('--f', 1); const lim = () => a.querySelector('.rx-pe').offsetTop - 8;
       while (inn.offsetTop + inn.scrollHeight > lim() && f > .66) { f -= .02; a.style.setProperty('--f', f.toFixed(3)); } const ap = inn.offsetTop + inn.scrollHeight > lim(); a.classList.toggle('apertado', ap); pior = Math.min(pior, ap ? 0 : f); }); return pior; };
-    box.innerHTML = monta(true); if (encaixa() < .9) { box.innerHTML = monta(false); encaixa(); }
+    box.innerHTML = monta(true); if (encaixa() < .9) { box.innerHTML = monta('alt'); if (encaixa() < .9) { box.innerHTML = monta(false); encaixa(); } }
   }, 80);
 }
 function relImprimir(){
@@ -8274,7 +8286,28 @@ const RL_CSS = `.rl-a4 .rx-in{z-index:1}.rl-marca{position:absolute;inset:150px 
 .rl-cols2{display:grid;grid-template-columns:1fr 1fr;gap:0 18px}.rl-cols2 .rx-b{grid-template-columns:100px 1fr 70px}
 .rl-ina{display:grid;grid-template-columns:1fr 1fr;gap:6px}.rl-ina>div{display:grid;grid-template-columns:calc(34px * var(--f)) 1fr;gap:3px 8px;align-items:center;border-radius:10px;border:1px solid color-mix(in srgb,var(--c) 30%,#e2e8f0);background:color-mix(in srgb,var(--c) 6%,#fff);padding:5px 8px}
 .rl-ina .ic{grid-row:1/3;width:calc(34px * var(--f));height:calc(34px * var(--f));border-radius:8px;background:#0b1222;padding:2px;display:block}.rl-ina .ic svg{width:100%;height:100%}.rl-ina b{display:block;font-size:calc(9.5px * var(--f))}.rl-ina small{color:#64748b;font-size:calc(8px * var(--f))}
-.rl-ina em{font-style:normal;font-weight:800;color:var(--c);font-size:calc(8.5px * var(--f))}.rl-ina em i{margin-right:4px}`;
+.rl-ina em{font-style:normal;font-weight:800;color:var(--c);font-size:calc(8.5px * var(--f))}.rl-ina em i{margin-right:4px}
+.rl-s{margin-bottom:calc(4px * var(--f))}
+.rl-sec{display:flex;align-items:center;gap:8px;margin:calc(8px * var(--f)) 0 calc(7px * var(--f))}
+.rl-sec .n{display:grid;place-items:center;min-width:calc(30px * var(--f));height:calc(22px * var(--f));padding:0 6px;border-radius:6px;background:linear-gradient(135deg,#0a1f4d,#1c3f94);color:#fff;font-weight:900;font-size:calc(10.5px * var(--f));letter-spacing:.04em;font-family:Georgia,'Times New Roman',serif}
+.rl-sec .ic{display:grid;place-items:center;width:calc(22px * var(--f));height:calc(22px * var(--f));border-radius:50%;background:#e0f2fe;color:#0369a1;font-size:calc(10px * var(--f))}
+.rl-sec b{font-size:calc(12px * var(--f));font-weight:900;color:#0a1f4d;text-transform:uppercase;letter-spacing:.09em;white-space:nowrap}
+.rl-sec .ln{flex:1;height:2px;border-radius:2px;background:linear-gradient(90deg,#1c3f94 0,#16a34a 35%,#f7c600 65%,rgba(14,165,233,0) 100%);opacity:.55}
+.rx-box h3 i{color:#1c3f94;font-size:calc(10px * var(--f))}.rx-box h3:has(i)::before{display:none}
+.rl-fatos{display:grid;grid-template-columns:1fr 1fr;gap:6px}.rl-fatos>div{display:grid;grid-template-columns:calc(26px * var(--f)) 1fr;column-gap:7px;align-items:center;padding:5px 7px;border-radius:9px;background:#f8fafc;border:1px solid #eef2f7}
+.rl-fatos i{grid-row:1/3;display:grid;place-items:center;width:calc(26px * var(--f));height:calc(26px * var(--f));border-radius:8px;background:linear-gradient(135deg,#1c3f94,#0ea5e9);color:#fff;font-size:calc(10px * var(--f))}
+.rl-fatos b{font-size:calc(10.5px * var(--f));color:#0a1f4d;line-height:1.2}.rl-fatos small{color:#64748b;font-size:calc(8px * var(--f));line-height:1.2}
+.rl-terr .rx-mapa{height:calc(190px * var(--f))}
+.rl-loc{width:calc(150px * var(--f));height:calc(118px * var(--f));display:block;filter:drop-shadow(0 4px 10px rgba(15,23,42,.12))}
+.rl-tit-3d{padding:6px 8px 2px;border-radius:14px;background:linear-gradient(160deg,#f8fafc,#eef4ff);border:1px solid #e2e8f0;margin:0}
+.rl-tit-3d span{margin-top:0}
+.rl-ass{display:flex;flex-direction:column;align-items:center;margin:calc(14px * var(--f)) 0 0 auto;width:250px}.rl-ass i{display:block;width:100%;border-top:1px solid #334155;margin-bottom:3px}.rl-ass b{font-size:10.5px}.rl-ass small{color:#475569;font-size:9px}
+.rx-pe.rl-pe{left:0;right:0;bottom:0;display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:center;padding:7px 36px 9px;border-top:0;background:linear-gradient(180deg,#f8fafc,#eef2f7)}
+.rl-pe::before{content:'';position:absolute;left:0;right:0;top:0;height:3px;background:linear-gradient(90deg,#1c3f94 0 25%,#16a34a 25% 50%,#f7c600 50% 75%,#0ea5e9 75%)}
+.rl-pe-l{display:flex;align-items:center;gap:7px}.rl-pe-l .rx-band{width:26px;height:18px;margin:0;box-shadow:0 1px 3px rgba(0,0,0,.25)}.rl-pe-l b{display:block;font-size:8.5px;color:#0a1f4d;line-height:1.15}.rl-pe-l small{display:block;font-size:7.5px;color:#64748b}
+.rl-pe-c{text-align:center;line-height:1.25}.rl-pe-c b{display:block;font-size:8.5px;color:#1e293b;font-weight:700}.rl-pe-c small{display:block;font-size:7.5px;color:#94a3b8}.rl-pe-c i{margin-right:4px;color:#1c3f94}
+.rl-pe-r{display:flex;align-items:baseline;gap:3px;padding:3px 9px;border-radius:99px;background:#0a1f4d;color:#fff}.rl-pe-r b{font-size:10px}.rl-pe-r small{font-size:7.5px;opacity:.75}
+.rx-g2>:only-child{grid-column:1/-1}.rl-tit-3d{background:linear-gradient(160deg,#ffffff,#e8f0fb)}`;
 /* ---------- painel de Obras: tipos com ícones animados, rosca da situação, entregas por trimestre ---------- */
 function obHero(L){
   const st = Object.keys(OB_ST).map(s => [s, L.filter(o => obStatus(o) === s).length, OB_ST[s]]).filter(f => f[1]);
