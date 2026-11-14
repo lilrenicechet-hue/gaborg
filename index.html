@@ -259,6 +259,76 @@ body.cen-ativo #vp{background-color:color-mix(in srgb,#f59e0b 6%,var(--bg))}
 .mt-grp .ei{display:flex;flex-direction:column;text-align:left;padding:7px 12px 7px 28px;border-top:1px solid var(--linha);font-size:12px}
 .mt-grp .ei:hover{background:color-mix(in srgb,var(--c) 8%,var(--sup))}.mt-grp .ei small{font-size:10.5px;color:var(--mut)}
 .mt-pe{display:flex;gap:6px;flex-wrap:wrap;padding-top:6px;border-top:1px solid var(--linha)}
+/* painel lateral do mapa · 1.51 */
+.mt-lado>*{flex-shrink:0}
+.mt-lado{gap:12px;background:linear-gradient(180deg,color-mix(in srgb,#2563eb 5%,var(--sup)) 0,var(--sup) 220px)}
+.mt-cab{align-items:center;gap:10px}.mt-cab>div{flex:1;min-width:0}
+.mt-cab-ic{flex:none;width:40px;height:40px;border-radius:12px;display:grid;place-items:center;color:#fff;font-size:18px;background:linear-gradient(135deg,#16a34a,#0e7490 55%,#1d4ed8);box-shadow:0 6px 16px -6px #0e7490}
+.mt-cab h1{font-size:16px}.mt-cab p{font-size:11.5px;line-height:1.3}
+.mt-kpi{grid-template-columns:repeat(3,1fr);gap:6px}
+.mt-kpi div,.mt-kpi div:last-child{grid-column:auto;flex-direction:row;align-items:center;gap:8px;padding:8px;border-radius:12px;background:var(--sup);border:1px solid var(--linha);box-shadow:0 1px 2px rgba(15,23,42,.04)}
+.mt-kpi div>i{flex:none;width:28px;height:28px;border-radius:9px;display:grid;place-items:center;font-size:13px;color:var(--c);background:color-mix(in srgb,var(--c) 13%,transparent)}
+.mt-kpi div span{display:flex;flex-direction:column;min-width:0;line-height:1.1}
+.mt-kpi div b,.mt-kpi div:last-child b{font-size:14.5px;color:var(--txt);font-variant-numeric:tabular-nums;white-space:nowrap}
+.mt-kpi div small{font-size:10.5px;color:var(--mut)}
+.mt-q{position:relative;display:flex;align-items:center}
+.mt-q>i{position:absolute;left:13px;color:var(--mut2);font-size:13px;pointer-events:none}
+.mt-q input{width:100%;height:42px;padding:0 38px 0 36px;border:1.5px solid var(--linha);border-radius:12px;background:var(--sup);color:var(--txt);font:inherit;font-size:13.5px;outline:0;transition:border-color .15s,box-shadow .15s}
+.mt-q input:focus{border-color:var(--marca);box-shadow:0 0 0 3px color-mix(in srgb,var(--marca) 18%,transparent)}
+.mt-q-x{position:absolute;right:8px;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:var(--sup2);color:var(--mut);font-size:12px}
+.mt-q-x:hover{background:#e11d48;color:#fff}.mt-q-x[hidden]{display:none}
+.mt-filtros{display:flex;flex-direction:column;border:1px solid var(--linha);border-radius:14px;background:var(--sup);overflow:hidden}
+.mt-fh{display:flex;align-items:center;gap:7px;padding:9px 12px;font-size:12.5px;border-bottom:1px solid var(--linha);background:var(--sup2)}
+.mt-fh>i{color:var(--marca)}.mt-fh small{color:var(--mut);font-size:11px}
+.mt-fh em{font-style:normal;font-size:10.5px;font-weight:800;padding:2px 8px;border-radius:999px;background:var(--marca);color:#fff}
+.mt-fh .lk{margin-left:auto;font-size:11.5px;color:var(--marca);font-weight:700;display:inline-flex;gap:5px;align-items:center}
+.mt-fsec{border-bottom:1px solid var(--linha)}.mt-fsec:last-child{border-bottom:0}
+.mt-fsec summary{list-style:none;display:flex;align-items:center;gap:8px;padding:9px 12px;cursor:pointer;font-size:12.5px;font-weight:700;color:var(--txt2,var(--txt))}
+.mt-fsec summary::-webkit-details-marker{display:none}
+.mt-fsec summary>i:first-child{width:22px;height:22px;border-radius:7px;display:grid;place-items:center;font-size:11px;color:var(--marca);background:var(--marca-bg,#eff6ff)}
+.mt-fsec summary span{flex:1}.mt-fsec summary em{font-style:normal;font-size:10px;font-weight:800;min-width:18px;height:18px;padding:0 5px;border-radius:999px;display:grid;place-items:center;background:var(--marca);color:#fff}
+.mt-fsec summary .sv{font-size:10px;color:var(--mut2);transition:transform .2s}.mt-fsec[open] summary .sv{transform:rotate(180deg)}
+.mt-fsec summary:hover{background:var(--sup2)}
+.mt-fcorpo{padding:2px 12px 11px}
+.mt-fcs{display:flex;flex-wrap:wrap;gap:5px}
+.mt-fc{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 9px 0 7px;border-radius:999px;border:1px solid var(--linha);background:var(--sup);font-size:11.5px;font-weight:600;color:var(--txt2,var(--txt));transition:all .15s;cursor:pointer}
+.mt-fc svg{flex:none}.mt-fc .pt{width:10px;height:10px;border-radius:50%;background:var(--c);flex:none}
+.mt-fc b{font-size:10.5px;color:var(--mut);font-variant-numeric:tabular-nums}
+.mt-fc:hover{border-color:var(--c);transform:translateY(-1px)}
+.mt-fc.on{border-color:var(--c);background:color-mix(in srgb,var(--c) 14%,var(--sup));color:var(--txt);box-shadow:0 0 0 1px var(--c) inset}.mt-fc.on b{color:var(--c)}
+.mt-fc.z{opacity:.45}
+.mt-seg{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;padding:3px;border-radius:11px;background:var(--sup2);border:1px solid var(--linha)}
+.mt-seg button{display:flex;flex-direction:column;align-items:center;gap:1px;padding:6px 4px;border-radius:8px;font-size:11.5px;font-weight:700;color:var(--mut)}
+.mt-seg button i{font-size:13px}.mt-seg button small{font-size:10px;font-weight:600;opacity:.8}
+.mt-seg button.on{background:var(--sup);color:var(--marca);box-shadow:0 1px 4px rgba(15,23,42,.12)}
+.mt-fsel{width:100%;height:36px;font-size:12.5px}
+.mt-lh{display:flex;align-items:center;gap:8px;margin-top:2px}.mt-lh .mt-sub{margin:0;flex:1}.mt-sub small{color:var(--marca);font-weight:800}
+.mt-ord{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--mut)}.mt-ord[hidden]{display:none}
+.mt-ord select{border:1px solid var(--linha);border-radius:8px;background:var(--sup);color:var(--txt);font:inherit;font-size:11.5px;height:28px;padding:0 4px;cursor:pointer}
+.mt-grp{border-radius:12px;background:var(--sup)}
+.mt-grp .gh{padding:8px 9px;background:var(--sup)}
+.mt-grp .gh:hover{background:color-mix(in srgb,var(--c) 7%,var(--sup))}
+.mt-grp .gh .pt{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;background:color-mix(in srgb,var(--c) 15%,transparent);color:var(--c);font-size:11px}
+.mt-grp .gh .gt{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.2}.mt-grp .gh .gt b{font-size:12.5px}.mt-grp .gh .gt small{font-size:10.5px;color:var(--mut)}
+.mt-grp .gh .n{padding:2px 8px;border-radius:999px;background:color-mix(in srgb,var(--c) 12%,transparent);font-size:11.5px}
+.mt-grp .ei,.mt-flat .ei{flex-direction:row;align-items:center;gap:9px;padding:7px 10px}
+.mt-flat{display:flex;flex-direction:column;border:1px solid var(--linha);border-radius:12px;overflow:hidden;background:var(--sup)}
+.mt-flat .ei{display:flex;text-align:left;border-top:1px solid var(--linha);font-size:12px}.mt-flat .ei:first-child{border-top:0}
+.ei .ic{flex:none;width:28px;height:28px;border-radius:8px;display:grid;place-items:center;background:color-mix(in srgb,var(--t) 12%,var(--sup));border:1px solid color-mix(in srgb,var(--t) 25%,transparent)}
+.ei .tx{flex:1;min-width:0;display:flex;flex-direction:column}.ei .tx b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12px}
+.ei .tx small{font-size:10.5px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ei .tx small em{font-style:normal;font-weight:700}
+.ei .al{flex:none;text-align:right;display:flex;flex-direction:column;line-height:1.1}.ei .al b{font-size:12px;font-variant-numeric:tabular-nums}.ei .al small{font-size:9.5px;color:var(--mut)}
+.mt-grp .ei{padding-left:14px}
+.mt-flat .ei:hover{background:color-mix(in srgb,var(--t) 7%,var(--sup))}
+.mt-mais{margin:6px 0 0;text-align:center;font-size:11.5px;color:var(--mut)}
+.mt-vazio{display:flex;flex-direction:column;align-items:center;gap:6px;padding:24px 10px;text-align:center;color:var(--mut);border:1px dashed var(--linha);border-radius:12px}
+.mt-vazio>i{font-size:24px;opacity:.5}.mt-vazio b{color:var(--txt);font-size:13px}
+.mt-ativos{position:absolute;top:64px;left:14px;right:14px;z-index:800;display:flex;flex-wrap:wrap;gap:6px;pointer-events:none}
+.mt-ativos button{pointer-events:auto;display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 10px;border-radius:999px;background:var(--c);color:#fff;font-size:12px;font-weight:700;box-shadow:0 4px 12px -4px rgba(15,23,42,.45);animation:sobe .2s;cursor:pointer}
+.mt-ativos button .x{opacity:.75;font-size:11px}.mt-ativos button:hover .x{opacity:1}
+.mt-ativos button.lp{background:var(--sup);color:var(--txt);border:1px solid var(--linha)}
+@media (max-width:820px){.mt-ativos{top:60px;right:64px;left:10px}.mt-ativos button{height:27px;font-size:11px}}
+.mt-leg .it{cursor:default}.mt-leg button.it{cursor:pointer}.mt-leg button.it.on{font-weight:800;box-shadow:inset 0 0 0 1.5px currentColor;border-radius:7px}
 .mt-area{position:relative;min-width:0}
 #esc-map{position:absolute;inset:0;background:var(--bg);z-index:0;isolation:isolate}
 .mt-status{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:500;font-size:13px;color:var(--mut)}
@@ -2000,8 +2070,8 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background
 <body>
 <!-- Vigia de inicialização: se o arquivo.js não carregar ou falhar, mostra o motivo em vez de uma tela vazia -->
 <script>
-window.GABORG_VERSAO_HTML = '1.50.1'; window.GABORG_ERROS = [];
-window.GABORG_NOVIDADES = "1.50.1 — Apresentação do território: busca ao lado da lista (sem acento, com destaque do trecho encontrado), filtro por DRE, ordenação, recentes, setas e Enter para escolher, duplo clique para apresentar e mapa que apaga o que ficou fora da busca.\n1.50.1 — Apresentação: a nota dos convênios aparece automaticamente no slide de convênios.\n1.50.1 — Relatório executivo: marca d’água SEDUC-MT em todas as páginas e conclusão com agradecimento pela parceria com o Estado (texto editável).\n1.50.1 — Relatório executivo: capa em faixa grafite com destaque dourado, mapa do município, brasão e bandeira menores.\n1.50.1 — Relatório executivo: ícones ilustrados de construção, reforma e quadra nas obras; regionais grandes passam a usar 3 páginas quando não cabem em 2.\nRelatórios executivo e de convênios: Considerações ou encaminhamentos com linhas em branco para escrever à mão depois de impresso (opção, ligada por padrão). Relatório executivo no padrão ABNT: seções numeradas, texto em Arial 12 com espaço 1,5 e recuo, alíneas, e tabelas, gráficos, figura e quadro com título e fonte. Relatório de convênios: textos no padrão ABNT (Arial 12, espaço 1,5, recuo, alíneas, títulos numerados, tabela e gráficos com título e fonte), nota em destaque no topo e mapa só do município com ícone. Mapas: limites dos municípios de MT refeitos com a malha do IBGE, bem mais precisa (ex.: Santo Antônio de Leverger). Correção: Santo Antônio de Leverger (nome atual do IBGE) voltou a mostrar suas 10 escolas estaduais. Apresentação: personagens refeitos com volume, sombras e brilho (estilo animação 3D), olhos com íris e reflexo, cabelos com mechas, mãos e tênis detalhados. Antes: personagens em estilo de animação (olhos grandes, sorrisos, cabelos com volume, uniforme azul de MT), inclusive o estudante cadeirante e os professores. Relatórios: seções numeradas (I – Introdução, II – Informações gerais, III – Território...) com ícones, mapa de localização moderno no lugar da miniatura 3D e rodapé novo. Obras: painel com tipos animados, caminho até a inauguração e entregas por trimestre; novo relatório de obras por município, DRE ou estado. Convênios: pódio dos melhores desempenhos e relatório também por DRE e estado. Relatórios com marca d'água e miniatura 3D do território. Nova seção Relatório executivo: relatório da Secretaria de Estado de Educação por município, DRE ou estado, com brasão e bandeira de MT, rede em números, mapa, obras e convênios; textos editáveis, prévia e PDF. Convênios: painel animado (caminho do recurso, classificação em rosca, vigência por trimestre), mapa interativo dos municípios e relatório de 1 página para o prefeito, editável, com prévia e impressão/PDF. Nova seção Convênios: monitoramento dos convênios com municípios (repasse, execução, vigência, prestação de contas, nota e ranking), ligada às Obras pelo nº do convênio, com modelo de planilha para importar e exportar; novo slide de convênios na Apresentação (requer Codigo.gs 1.20.0). Apresentação: sempre os 142 municípios de MT (Boa Esperança do Norte incluída mesmo sem a malha do IBGE); municípios sem escola vinculada aparecem destacados para conferência. Apresentação: opção Repetir em loop (volta ao início ao terminar e recomeça; botão e tecla R). Apresentação: usa os limites municipais atuais do IBGE (142 municípios, com Boa Esperança do Norte). Escolas: cada escola usa o município oficial (base 2026), corrigindo a contagem para 142 municípios; Campos de Júlio com o nome completo. Apresentação: animações sempre ativas no modo apresentação; nova tela Pessoas (equipe ilustrada, pictogramas de estudantes por profissional, vínculos e cargos com ícones) também para municípios e DREs; nova tela Investimentos no mapa, com bolhas animadas por tipo de obra e passeio pelas maiores obras.";
+window.GABORG_VERSAO_HTML = '1.51.0'; window.GABORG_ERROS = [];
+window.GABORG_NOVIDADES = "1.51.0 — Mapa de MT: painel lateral redesenhado, com ícones nos números, busca com limpar, filtros por tipo, localização, porte, distância até a DRE, município e DRE (com contagem em cada opção), lista com ícones e ordenação, filtros ativos no mapa, legenda que filtra e botão para ver todo o estado.\n1.51.0 — Apresentação do território: busca ao lado da lista (sem acento, com destaque do trecho encontrado), filtro por DRE, ordenação, recentes, setas e Enter para escolher, duplo clique para apresentar e mapa que apaga o que ficou fora da busca.\n1.51.0 — Apresentação: a nota dos convênios aparece automaticamente no slide de convênios.\n1.51.0 — Relatório executivo: marca d’água SEDUC-MT em todas as páginas e conclusão com agradecimento pela parceria com o Estado (texto editável).\n1.51.0 — Relatório executivo: capa em faixa grafite com destaque dourado, mapa do município, brasão e bandeira menores.\n1.51.0 — Relatório executivo: ícones ilustrados de construção, reforma e quadra nas obras; regionais grandes passam a usar 3 páginas quando não cabem em 2.\nRelatórios executivo e de convênios: Considerações ou encaminhamentos com linhas em branco para escrever à mão depois de impresso (opção, ligada por padrão). Relatório executivo no padrão ABNT: seções numeradas, texto em Arial 12 com espaço 1,5 e recuo, alíneas, e tabelas, gráficos, figura e quadro com título e fonte. Relatório de convênios: textos no padrão ABNT (Arial 12, espaço 1,5, recuo, alíneas, títulos numerados, tabela e gráficos com título e fonte), nota em destaque no topo e mapa só do município com ícone. Mapas: limites dos municípios de MT refeitos com a malha do IBGE, bem mais precisa (ex.: Santo Antônio de Leverger). Correção: Santo Antônio de Leverger (nome atual do IBGE) voltou a mostrar suas 10 escolas estaduais. Apresentação: personagens refeitos com volume, sombras e brilho (estilo animação 3D), olhos com íris e reflexo, cabelos com mechas, mãos e tênis detalhados. Antes: personagens em estilo de animação (olhos grandes, sorrisos, cabelos com volume, uniforme azul de MT), inclusive o estudante cadeirante e os professores. Relatórios: seções numeradas (I – Introdução, II – Informações gerais, III – Território...) com ícones, mapa de localização moderno no lugar da miniatura 3D e rodapé novo. Obras: painel com tipos animados, caminho até a inauguração e entregas por trimestre; novo relatório de obras por município, DRE ou estado. Convênios: pódio dos melhores desempenhos e relatório também por DRE e estado. Relatórios com marca d'água e miniatura 3D do território. Nova seção Relatório executivo: relatório da Secretaria de Estado de Educação por município, DRE ou estado, com brasão e bandeira de MT, rede em números, mapa, obras e convênios; textos editáveis, prévia e PDF. Convênios: painel animado (caminho do recurso, classificação em rosca, vigência por trimestre), mapa interativo dos municípios e relatório de 1 página para o prefeito, editável, com prévia e impressão/PDF. Nova seção Convênios: monitoramento dos convênios com municípios (repasse, execução, vigência, prestação de contas, nota e ranking), ligada às Obras pelo nº do convênio, com modelo de planilha para importar e exportar; novo slide de convênios na Apresentação (requer Codigo.gs 1.20.0). Apresentação: sempre os 142 municípios de MT (Boa Esperança do Norte incluída mesmo sem a malha do IBGE); municípios sem escola vinculada aparecem destacados para conferência. Apresentação: opção Repetir em loop (volta ao início ao terminar e recomeça; botão e tecla R). Apresentação: usa os limites municipais atuais do IBGE (142 municípios, com Boa Esperança do Norte). Escolas: cada escola usa o município oficial (base 2026), corrigindo a contagem para 142 municípios; Campos de Júlio com o nome completo. Apresentação: animações sempre ativas no modo apresentação; nova tela Pessoas (equipe ilustrada, pictogramas de estudantes por profissional, vínculos e cargos com ícones) também para municípios e DREs; nova tela Investimentos no mapa, com bolhas animadas por tipo de obra e passeio pelas maiores obras.";
 window.addEventListener('error', function (e) {
   var alvo = e.target || {};
   if (alvo.tagName === 'SCRIPT') window.GABORG_ERROS.push('Não foi possível baixar o arquivo ' + (alvo.getAttribute('src') || '') + '.');
@@ -2229,17 +2299,12 @@ window.addEventListener('load', function () { setTimeout(function () { window.GA
     <section class="vista fora" id="v-escolas">
       <div class="mt-wrap">
         <aside class="mt-lado">
-          <div class="mt-cab"><div><h1><i class="fa-solid fa-map-location-dot"></i>Mapa de Mato Grosso</h1><p>Escolas estaduais e Diretorias Regionais de Educação</p></div><button class="btn btn-s btn-sm btn-i" onclick="alternarLadoMT(false)" title="Esconder o painel"><i class="fa-solid fa-angles-left"></i></button></div>
+          <div class="mt-cab"><span class="mt-cab-ic"><i class="fa-solid fa-map-location-dot"></i></span><div><h1>Mapa de Mato Grosso</h1><p>Escolas estaduais e Diretorias Regionais de Educação</p></div><button class="btn btn-s btn-sm btn-i" onclick="alternarLadoMT(false)" title="Esconder o painel"><i class="fa-solid fa-angles-left"></i></button></div>
           <div class="mt-kpi" id="esc-kpi"></div>
-          <div class="busca mt-busca2"><i class="fa-solid fa-magnifying-glass"></i><input id="esc-q" class="campo" placeholder="Buscar escola, código, município ou bairro" oninput="filtroEscMT('q',this.value)"></div>
-          <div class="mt-fs">
-            <select id="esc-tipo" class="campo" onchange="filtroEscMT('tipo',this.value)"><option value="">Todos os tipos</option><option>Regular</option><option>Cívico-militar</option><option>Militar</option><option>Campo</option><option>Indígena</option><option>Quilombola</option><option>Integral</option><option>Especializada</option><option>Confessional</option></select>
-            <select id="esc-loc" class="campo" onchange="filtroEscMT('loc',this.value)"><option value="">Urbanas e rurais</option><option value="URBANA">Urbanas</option><option value="RURAL">Rurais</option></select>
-          </div>
-          <div class="mt-sub">Diretorias Regionais <small>clique para filtrar</small><button class="lk" onclick="limparFiltrosMT()">limpar filtros</button></div>
-          <div class="mt-chips" id="esc-dres"></div>
+          <div class="mt-q"><i class="fa-solid fa-magnifying-glass"></i><input id="esc-q" autocomplete="off" spellcheck="false" placeholder="Escola, código, município ou bairro" oninput="filtroEscMT('q',this.value)" onkeydown="if(event.key==='Escape'){this.value='';filtroEscMT('q','')}"><button type="button" class="mt-q-x" title="Limpar a busca" onclick="const q=$('#esc-q');q.value='';filtroEscMT('q','');q.focus()"><i class="fa-solid fa-xmark"></i></button></div>
+          <div class="mt-filtros" id="esc-filtros"></div>
           <div id="esc-foco"></div>
-          <div class="mt-sub" id="esc-sub">Escolas por DRE</div>
+          <div class="mt-lh"><span class="mt-sub" id="esc-sub">Escolas por DRE</span><label class="mt-ord" id="esc-ord-w"><i class="fa-solid fa-arrow-down-wide-short"></i><select id="esc-ord" onchange="mt.ord=this.value;store.set('gaborg_mt_ord',mt.ord);desenharEscolasMT()"><option value="dre">Por DRE</option><option value="nome">Nome (A–Z)</option><option value="alunos">Mais alunos</option><option value="dist">Mais distantes da DRE</option></select></label></div>
           <div class="mt-lista" id="esc-lista"></div>
           <div class="mt-pe"><button class="btn btn-s btn-sm" onclick="exportarEscolasMT()"><i class="fa-solid fa-file-csv"></i>Exportar CSV</button><button class="btn btn-s btn-sm so-edit" onclick="abrirBaseEscolas()" title="Editar tipo, alunos e dados das escolas"><i class="fa-solid fa-pen-to-square"></i>Editar escolas</button><label class="btn btn-s btn-sm so-adm" title="Atualizar com uma planilha .xlsx no mesmo formato"><i class="fa-solid fa-file-arrow-up"></i>Atualizar base<input type="file" accept=".xlsx,.xls" class="sr" onchange="importarEscolasMT(this.files[0]);this.value=''"></label></div>
         </aside>
@@ -2248,6 +2313,7 @@ window.addEventListener('load', function () { setTimeout(function () { window.GA
           <div class="mt-status" id="esc-status"></div>
           <div class="mt-topo"><button class="btn btn-s mt-abre" onclick="alternarLadoMT(true)" title="Mostrar o painel"><i class="fa-solid fa-angles-right"></i><span>Painel</span></button><nav class="mt-trilha" id="mt-trilha"></nav></div>
           <div class="mt-ctrl" id="mt-ctrl"></div>
+          <div class="mt-ativos" id="mt-ativos"></div>
           <div class="mt-leg" id="mt-leg"></div>
           <div class="mt-aviso hidden" id="mt-aviso-malha"><i class="fa-solid fa-triangle-exclamation"></i>Os limites dos municípios (IBGE) não carregaram; as escolas e as DREs continuam no mapa.</div>
         </div>
@@ -2356,6 +2422,6 @@ window.addEventListener('load', function () { setTimeout(function () { window.GA
 
 <div id="toast"><i class="fa-solid fa-check"></i><span></span></div>
 
-<script src="arquivo.js?v=1.50.1" onerror="window.GABORG_ERROS.push('O arquivo arquivo.js não foi encontrado no servidor (erro 404).');GABORG_DIAGNOSTICO()"></script>
+<script src="arquivo.js?v=1.51.0" onerror="window.GABORG_ERROS.push('O arquivo arquivo.js não foi encontrado no servidor (erro 404).');GABORG_DIAGNOSTICO()"></script>
 </body>
 </html>

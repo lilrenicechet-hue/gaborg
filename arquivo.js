@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.50.1';
+const VERSAO = '1.51.0';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -3277,7 +3277,7 @@ const MODOS_MT = {
   distancia:['fa-route', 'Distância até a DRE', 'Cor da escola pela distância em linha reta até a sede da sua DRE'],
   alunos:['fa-children', 'Quantidade de alunos', 'Cor e tamanho da escola pelo número de alunos']
 };
-const mt = { mapa:null, camadas:{}, base:'', modo:store.get('gaborg_mt_modo', 'dre'), fil:{ dres:new Set(), tipo:'', loc:'', q:'' }, foco:-1, lado:window.innerWidth > 820, ligacoes:store.get('gaborg_mt_lig', true), divisas:store.get('gaborg_mt_div', false), rotulos:store.get('gaborg_mt_rot', false), leg:store.get('gaborg_mt_leg2', false), mun:'', marcadores:new Map(), aberto:new Set(), carregando:null, malha:null, erroTiles:0 };
+const mt = { mapa:null, camadas:{}, base:'', modo:store.get('gaborg_mt_modo', 'dre'), fil:{ dres:new Set(), tipos:new Set(), loc:'', portes:new Set(), dists:new Set(), mun:'', q:'' }, ord:store.get('gaborg_mt_ord', 'dre'), secAb:new Set(store.get('gaborg_mt_secab', ['tipo', 'dre']) || []), foco:-1, lado:window.innerWidth > 820, ligacoes:store.get('gaborg_mt_lig', true), divisas:store.get('gaborg_mt_div', false), rotulos:store.get('gaborg_mt_rot', false), leg:store.get('gaborg_mt_leg2', false), mun:'', marcadores:new Map(), aberto:new Set(), carregando:null, malha:null, erroTiles:0 };
 /* município oficial de cada escola (base 2026): corrige registros da planilha que ficaram com o município antigo ou errado */
 function munOficial(cod){
   if (!munOficial.m) munOficial.m = new Map(ESCOLAS_BASE.map(r => [String(r[0]), r[3]]));
@@ -3424,6 +3424,7 @@ function montarControlesMT(){
       <span class="mt-sep"></span>
       <button class="mt-bi" onclick="menuMT('fundo',this)" title="Fundo do mapa"><i class="fa-solid fa-map"></i></button>
       <button class="mt-bi" onclick="menuMT('camadas',this)" title="Linhas e nomes"><i class="fa-solid fa-sliders"></i></button>
+      <button class="mt-bi" onclick="mt.foco=-1;mt.mun='';if(mt.mapa)mt.mapa.closePopup();desenharEscolasMT();enquadrarMT(true)" title="Ver todo o estado"><i class="fa-solid fa-house"></i></button>
       <button class="mt-bi" onclick="telaCheiaMT()" title="Tela cheia"><i class="fa-solid fa-expand"></i></button>
     </div><div class="mt-menu hidden" id="mt-menu"></div>`;
 }
@@ -3446,10 +3447,17 @@ async function modoMT(m){
 }
 function telaCheiaMT(){ const a = $('.mt-area'); if (document.fullscreenElement) document.exitFullscreen(); else if (a.requestFullscreen) a.requestFullscreen().then(() => setTimeout(() => mt.mapa.invalidateSize(), 200)).catch(() => {}); }
 document.addEventListener('fullscreenchange', () => { if (mt.mapa) setTimeout(() => mt.mapa.invalidateSize(), 200); });
-function filtrarEscolasMT(lista){
+/* filtros do mapa; "sem" ignora uma dimensão (para contar quantas escolas cada opção teria) */
+const porteMT = e => num(e.alunos) ? FAIXAS_ALUNOS.indexOf(faixaAlunos(num(e.alunos))) : FAIXAS_ALUNOS.length;
+const distMT = e => FAIXAS_DIST.indexOf(faixaDist(distEscola(e)));
+const tipoOkMT = (e, T) => !T.size || T.has(grupoTipo(e.tipo)) || (T.has('Integral') && /INTEGRAL/.test(e.tipo));
+function filtrarEscolasMT(lista, sem){
   const f = mt.fil, q = norm(f.q);
-  return lista.filter(e => (!f.dres.size || f.dres.has(e.dre)) && (!f.tipo || grupoTipo(e.tipo) === f.tipo || (f.tipo === 'Integral' && /INTEGRAL/.test(e.tipo))) && (!f.loc || e.localidade === f.loc) && (!q || norm(e.nome + ' ' + e.codigo + ' ' + e.municipio + ' ' + e.bairro).includes(q)));
+  return lista.filter(e => (sem === 'dres' || !f.dres.size || f.dres.has(e.dre)) && (sem === 'tipos' || tipoOkMT(e, f.tipos)) && (sem === 'loc' || !f.loc || e.localidade === f.loc)
+    && (sem === 'portes' || !f.portes.size || f.portes.has(porteMT(e))) && (sem === 'dists' || !f.dists.size || f.dists.has(distMT(e))) && (sem === 'mun' || !f.mun || chaveMun(e.municipio) === f.mun)
+    && (!q || norm(e.nome + ' ' + e.codigo + ' ' + e.municipio + ' ' + e.bairro).includes(q)));
 }
+const filtrosAtivosMT = () => { const f = mt.fil; return f.dres.size + f.tipos.size + (f.loc ? 1 : 0) + f.portes.size + f.dists.size + (f.mun ? 1 : 0) + (f.q ? 1 : 0); };
 /* ---------- Distâncias das escolas até a sede da sua DRE ---------- */
 const FATOR_ESTRADA = 1.3, VEL_MEDIA = 70; // estimativa: estrada ≈ 1,3 × linha reta; 70 km/h em média
 const FAIXAS_DIST = [[10, 'até 10 km', '#16a34a'], [50, '10 a 50 km', '#65a30d'], [100, '50 a 100 km', '#eab308'], [200, '100 a 200 km', '#f97316'], [300, '200 a 300 km', '#dc2626'], [Infinity, 'mais de 300 km', '#7f1d1d']];
@@ -3521,7 +3529,7 @@ function desenharEscolasMT(){
   });
   const dresMun = mun ? new Set(todas.filter(e => chaveMun(e.municipio) === mun).map(e => e.dre)) : null;
   if (!centroMun && modo !== 'municipio' && (modo !== 'divisao' || foco)) dres.forEach((d, i) => { if (dresMun && !dresMun.has(d)) return;
-    const n = lista.filter(e => e.dre === d).length; if (!n && (mt.fil.dres.size && !mt.fil.dres.has(d))) return;
+    const n = lista.filter(e => e.dre === d).length; if (!n && filtrosAtivosMT()) return;
     const icone = L.divIcon({ className:'mt-dre-ic', html:`<div class="mt-dre ${foco === d ? 'on' : ''} ${foco && foco !== d ? 'off' : ''}" style="--c:${corDRE(dres, d)}"><i class="fa-solid fa-building-flag"></i><span>${esc(nomeDRE(d))}</span><b>${n}</b></div>`, iconSize:null, iconAnchor:[14, 14] });
     L.marker(sedes.get(d), { icon:icone, zIndexOffset:1000 + (foco === d ? 500 : 0), keyboard:false, title:'Sede da ' + d }).on('click', ev => { L.DomEvent.stopPropagation(ev); focarDREmt(foco === d && !mt.mun ? -1 : i); }).on('mouseover', () => realcarDREmt(i)).on('mouseout', () => realcarDREmt(-1)).addTo(mt.camadas.dres);
   });
@@ -3532,7 +3540,7 @@ function enquadrarMT(anim){
   if (!mt.mapa) return;
   const dur = anim === false || semMovimento() ? 0 : .9, pad = { paddingTopLeft:[40, 70], paddingBottomRight:[40, 40], duration:dur };
   const todas = escolasLista(), dres = dresDe(todas), foco = mt.foco >= 0 ? dres[mt.foco] : null;
-  const filtrando = mt.fil.dres.size || mt.fil.tipo || mt.fil.loc || mt.fil.q;
+  const filtrando = filtrosAtivosMT();
   if (mt.mun && mt.munB && mt.munB.get(mt.mun)) return mt.mapa.flyToBounds(mt.munB.get(mt.mun), Object.assign({ maxZoom:11.5 }, pad));
   if (foco && !filtrando && mt.regB && mt.regB.get(foco)) return mt.mapa.flyToBounds(mt.regB.get(foco), Object.assign({ maxZoom:10 }, pad));
   if (!foco && !filtrando && mt.estadoB) return mt.mapa.flyToBounds(mt.estadoB, Object.assign({}, pad, { paddingTopLeft:[20, 60], paddingBottomRight:[20, 20] }));
@@ -3738,23 +3746,27 @@ function legendaMT(dres, lista){
   const el = $('#mt-leg'); if (!el) return;
   el.classList.toggle('fechada', !mt.leg);
   let it = [];
-  if (mt.modo === 'tipo') { const c = {}; lista.forEach(e => { const g = grupoTipo(e.tipo); c[g] = (c[g] || 0) + 1; }); it = Object.entries(c).sort((a, b) => b[1] - a[1]).map(([k, n]) => [CORES_TIPO[k] || CORES_TIPO.Outro, k, n]); }
-  else if (mt.modo === 'localidade') it = [['#2563eb', 'Urbanas', lista.filter(e => e.localidade !== 'RURAL').length], ['#65a30d', 'Rurais', lista.filter(e => e.localidade === 'RURAL').length]];
-  else if (mt.modo === 'alunos') it = FAIXAS_ALUNOS.map(f => [f[2], f[1], lista.filter(e => num(e.alunos) && faixaAlunos(num(e.alunos)) === f).length]).concat(lista.some(e => !num(e.alunos)) ? [['#cbd5e1', 'sem informação', lista.filter(e => !num(e.alunos)).length]] : []);
-  else if (mt.modo === 'distancia') it = FAIXAS_DIST.map(f => [f[2], f[1], lista.filter(e => faixaDist(distEscola(e)) === f).length]);
+  if (mt.modo === 'tipo') { const c = {}; lista.forEach(e => { const g = grupoTipo(e.tipo); c[g] = (c[g] || 0) + 1; }); it = Object.entries(c).sort((a, b) => b[1] - a[1]).map(([k, n]) => [CORES_TIPO[k] || CORES_TIPO.Outro, k, n, undefined, `filtroSetMT('tipos',${arg(k)})`, mt.fil.tipos.has(k)]); }
+  else if (mt.modo === 'localidade') it = [['#2563eb', 'Urbanas', lista.filter(e => e.localidade !== 'RURAL').length, undefined, `filtroEscMT('loc','${mt.fil.loc === 'URBANA' ? '' : 'URBANA'}')`, mt.fil.loc === 'URBANA'], ['#65a30d', 'Rurais', lista.filter(e => e.localidade === 'RURAL').length, undefined, `filtroEscMT('loc','${mt.fil.loc === 'RURAL' ? '' : 'RURAL'}')`, mt.fil.loc === 'RURAL']];
+  else if (mt.modo === 'alunos') it = FAIXAS_ALUNOS.map((f, i) => [f[2], f[1], lista.filter(e => num(e.alunos) && faixaAlunos(num(e.alunos)) === f).length, undefined, `filtroSetMT('portes',${i})`, mt.fil.portes.has(i)]).concat(lista.some(e => !num(e.alunos)) ? [['#cbd5e1', 'sem informação', lista.filter(e => !num(e.alunos)).length]] : []);
+  else if (mt.modo === 'distancia') it = FAIXAS_DIST.map((f, i) => [f[2], f[1], lista.filter(e => faixaDist(distEscola(e)) === f).length, undefined, `filtroSetMT('dists',${i})`, mt.fil.dists.has(i)]);
   else if (mt.modo === 'divisao') { const ks = mt.munF ? [...mt.munF.values()] : [], com = ks.filter(f => f.properties.n).length; it = [['#fde68a', `${ks.length || 142} municípios`], ['#bfdbfe', `${com} com escola estadual`, undefined], ['#e2e8f0', `${(ks.length || 142) - com} sem escola estadual`]]; }
   else if (mt.modo === 'municipio') it = [['#dbeafe', '1 escola'], ['#93c5fd', '2'], ['#60a5fa', '3 a 4'], ['#3b82f6', '5 a 8'], ['#1d4ed8', '9 a 16'], ['#1e3a8a', 'mais de 16'], ['#e2e8f0', 'sem escola']];
   else it = dres.map((d, i) => [corDRE(dres, d), nomeDRE(d), lista.filter(e => e.dre === d).length, i]);
   el.innerHTML = `<button class="mt-leg-tg" onclick="mt.leg=!mt.leg;store.set('gaborg_mt_leg2',mt.leg);this.parentNode.classList.toggle('fechada',!mt.leg)" title="Mostrar ou esconder a legenda"><i class="fa-solid fa-list"></i><span>Legenda</span></button>
-    <div class="mt-leg-c"><b>${esc(MODOS_MT[mt.modo][1])}</b><small>${esc(MODOS_MT[mt.modo][2])}</small><div class="its ${it.length > 8 ? 'duas' : ''}">${it.map(([c, n, q, i]) => i !== undefined ? `<button class="it ${mt.foco === i ? 'on' : ''}" onclick="focarDREmt(${mt.foco === i ? -1 : i})" onmouseenter="realcarDREmt(${i})" onmouseleave="realcarDREmt(-1)"><i style="background:${c}"></i>${esc(n)}<span>${q}</span></button>` : `<div class="it"><i style="background:${c}"></i>${esc(n)}${q !== undefined ? `<span>${q}</span>` : ''}</div>`).join('')}</div>
+    <div class="mt-leg-c"><b>${esc(MODOS_MT[mt.modo][1])}</b><small>${esc(MODOS_MT[mt.modo][2])}${['tipo', 'localidade', 'alunos', 'distancia'].includes(mt.modo) ? ' · clique num item para filtrar' : ['dre', 'regioes', 'cluster'].includes(mt.modo) ? ' · clique numa DRE para destacar' : ''}</small><div class="its ${it.length > 8 ? 'duas' : ''}">${it.map(([c, n, q, i, onc, ligado]) => onc ? `<button class="it ${ligado ? 'on' : ''}" onclick="${onc}" title="Clique para filtrar"><i style="background:${c}"></i>${esc(n)}<span>${q}</span></button>` : i !== undefined ? `<button class="it ${mt.foco === i ? 'on' : ''}" onclick="focarDREmt(${mt.foco === i ? -1 : i})" onmouseenter="realcarDREmt(${i})" onmouseleave="realcarDREmt(-1)"><i style="background:${c}"></i>${esc(n)}<span>${q}</span></button>` : `<div class="it"><i style="background:${c}"></i>${esc(n)}${q !== undefined ? `<span>${q}</span>` : ''}</div>`).join('')}</div>
     ${(() => { const c = {}; lista.forEach(e => { const g = grupoTipo(e.tipo); c[g] = (c[g] || 0) + 1; }); const ks = Object.keys(FORMAS_TIPO).filter(k => c[k]); return ks.length ? `<div class="mt-leg-formas"><b>Tipo de unidade (forma do ícone)</b><div>${ks.map(k => `<span title="${esc(k)}: ${NOMES_FORMA[FORMAS_TIPO[k]]}">${iconeTipoSVG(k, mt.modo === 'tipo' ? CORES_TIPO[k] : '#475569', 15)}${esc(k)}<small>${c[k]}</small></span>`).join('')}</div></div>` : ''; })()}
     ${!['municipio', 'divisao'].includes(mt.modo) ? '<div class="sede"><span class="mt-dre" style="--c:#475569;transform:scale(.8);transform-origin:left"><i class="fa-solid fa-building-flag"></i><b>n</b></span>sede da DRE (nº de escolas)</div>' : ''}</div>`;
 }
 function painelEscolasMT(todas, dres, lista){
   const f = mt.fil, foco = mt.foco >= 0 ? dres[mt.foco] : null;
   const mun = new Set(lista.map(e => e.municipio)), urb = lista.filter(e => e.localidade !== 'RURAL').length;
-  $('#esc-kpi').innerHTML = `<div><b>${lista.length.toLocaleString('pt-BR')}</b>escolas</div><div><b>${new Set(lista.map(e => e.dre)).size}</b>DREs</div><div><b>${mun.size}</b>municípios</div><div><b>${fmtN(alunosDe(lista))}</b> alunos · <b>${urb}</b>urbanas · <b>${lista.length - urb}</b> rurais</div>`;
-  $('#esc-dres').innerHTML = dres.map((d, i) => { const n = todas.filter(e => e.dre === d).length; return `<button class="mt-chip ${!f.dres.size || f.dres.has(d) ? 'on' : ''}" style="--c:${corDRE(dres, d)}" onclick="alternarDREfiltro(${i})" title="${esc(d)}: ${n} escolas"><i></i>${esc(nomeDRE(d))}<b>${n}</b></button>`; }).join('');
+  const kp = (ic, c, v, t) => `<div style="--c:${c}"><i class="fa-solid ${ic}"></i><span><b>${v}</b><small>${t}</small></span></div>`;
+  $('#esc-kpi').innerHTML = kp('fa-school', '#2563eb', fmtN(lista.length), 'escolas') + kp('fa-building-flag', '#7c3aed', new Set(lista.map(e => e.dre)).size, 'DREs') + kp('fa-city', '#0e7490', mun.size, 'municípios')
+    + kp('fa-children', '#ea580c', fmtN(alunosDe(lista)), 'alunos') + kp('fa-building', '#1d4ed8', fmtN(urb), 'urbanas') + kp('fa-tractor', '#65a30d', fmtN(lista.length - urb), 'rurais');
+  const qx = $('.mt-q-x'); if (qx) qx.hidden = !f.q;
+  filtrosPainelMT(todas, dres);
+  ativosMT(dres);
   const fc = $('#esc-foco');
   if (foco) {
     const l = todas.filter(e => e.dre === foco), m = [...new Set(l.map(e => e.municipio))].sort(), u = l.filter(e => e.localidade !== 'RURAL').length, s = setorDaDRE(foco);
@@ -3767,7 +3779,7 @@ function painelEscolasMT(todas, dres, lista){
   if (mt.mun && mt.munF && mt.munF.get(mt.mun)) {
     const f = mt.munF.get(mt.mun), l = todas.filter(e => chaveMun(e.municipio) === mt.mun).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')), d = f.properties.dre;
     fc.innerHTML = `<div class="mt-foco" style="--c:${d ? corDRE(dres, d) : '#94a3b8'}"><div class="h"><i class="fa-solid fa-city"></i><div><b>${esc(f.properties.nome)}</b><small>${d ? esc(d) + ' · ' : ''}${l.length} escola(s)</small></div><button class="btn btn-s btn-sm btn-i" onclick="voltarMT(1)" title="Voltar para a DRE"><i class="fa-solid fa-xmark"></i></button></div>
-      <div class="mt-mun-l">${l.map(e => `<button class="ei" onclick="irEscolaMT(${arg(e.codigo)})" onmouseenter="pulsarEscolaMT(${arg(e.codigo)})"><b>${esc(e.nome)}</b><small>${iconeTipoSVG(grupoTipo(e.tipo), CORES_TIPO[grupoTipo(e.tipo)], 12)} ${esc(grupoTipo(e.tipo))}${e.localidade === 'RURAL' ? ' · rural' : ''}${e.bairro ? ' · ' + esc(e.bairro) : ''}</small></button>`).join('') || '<small>Nenhuma escola estadual na base.</small>'}</div></div>`;
+      <div class="mt-mun-l">${l.map(e => `${itemEscolaMT(e, dres)}`).join('') || '<small>Nenhuma escola estadual na base.</small>'}</div></div>`;
   }
   const sub = $('#esc-sub'); if (sub) sub.textContent = mt.modo === 'divisao' ? 'Municípios' : 'Escolas por DRE';
   if (mt.modo === 'divisao' && mt.munF) {
@@ -3776,15 +3788,60 @@ function painelEscolasMT(todas, dres, lista){
     $('#esc-lista').innerHTML = ms.length ? `<div class="mt-muns">${ms.map(x => { const p = x.properties; return `<button class="mt-mu ${mt.mun === p.chave ? 'on' : ''}" style="--c:${p.dre ? corDRE(dres, p.dre) : '#94a3b8'};--m:${p.cor}" onclick="selecionarMunMT(${arg(p.chave)})" onmouseenter="realcarMunMT(${arg(p.chave)},true)" onmouseleave="realcarMunMT(${arg(p.chave)},false)"><span class="q"></span><b>${esc(p.nome)}</b><small>${p.dre ? esc(nomeDRE(p.dre)) : 'sem escola'}</small><span class="n">${p.n || '–'}</span></button>`; }).join('')}</div>` : '<div class="cartao vazio">Nenhum município com esses filtros.</div>';
     return;
   }
+  const ow = $('#esc-ord-w'), os = $('#esc-ord'); if (ow) ow.hidden = mt.modo === 'divisao'; if (os) os.value = mt.ord;
+  const tot = $('#esc-sub'); if (tot && mt.modo !== 'divisao') tot.innerHTML = `${mt.ord === 'dre' ? 'Escolas por DRE' : 'Escolas'} <small>${fmtN(lista.length)}</small>`;
+  if (!lista.length) { $('#esc-lista').innerHTML = `<div class="mt-vazio"><i class="fa-solid fa-filter-circle-xmark"></i><b>Nenhuma escola com esses filtros</b><button class="btn btn-s btn-sm" onclick="limparFiltrosMT()"><i class="fa-solid fa-eraser"></i>Limpar filtros</button></div>`; return; }
+  if (mt.ord !== 'dre') {
+    const ord = { nome:(a, b) => a.nome.localeCompare(b.nome, 'pt-BR'), alunos:(a, b) => num(b.alunos) - num(a.alunos), dist:(a, b) => distEscola(b) - distEscola(a) }[mt.ord] || ((a, b) => 0);
+    const L = [...lista].sort(ord), max = 250;
+    $('#esc-lista').innerHTML = `<div class="mt-flat">${L.slice(0, max).map(e => itemEscolaMT(e, dres, true)).join('')}</div>${L.length > max ? `<p class="mt-mais">e mais ${fmtN(L.length - max)} escolas · use a busca ou os filtros</p>` : ''}`;
+    return;
+  }
   const grupos = dres.map(d => [d, lista.filter(e => e.dre === d)]).filter(([, l]) => l.length);
-  const abrirTudo = !!f.q && lista.length <= 80;
-  $('#esc-lista').innerHTML = grupos.length ? grupos.map(([d, l]) => { const ab = abrirTudo || mt.aberto.has(d); return `<div class="mt-grp ${foco === d ? 'foco' : ''}" style="--c:${corDRE(dres, d)}">
-      <button class="gh" onclick="alternarGrupoMT(${arg(d)})"><i class="fa-solid fa-chevron-${ab ? 'down' : 'right'}"></i><span class="pt"></span><b>${esc(d)}</b><span class="n">${l.length}</span><span class="fo" onclick="event.stopPropagation();focarDREmt(${dres.indexOf(d)})" title="Mostrar no mapa"><i class="fa-solid fa-crosshairs"></i></span></button>
-      ${ab ? `<div class="gi">${l.sort((a, b) => a.municipio.localeCompare(b.municipio, 'pt-BR') || a.nome.localeCompare(b.nome, 'pt-BR')).map(e => `<button class="ei" onclick="irEscolaMT(${arg(e.codigo)})"><b>${esc(e.nome)}</b><small>${esc(e.municipio)} · ${esc(grupoTipo(e.tipo))}${e.localidade === 'RURAL' ? ' · rural' : ''}</small></button>`).join('')}</div>` : ''}</div>`; }).join('') : '<div class="cartao vazio">Nenhuma escola com esses filtros.</div>';
+  const abrirTudo = (!!f.q && lista.length <= 80) || grupos.length === 1;
+  $('#esc-lista').innerHTML = grupos.map(([d, l]) => { const ab = abrirTudo || mt.aberto.has(d), i = dres.indexOf(d); return `<div class="mt-grp ${foco === d ? 'foco' : ''}" style="--c:${corDRE(dres, d)}">
+      <button class="gh" onclick="alternarGrupoMT(${arg(d)})" onmouseenter="realcarDREmt(${i})" onmouseleave="realcarDREmt(-1)"><i class="fa-solid fa-chevron-${ab ? 'down' : 'right'}"></i><span class="pt"><i class="fa-solid fa-building-flag"></i></span><span class="gt"><b>${esc(nomeDRE(d))}</b><small>${fmtN(alunosDe(l))} alunos · ${new Set(l.map(e => e.municipio)).size} mun.</small></span><span class="n">${l.length}</span><span class="fo" onclick="event.stopPropagation();focarDREmt(${i})" title="Mostrar no mapa"><i class="fa-solid fa-crosshairs"></i></span></button>
+      ${ab ? `<div class="gi">${l.sort((a, b) => a.municipio.localeCompare(b.municipio, 'pt-BR') || a.nome.localeCompare(b.nome, 'pt-BR')).map(e => itemEscolaMT(e, dres)).join('')}</div>` : ''}</div>`; }).join('');
+}
+/* item da lista: ícone do tipo, nome, município e alunos; passar o mouse pulsa a escola no mapa */
+function itemEscolaMT(e, dres, comDre){
+  const g = grupoTipo(e.tipo), c = CORES_TIPO[g] || CORES_TIPO.Outro;
+  return `<button class="ei" style="--t:${c}" onclick="irEscolaMT(${arg(e.codigo)})" onmouseenter="pulsarEscolaMT(${arg(e.codigo)})"><span class="ic">${iconeTipoSVG(g, c, 15)}</span><span class="tx"><b>${esc(e.nome)}</b><small>${esc(e.municipio)} · ${esc(g)}${e.localidade === 'RURAL' ? ' · <i class="fa-solid fa-tractor"></i> rural' : ''}${comDre ? ` · <em style="color:${corDRE(dres, e.dre)}">${esc(nomeDRE(e.dre))}</em>` : ''}</small></span><span class="al">${num(e.alunos) ? `<b>${fmtN(e.alunos)}</b><small>${mt.ord === 'dist' ? fmtKm(distEscola(e)) : 'alunos'}</small>` : mt.ord === 'dist' ? `<b>${fmtKm(distEscola(e))}</b>` : ''}</span></button>`;
+}
+/* painel de filtros, com quantas escolas cada opção mostraria */
+function filtrosPainelMT(todas, dres){
+  const el = $('#esc-filtros'); if (!el) return; const f = mt.fil, n = filtrosAtivosMT() - (f.q ? 1 : 0);
+  const cont = (sem, fn) => { const c = {}; filtrarEscolasMT(todas, sem).forEach(e => { const k = fn(e); c[k] = (c[k] || 0) + 1; }); return c; };
+  const sec = (k, ic, t, ativos, corpo) => `<details class="mt-fsec" ${mt.secAb.has(k) || ativos ? 'open' : ''} ontoggle="secMT('${k}',this.open)"><summary><i class="fa-solid ${ic}"></i><span>${t}</span>${ativos ? `<em>${ativos}</em>` : ''}<i class="fa-solid fa-chevron-down sv"></i></summary><div class="mt-fcorpo">${corpo}</div></details>`;
+  const cT = cont('tipos', e => grupoTipo(e.tipo)), tipos = Object.keys(CORES_TIPO).filter(k => cT[k] || f.tipos.has(k));
+  const cL = cont('loc', e => e.localidade === 'RURAL' ? 'RURAL' : 'URBANA'), cP = cont('portes', porteMT), cD = cont('dists', distMT), cDr = cont('dres', e => e.dre), cM = cont('mun', e => chaveMun(e.municipio));
+  const muns = [...new Map(todas.filter(e => !f.dres.size || f.dres.has(e.dre)).map(e => [chaveMun(e.municipio), e.municipio])).entries()].sort((a, b) => a[1].localeCompare(b[1], 'pt-BR'));
+  const chip = (on, cor, ic, t, q, onc, tit) => `<button class="mt-fc ${on ? 'on' : ''} ${q ? '' : 'z'}" style="--c:${cor}" onclick="${onc}" ${tit ? `title="${esc(tit)}"` : ''}>${ic}<span>${esc(t)}</span><b>${q || 0}</b></button>`;
+  el.innerHTML = `<div class="mt-fh"><i class="fa-solid fa-sliders"></i><b>Filtros</b>${n ? `<em>${n} ativo${n === 1 ? '' : 's'}</em><button class="lk" onclick="limparFiltrosMT()"><i class="fa-solid fa-eraser"></i>Limpar</button>` : '<small>clique para combinar</small>'}</div>
+    ${sec('tipo', 'fa-shapes', 'Tipo de unidade', f.tipos.size, `<div class="mt-fcs">${tipos.map(k => chip(f.tipos.has(k), CORES_TIPO[k], iconeTipoSVG(k, CORES_TIPO[k], 14), k, cT[k], `filtroSetMT('tipos',${arg(k)})`)).join('')}</div>`)}
+    ${sec('loc', 'fa-tree-city', 'Localização', f.loc ? 1 : 0, `<div class="mt-seg">${[['', 'fa-earth-americas', 'Todas', (cL.URBANA || 0) + (cL.RURAL || 0)], ['URBANA', 'fa-building', 'Urbanas', cL.URBANA], ['RURAL', 'fa-tractor', 'Rurais', cL.RURAL]].map(([v, ic, t, q]) => `<button class="${f.loc === v ? 'on' : ''}" onclick="filtroEscMT('loc','${v}')"><i class="fa-solid ${ic}"></i>${t}<small>${fmtN(q || 0)}</small></button>`).join('')}</div>`)}
+    ${sec('porte', 'fa-children', 'Porte (alunos)', f.portes.size, `<div class="mt-fcs">${FAIXAS_ALUNOS.map((x, i) => chip(f.portes.has(i), x[2], '<i class="pt"></i>', x[1], cP[i], `filtroSetMT('portes',${i})`)).join('')}${cP[FAIXAS_ALUNOS.length] || f.portes.has(FAIXAS_ALUNOS.length) ? chip(f.portes.has(FAIXAS_ALUNOS.length), '#cbd5e1', '<i class="pt"></i>', 'sem informação', cP[FAIXAS_ALUNOS.length], `filtroSetMT('portes',${FAIXAS_ALUNOS.length})`) : ''}</div>`)}
+    ${sec('dist', 'fa-route', 'Distância até a sede da DRE', f.dists.size, `<div class="mt-fcs">${FAIXAS_DIST.map((x, i) => chip(f.dists.has(i), x[2], '<i class="pt"></i>', x[1], cD[i], `filtroSetMT('dists',${i})`, 'em linha reta')).join('')}</div>`)}
+    ${sec('mun', 'fa-city', 'Município', f.mun ? 1 : 0, `<select class="campo mt-fsel" onchange="filtroEscMT('mun',this.value)"><option value="">Todos os municípios (${muns.length})</option>${muns.map(([k, nm]) => `<option value="${esc(k)}" ${f.mun === k ? 'selected' : ''}>${esc(nm)} · ${cM[k] || 0}</option>`).join('')}</select>`)}
+    ${sec('dre', 'fa-building-flag', 'Diretorias Regionais', f.dres.size, `<div class="mt-fcs">${dres.map((d, i) => chip(!f.dres.size || f.dres.has(d), corDRE(dres, d), '<i class="pt"></i>', nomeDRE(d), cDr[d], `alternarDREfiltro(${i})`, d)).join('')}</div>`)}`;
+}
+function secMT(k, ab){ ab ? mt.secAb.add(k) : mt.secAb.delete(k); store.set('gaborg_mt_secab', [...mt.secAb]); }
+function filtroSetMT(k, v){ const S = mt.fil[k]; S.has(v) ? S.delete(v) : S.add(v); desenharEscolasMT(); enquadrarMT(true); }
+/* pílulas no topo do mapa com os filtros em uso; o × tira só aquele */
+function ativosMT(dres){
+  const el = $('#mt-ativos'); if (!el) return; const f = mt.fil, P = [];
+  if (f.q) P.push(['fa-magnifying-glass', `“${f.q}”`, "const q=$('#esc-q');if(q)q.value='';filtroEscMT('q','')", '#475569']);
+  f.tipos.forEach(k => P.push([null, k, `filtroSetMT('tipos',${arg(k)})`, CORES_TIPO[k], iconeTipoSVG(k, '#fff', 12)]));
+  if (f.loc) P.push([f.loc === 'RURAL' ? 'fa-tractor' : 'fa-building', f.loc === 'RURAL' ? 'Rurais' : 'Urbanas', "filtroEscMT('loc','')", f.loc === 'RURAL' ? '#65a30d' : '#2563eb']);
+  f.portes.forEach(i => P.push(['fa-children', (FAIXAS_ALUNOS[i] || [0, 'sem informação'])[1], `filtroSetMT('portes',${i})`, '#0284c7']));
+  f.dists.forEach(i => P.push(['fa-route', FAIXAS_DIST[i][1], `filtroSetMT('dists',${i})`, FAIXAS_DIST[i][2]]));
+  if (f.mun) { const e = escolasLista().find(x => chaveMun(x.municipio) === f.mun); P.push(['fa-city', e ? e.municipio : f.mun, "filtroEscMT('mun','')", '#0e7490']); }
+  f.dres.forEach(d => P.push(['fa-building-flag', nomeDRE(d), `alternarDREfiltro(${dres.indexOf(d)})`, corDRE(dres, d)]));
+  el.innerHTML = P.length ? P.map(([ic, t, onc, c, svg]) => `<button style="--c:${c}" onclick="${onc}" title="Tirar este filtro">${svg || `<i class="fa-solid ${ic}"></i>`}<span>${esc(t)}</span><i class="fa-solid fa-xmark x"></i></button>`).join('') + (P.length > 1 ? `<button class="lp" onclick="limparFiltrosMT()"><i class="fa-solid fa-eraser"></i>Limpar tudo</button>` : '') : '';
 }
 function alternarGrupoMT(d){ mt.aberto.has(d) ? mt.aberto.delete(d) : mt.aberto.add(d); painelEscolasMT(escolasLista(), dresDe(escolasLista()), filtrarEscolasMT(escolasLista())); }
 function alternarDREfiltro(i){
-  const dres = dresDe(escolasLista()), d = dres[i];
+  const dres = dresDe(escolasLista()), d = dres[i]; if (!d) return;
   if (!mt.fil.dres.size) mt.fil.dres = new Set([d]);
   else if (mt.fil.dres.has(d)) mt.fil.dres.delete(d);
   else mt.fil.dres.add(d);
@@ -3792,7 +3849,7 @@ function alternarDREfiltro(i){
   desenharEscolasMT(); enquadrarMT(true);
 }
 function filtroEscMT(k, v){ mt.fil[k] = v; clearTimeout(filtroEscMT.t); filtroEscMT.t = setTimeout(() => { desenharEscolasMT(); if (k !== 'q' || v.length > 2) enquadrarMT(true); }, k === 'q' ? 250 : 0); }
-function limparFiltrosMT(){ mt.fil = { dres:new Set(), tipo:'', loc:'', q:'' }; mt.foco = -1; ['#esc-q', '#esc-tipo', '#esc-loc'].forEach(s => { const e = $(s); if (e) e.value = ''; }); desenharEscolasMT(); enquadrarMT(true); }
+function limparFiltrosMT(){ mt.fil = { dres:new Set(), tipos:new Set(), loc:'', portes:new Set(), dists:new Set(), mun:'', q:'' }; mt.foco = -1; ['#esc-q'].forEach(s => { const e = $(s); if (e) e.value = ''; }); desenharEscolasMT(); enquadrarMT(true); }
 function irEscolaMT(cod){
   const e = escolasLista().find(x => x.codigo === cod); if (!e || !mt.mapa) return;
   if (window.innerWidth <= 820) alternarLadoMT(false);
