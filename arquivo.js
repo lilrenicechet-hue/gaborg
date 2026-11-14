@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.49.4';
+const VERSAO = '1.49.6';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -7920,7 +7920,7 @@ const CV_REL_CSS = `.r-a4{--f:1;width:794px;height:1123px;background:#fff;color:
    Documento de 1 a 2 páginas A4, com identidade da Secretaria de Estado de Educação (brasão e bandeira de MT),
    textos editáveis, prévia fiel e impressão/PDF. Usa os dados já carregados: escolas, obras, convênios e servidores. */
 let rxModo = store.get('gaborg_rx_modo', 'mun'), rxSel = store.get('gaborg_rx_sel', ''), rxBusca = '';
-const RX_SECOES = [['rede', 'A rede em números', true], ['mapa', 'Mapa do território', true], ['perfil', 'Perfil das escolas', true], ['escolas', 'Maiores escolas', true], ['territorio', 'Municípios ou DREs', true], ['pessoas', 'Pessoas', true], ['obras', 'Obras e investimentos', true], ['convenios', 'Convênios', true], ['textos', 'Destaques e próximos passos', true]];
+const RX_SECOES = [['rede', 'A rede em números', true], ['mapa', 'Mapa do território', true], ['perfil', 'Perfil das escolas', true], ['escolas', 'Maiores escolas', true], ['territorio', 'Municípios ou DREs', true], ['pessoas', 'Pessoas', true], ['obras', 'Obras e investimentos', true], ['convenios', 'Convênios', true], ['textos', 'Considerações ou encaminhamentos', true]];
 /* bandeira de Mato Grosso desenhada (não depende de internet) */
 const RX_BANDEIRA_MT = `<svg viewBox="0 0 100 70" class="rx-band" role="img" aria-label="Bandeira de Mato Grosso"><rect width="100" height="70" fill="#1c3f94"/><path d="M50,6L94,35L50,64L6,35Z" fill="#fff"/><circle cx="50" cy="35" r="14.5" fill="#1c3f94"/><path d="M50,24.5L52.6,32.2H60.7L54.2,37L56.6,44.8L50,40L43.4,44.8L45.8,37L39.3,32.2H47.4Z" fill="#f7c600"/></svg>`;
 const rxBrasao = () => `<img class="rx-bras" src="${esc(AP_UF_SIMB.c)}" alt="Brasão de Mato Grosso" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'rx-bras rx-bras-alt',innerHTML:'<i>MT</i>'}))">`;
@@ -7962,7 +7962,8 @@ function renderExecutivo(){
       <div class="rx-modos">${[['mun', 'Município', 'fa-city'], ['dre', 'DRE', 'fa-route'], ['est', 'SEDUC · Estado', 'fa-landmark']].map(([k, t, ic]) => `<button class="${rxModo === k ? 'on' : ''}" onclick="rxModo='${k}';rxSel='';rxBusca='';renderExecutivo()"><i class="fa-solid ${ic}"></i>${t}</button>`).join('')}</div>
       ${rxModo === 'est' ? '<p class="s">Relatório de toda a rede estadual, com as Diretorias Regionais.</p>' : `<input class="campo" placeholder="Buscar ${rxModo === 'mun' ? 'município' : 'DRE'}..." value="${esc(rxBusca)}" oninput="rxBusca=this.value;clearTimeout(window.rxT);window.rxT=setTimeout(()=>{rxListar()},150)">
       <div class="rx-lst" id="rx-lst">${rxLista(lista)}</div>`}
-      <details class="rx-det" open><summary><i class="fa-solid fa-layer-group"></i>Seções do relatório</summary><div class="rx-secs">${RX_SECOES.map(([k, t]) => `<label><input type="checkbox" ${sec[k] !== false ? 'checked' : ''} onchange="rxSec('${k}',this.checked)">${t}</label>`).join('')}</div></details>
+      <details class="rx-det" open><summary><i class="fa-solid fa-layer-group"></i>Seções do relatório</summary><div class="rx-secs">${RX_SECOES.map(([k, t]) => `<label><input type="checkbox" ${sec[k] !== false ? 'checked' : ''} onchange="rxSec('${k}',this.checked)">${t}</label>`).join('')}</div>
+        <label class="rx-man"><input type="checkbox" ${store.get('gaborg_rx_manual', true) !== false ? 'checked' : ''} onchange="store.set('gaborg_rx_manual',this.checked);renderExecutivo()"><span><b>Considerações em branco</b><small>Linhas para escrever à mão depois de impresso. Desmarcado, usa os destaques e próximos passos escritos abaixo.</small></span></label></details>
       <details class="rx-det" open><summary><i class="fa-solid fa-pen-to-square"></i>Textos</summary><form class="rx-tx" onsubmit="event.preventDefault()">
         <label><span class="rot">Síntese</span><textarea class="campo" name="sintese" rows="6" oninput="rxTexto()">${esc(P.sintese)}</textarea></label>
         <label><span class="rot">Destaques</span><textarea class="campo" name="destaques" rows="4" oninput="rxTexto()">${esc(P.destaques)}</textarea><small class="s">Um item por linha.</small></label>
@@ -8036,9 +8037,10 @@ function rxPaginas(uma){
   const convH = temConv ? `<p class="abnt-cap">{{GRA}} – Execução dos convênios</p><div class="rx-g3"><div class="rx-big" style="--c:#0e7490"><small>Valor pactuado</small><b>${fmtRc(cc)}</b><span>${cv.length} convênio${cv.length === 1 ? '' : 's'}${A.tipo !== 'mun' ? ` · ${new Set(cv.map(c => chaveMun(c.municipio))).size} municípios` : ''}</span></div>
       <div class="rx-fun">${rxBarras([['Pactuado', cc, '#1d4ed8'], ['Repassado', cr, '#0d9488'], ['Executado', ce, '#f59e0b']], fmtRc)}</div>
       <div class="rx-mini">${[['Em execução', cv.filter(c => c.situacao === 'Em execução').length], ['Concluídos', cv.filter(c => c.situacao === 'Concluído').length], ['Vencem em 90 dias', cv.filter((c, i) => cvAberto(c) && cX[i].dias !== null && cX[i].dias >= 0 && cX[i].dias <= 90).length]].map(([t, n]) => `<span><b>${n}</b>${t}</span>`).join('')}</div></div><p class="abnt-fonte">Fonte: SEDUC-MT, monitoramento de convênios (${new Date().getFullYear()}).</p>` : '';
-  const acoesH = on('textos') ? `<div class="abnt-sub"><b>{{SEC}}.1 Destaques</b></div>${abntAlineas(P.destaques)}<div class="abnt-sub"><b>{{SEC}}.2 Próximos passos</b></div>${abntAlineas(P.proximos)}` : '';
+  const manual = store.get('gaborg_rx_manual', true) !== false;
+  const acoesH = on('textos') ? (manual ? rlPauta(8) : `<div class="abnt-sub"><b>{{SEC}}.1 Destaques</b></div>${abntAlineas(P.destaques)}<div class="abnt-sub"><b>{{SEC}}.2 Próximos passos</b></div>${abntAlineas(P.proximos)}`) : '';
   const X = { intro:['fa-book-open', 'Introdução', abntPars(P.sintese)], gerais:['fa-circle-info', 'Informações gerais', gerais], terr:['fa-map-location-dot', 'Território', terrH],
-    obras:['fa-helmet-safety', 'Obras e investimentos', obrasH], conv:['fa-handshake', 'Convênios', convH], acoes:['fa-list-check', 'Considerações e encaminhamentos', acoesH] };
+    obras:['fa-helmet-safety', 'Obras e investimentos', obrasH], conv:['fa-handshake', 'Convênios', convH], acoes:['fa-list-check', 'Considerações ou encaminhamentos', acoesH] };
   const tem2 = temObras || temConv, ordem = !tem2 || uma === true ? [['intro', 'gerais', 'terr', 'obras', 'conv', 'acoes']]
     : uma === 'meio' ? [['intro', 'gerais', 'terr', 'conv'], ['obras', 'acoes']] : uma === 'meio2' ? [['intro', 'gerais', 'terr', 'obras'], ['conv', 'acoes']] : [['intro', 'gerais', 'terr'], ['obras', 'conv', 'acoes']];
   const pags = rlNumerar(rlPags(ordem.map(p => p.map(k => X[k])), true)), t = pags.length, simbMun = g && g.cod ? `<div class="apx-simb rx-simb" data-cod="${esc(g.cod)}"></div>` : '';
@@ -8165,6 +8167,9 @@ function rlPags(paginas, abnt){
   return paginas.map(pg => pg.filter(x => x && x[2]).map(([ic, t, h]) => `<section class="rl-s ${abnt ? 'abnt' : ''}"><div class="rl-sec"><span class="n">${abnt ? ++n : romano(++n)}</span><span class="ic"><i class="fa-solid ${ic}"></i></span><b>${esc(t)}</b><span class="ln"></span></div>${h.replace(/\{\{SEC\}\}/g, String(n))}</section>`).join('')).filter(Boolean);
 }
 const rlNumerar = pags => { const c = { TAB:0, GRA:0, FIG:0, QUA:0 }, nome = { TAB:'Tabela', GRA:'Gráfico', FIG:'Figura', QUA:'Quadro' }; return pags.map(h => h.replace(/\{\{(TAB|GRA|FIG|QUA)\}\}/g, (_, k) => nome[k] + ' ' + (++c[k]))); };
+/* campo aberto (pautado) para escrever à mão depois de impresso */
+const rlPauta = n => `<div class="rl-pauta">${'<i></i>'.repeat(n)}</div>`
+  + `<div class="rl-camp"><span>Responsável: <i></i></span><span>Cargo: <i></i></span><span>Data: ____/____/________</span></div>`;
 const rlAssin = ass => ass && (ass.nome || ass.cargo) ? `<div class="rl-ass"><i></i><b>${esc(ass.nome || '')}</b><small>${esc(ass.cargo || '')}</small></div>` : '';
 /* marca d'água: brasão de MT e o contorno do território, bem claros, atrás do conteúdo */
 function rlMarca(D, A){
@@ -8237,7 +8242,7 @@ const REL_TIPOS = {
       const ct = L.filter(c => ['Pendente', 'Irregular'].includes(c.prestacaoContas)).length; if (ct) at.push(`${ct} prestação${ct === 1 ? '' : 'ões'} de contas pendente${ct === 1 ? '' : 's'} ou irregular${ct === 1 ? '' : 'es'}.`);
       if (melhor.length) at.push(`Melhor desempenho: ${melhor.map(m => m.nome).join(', ')}.`);
       return { sintese:sint, destaques:at.join('\n') || 'Nenhuma pendência registrada.', proximos:['Cobrar a atualização da medição física das obras dos convênios.', venc ? 'Analisar os pedidos de aditivo de prazo dos convênios com vigência próxima do fim.' : '', ct ? 'Notificar os municípios com prestação de contas pendente.' : '', 'Ampliar o monitoramento aos convênios de Obras ainda sem acompanhamento.'].filter(Boolean).join('\n') }; },
-    opcoes:[['max', 'Linhas na tabela', 12], ['nota', 'Mostrar nota e classificação (no topo)', true], ['obra', 'Execução física da seção Obras', true]], abnt:true,
+    opcoes:[['max', 'Linhas na tabela', 12], ['nota', 'Mostrar nota e classificação (no topo)', true], ['obra', 'Execução física da seção Obras', true], ['manual', 'Considerações em branco, para escrever à mão', true]], abnt:true,
     paginas(D, A, L, v, uma){
       const X = L.map(cvK), conc = X.reduce((t, x) => t + x.conc, 0), rep = X.reduce((t, x) => t + x.rep, 0), exe = X.reduce((t, x) => t + x.exe, 0), M = cvPorMun(L), fisDe = x => v.obra ? cvFisReal(x) : x.fis;
       const fq = X.filter(x => fisDe(x) !== null && x.conc), ft = fq.reduce((s, x) => s + x.conc, 0), fis = ft ? Math.round(fq.reduce((s, x) => s + fisDe(x) * x.conc, 0) / ft) : null;
@@ -8254,10 +8259,10 @@ const REL_TIPOS = {
         : `<section class="rx-box">${cap('Tabela 1', 'Municípios parceiros')}<table class="rx-tab"><thead><tr><th>Município</th>${A.tipo === 'estado' ? '<th>DRE</th>' : ''}<th class="n">Convênios</th><th class="n">Pactuado</th><th>Repassado</th><th class="n">Executado</th>${v.nota ? '<th>Nota</th>' : ''}</tr></thead><tbody>
           ${mostra.map(m => `<tr><td><b>${esc(m.nome)}</b></td>${A.tipo === 'estado' ? `<td>${m.dre ? esc(nomeDRE(m.dre)) : '—'}</td>` : ''}<td class="n">${m.L.length}</td><td class="n">${fmtRc(m.conc)}</td><td class="nw"><span class="rx-pb"><i style="width:${(m.conc ? m.rep / m.conc * 100 : 0).toFixed(0)}%;background:#0d9488"></i></span>${m.conc ? Math.round(m.rep / m.conc * 100) : 0}%</td><td class="n">${fmtRc(m.exe)}</td>${v.nota ? `<td><span class="rx-st" style="--c:${CV_COR[m.cls]}">${m.nota === null ? '—' : Math.round(m.nota) + ' · ' + m.cls}</span></td>` : ''}</tr>`).join('')}</tbody></table>${fonte}${linhas.length > mostra.length ? `<p class="rx-mais">e mais ${linhas.length - mostra.length} município${linhas.length - mostra.length === 1 ? '' : 's'}.</p>` : ''}</section>`;
       const dest = A.tipo === 'mun' && v.destinatario ? `<div class="rl-dest abnt-dest"><p><b>A/C:</b> ${esc(v.destinatario)}</p><p><b>Assunto:</b> Situação dos convênios entre a SEDUC-MT e o Município de ${esc(A.nome)}.</p></div>` : '';
-      const acoes = `<div class="abnt-sub"><b>{{SEC}}.1 Pontos de atenção</b></div>${abntAlineas(v.destaques)}<div class="abnt-sub"><b>{{SEC}}.2 Próximos passos</b></div>${abntAlineas(v.proximos)}`;
+      const acoes = v.manual ? rlPauta(8) : `<div class="abnt-sub"><b>{{SEC}}.1 Pontos de atenção</b></div>${abntAlineas(v.destaques)}<div class="abnt-sub"><b>{{SEC}}.2 Próximos passos</b></div>${abntAlineas(v.proximos)}`;
       const notaTopo = v.nota && notaM !== null ? `<div class="rl-notatop" style="--c:${CV_COR[clsM]}"><small>Nota média</small><b>${Math.round(notaM)}</b><span>${clsM}</span><i style="--p:${Math.max(0, Math.min(100, notaM)).toFixed(0)}"></i></div>` : '';
       const tit = rlTit(D, A, A.tipo === 'mun' && A.dre ? 'DRE ' + esc(nomeDRE(A.dre)) : A.tipo === 'dre' ? A.ms.length + ' municípios' : 'Rede estadual', 'Convênios · ' + rlNomeAlvo(A), rlHoje(), notaTopo), sint = abntPars(v.sintese);
-      const sem = h => h.replace(/<h3>[^<]*<\/h3>/, ''), SX = { intro:['fa-book-open', 'Introdução', dest + sint], gerais:['fa-circle-info', 'Informações gerais', kpi], rec:['fa-filter-circle-dollar', 'Execução dos recursos', graf], tab:['fa-table-list', A.tipo === 'mun' ? 'Convênios' : 'Municípios parceiros', sem(tab)], acoes:['fa-list-check', 'Considerações e encaminhamentos', acoes] };
+      const sem = h => h.replace(/<h3>[^<]*<\/h3>/, ''), SX = { intro:['fa-book-open', 'Introdução', dest + sint], gerais:['fa-circle-info', 'Informações gerais', kpi], rec:['fa-filter-circle-dollar', 'Execução dos recursos', graf], tab:['fa-table-list', A.tipo === 'mun' ? 'Convênios' : 'Municípios parceiros', sem(tab)], acoes:['fa-list-check', 'Considerações ou encaminhamentos', acoes] };
       const ord = uma === true ? [['intro', 'gerais', 'rec', 'tab', 'acoes']] : uma === 'alt' ? [['intro', 'gerais', 'rec', 'tab'], ['acoes']] : uma === 'alt2' ? [['intro', 'gerais', 'tab'], ['rec', 'acoes']] : [['intro', 'gerais', 'rec'], ['tab', 'acoes']];
       return { tit, pags:ord.map(p => p.map(k => SX[k])) }; },
     fonte:'monitoramento de convênios e seção Obras' }
@@ -8380,7 +8385,11 @@ const RL_CSS = `.rl-a4 .rx-in{z-index:1}.rl-marca{position:absolute;inset:150px 
 .rl-notatop small{font-size:8px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#475569}.rl-notatop b{font-size:34px;line-height:1;font-weight:900;color:var(--c);font-family:Inter,Arial,sans-serif}
 .rl-notatop span{font-size:10px;font-weight:800;color:#fff;background:var(--c);padding:2px 10px;border-radius:99px;text-transform:uppercase;letter-spacing:.06em}
 .rl-notatop i{display:block;width:84px;height:5px;border-radius:9px;margin-top:4px;background:linear-gradient(90deg,var(--c) calc(var(--p) * 1%),#e2e8f0 0)}
-.rl-mun{filter:drop-shadow(0 6px 12px rgba(15,23,42,.18))}`;
+.rl-mun{filter:drop-shadow(0 6px 12px rgba(15,23,42,.18))}
+.rl-pauta{margin:2pt 0 8pt}.rl-pauta i{display:block;height:calc(25px * var(--f));border-bottom:1px solid #94a3b8}
+.rl-camp{display:grid;grid-template-columns:1.3fr 1fr auto;gap:14px;margin:10pt 0 2pt;font-family:Arial,Helvetica,sans-serif;font-size:10pt;color:#334155}
+.rl-camp span{display:flex;align-items:flex-end;gap:6px;white-space:nowrap}.rl-camp i{flex:1;border-bottom:1px solid #94a3b8;height:14px}
+.rx-man{display:flex;gap:8px;align-items:flex-start;margin-top:8px;padding:8px;border-radius:10px;background:var(--marca-bg,#eff6ff);cursor:pointer;font-size:12.5px}.rx-man b{display:block}.rx-man small{display:block;color:var(--mut,#64748b);font-size:11.5px}.rx-man input{margin-top:3px}`;
 /* ---------- painel de Obras: tipos com ícones animados, rosca da situação, entregas por trimestre ---------- */
 function obHero(L){
   const st = Object.keys(OB_ST).map(s => [s, L.filter(o => obStatus(o) === s).length, OB_ST[s]]).filter(f => f[1]);
