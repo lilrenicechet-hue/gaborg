@@ -25,7 +25,6 @@
   try {
     const i192 = icone(192, false, .78), i512 = icone(512, false, .78), iMask = icone(512, true, .62);
     link('icon', icone(32, false, .82), { type:'image/png' });
-    link('apple-touch-icon', icone(180, true, .78));
     const base = location.href.split('#')[0].split('?')[0].replace(/[^/]*$/, '');
     const manifesto = {
       name:'GABOrg · Organização Institucional SEDUC-MT', short_name:'GABOrg',
@@ -34,7 +33,8 @@
       background_color:'#0b1222', theme_color:'#0b1222', lang:'pt-BR',
       icons:[{ src:i192, sizes:'192x192', type:'image/png', purpose:'any' }, { src:i512, sizes:'512x512', type:'image/png', purpose:'any' }, { src:iMask, sizes:'512x512', type:'image/png', purpose:'maskable' }]
     };
-    link('manifest', 'data:application/manifest+json;charset=utf-8,' + encodeURIComponent(JSON.stringify(manifesto)));
+    /* o manifesto agora é o arquivo manifest.webmanifest (necessário para instalar no Android/Samsung); este fica só de reserva */
+    if (!document.querySelector('link[rel="manifest"]')) link('manifest', 'data:application/manifest+json;charset=utf-8,' + encodeURIComponent(JSON.stringify(manifesto)));
   } catch (e) {}
 })();
 
@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.53.0';
+const VERSAO = '1.54.0';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -1403,6 +1403,8 @@ function trocarVista(v){
   if (cenMapa) { if (VISTAS_CEN.includes(v)) { if (!cenSwap) aplicarCenario(); } else if (cenSwap) desaplicarCenario(); }
   if (typeof atualizarBarraCen === 'function') atualizarBarraCen();
   document.querySelectorAll('.nav-b').forEach(b => b.classList.toggle('on', b.dataset.vista === v));
+  { const mb = $('.nav-mais'); if (mb) mb.classList.toggle('on', !NAV_FIXOS.includes(v)); }
+  if (history.replaceState && /^https?:$/.test(location.protocol)) try { history.replaceState(null, '', '#' + v); } catch (e) {}
   document.querySelectorAll('.vista').forEach(s => s.classList.toggle('fora', s.id !== 'v-' + v));
   atualizarVistaAtual();
   if (typeof animarEntrada === 'function') animarEntrada($('#v-' + v));
@@ -1921,7 +1923,7 @@ function abrirApp(){
   $('#login').classList.add('hidden'); $('#app').classList.remove('hidden');
   if (typeof animAtiva === 'function' && animAtiva()) { const ap = $('#app'); ap.classList.add('chegando'); setTimeout(() => { ap.classList.remove('chegando'); animarEntrada($('#v-' + vistaAtual)); }, 750); }
   preencherUsuario(); statusSync();
-  { const hv = location.hash.slice(1); if (['mapa','lista','painel','validacoes','config'].includes(hv)) vistaAtual = hv; }
+  { const hv = location.hash.slice(1), vs = [...document.querySelectorAll('.nav-b[data-vista]')].map(b => b.dataset.vista); if (vs.includes(hv)) vistaAtual = hv; }
   trocarVista(vistaAtual === 'usuarios' && !ehAdmin() ? 'mapa' : (vistaAtual || 'mapa'));
   if (!store.get('gaborg_view_ok', false)) { setTimeout(() => ajustar(true), 60); store.set('gaborg_view_ok', true); }
   if (fila.length && !somenteLeitura()) enviarFila(); else if (somenteLeitura() && fila.length) { fila = []; store.set('gaborg_fila', fila); }
@@ -6092,14 +6094,17 @@ function cartaoAparencia(){
 
 /* ===================== MENU LATERAL: RECOLHER E AJUSTAR LARGURA ===================== */
 let ladoCfg = Object.assign({ mini:false, w:236 }, store.get('gaborg_lado', {}));
+/* tablet e celular dobrável aberto (Galaxy Z Fold): menu vira uma coluna de ícones, para sobrar tela ao conteúdo */
+const telaMedia = () => window.innerWidth > 820 && window.innerWidth <= 1180;
 function aplicarLado(){
   const larga = window.innerWidth > 820;
-  document.body.classList.toggle('lado-mini', larga && ladoCfg.mini);
+  document.body.classList.toggle('lado-mini', larga && (telaMedia() ? !ladoCfg.abertoMedia : ladoCfg.mini));
   document.documentElement.style.setProperty('--lado-w', Math.max(180, Math.min(340, ladoCfg.w)) + 'px');
   const tg = document.querySelector('.lado-tg'); if (tg) tg.title = ladoCfg.mini ? 'Expandir o menu (tecla [ )' : 'Recolher o menu (tecla [ )';
   setTimeout(() => { if (vistaAtual === 'mapa') desenharMini(); }, 260);
 }
-function alternarLado(forcar){ ladoCfg.mini = forcar !== undefined ? forcar : !ladoCfg.mini; store.set('gaborg_lado', ladoCfg); aplicarLado(); }
+function alternarLado(forcar){ if (telaMedia()) ladoCfg.abertoMedia = forcar !== undefined ? !forcar : !ladoCfg.abertoMedia; else ladoCfg.mini = forcar !== undefined ? forcar : !ladoCfg.mini; store.set('gaborg_lado', ladoCfg); aplicarLado(); }
+window.addEventListener('resize', () => { clearTimeout(aplicarLado.t); aplicarLado.t = setTimeout(aplicarLado, 120); });
 (function(){
   const alca = document.querySelector('.lado-alca'), lado = document.querySelector('.lado'); if (!alca) return;
   let ini = null;
@@ -8676,6 +8681,47 @@ function menuUsuario(){
   document.body.appendChild(m);
 }
 
+/* ===================== CELULAR: MENU "MAIS" (todas as seções numa folha que sobe de baixo) ===================== */
+const NAV_FIXOS = ['mapa', 'escolas', 'convenios', 'apresentacao'];
+function abrirMaisMenu(){
+  fecharMaisMenu(); const nav = $('.lado nav'); if (!nav) return;
+  const grupos = []; let g = null;
+  [...nav.children].forEach(el => { if (el.tagName === 'H6') { g = { t:el.textContent, it:[] }; grupos.push(g); } else if (g && el.classList.contains('nav-b') && el.dataset.vista && !el.classList.contains('nav-mais') && !el.classList.contains('hidden') && (typeof podeVerVista !== 'function' || podeVerVista(el.dataset.vista)) && !(el.classList.contains('so-adm') && !ehAdmin())) g.it.push(el); });
+  const f = document.createElement('div'); f.className = 'mais-f'; f.id = 'mais-f';
+  f.innerHTML = `<div class="mais-fundo" onclick="fecharMaisMenu()"></div><div class="mais-cx" role="dialog" aria-label="Todas as seções"><span class="mais-alca"></span>
+    <div class="mais-topo"><button class="mais-busca" onclick="fecharMaisMenu();abrirPaleta()"><i class="fa-solid fa-magnifying-glass"></i>Buscar setor, escola, município...</button>
+      ${appInstalavel() ? '<button class="mais-inst" onclick="fecharMaisMenu();instalarApp()"><i class="fa-solid fa-download"></i>Instalar</button>' : ''}</div>
+    ${grupos.filter(x => x.it.length).map(x => `<h6>${esc(x.t)}</h6><div class="mais-g">${x.it.map(b => `<button class="${b.dataset.vista === vistaAtual ? 'on' : ''}" onclick="fecharMaisMenu();trocarVista('${b.dataset.vista}')">${b.querySelector('i').outerHTML}<span>${esc(b.querySelector('span').textContent)}</span>${b.querySelector('.qt:not(.hidden)') ? `<em>${esc(b.querySelector('.qt').textContent)}</em>` : ''}</button>`).join('')}</div>`).join('')}
+    <div class="mais-pe"><button onclick="fecharMaisMenu();menuUsuario()"><i class="fa-solid fa-circle-user"></i>Minha conta</button><button onclick="alternarTema()"><i class="fa-solid fa-circle-half-stroke"></i>Tema</button><button onclick="fecharMaisMenu();sair()"><i class="fa-solid fa-power-off"></i>Sair</button></div></div>`;
+  document.body.appendChild(f); requestAnimationFrame(() => f.classList.add('on'));
+  const cx = f.querySelector('.mais-cx'); let y0 = null;
+  cx.addEventListener('touchstart', e => { if (cx.scrollTop <= 0) y0 = e.touches[0].clientY; }, { passive:true });
+  cx.addEventListener('touchmove', e => { if (y0 === null) return; const d = e.touches[0].clientY - y0; if (d > 0) cx.style.transform = `translateY(${d}px)`; }, { passive:true });
+  cx.addEventListener('touchend', e => { if (y0 === null) return; const d = (e.changedTouches[0].clientY - y0); y0 = null; cx.style.transform = ''; if (d > 90) fecharMaisMenu(); });
+}
+function fecharMaisMenu(){ const f = $('#mais-f'); if (!f) return; f.classList.remove('on'); setTimeout(() => f.remove(), 250); }
+window.addEventListener('popstate', fecharMaisMenu);
+
+/* ===================== DOBRÁVEIS (Galaxy Z Fold e similares) =====================
+ * Quando o aparelho informa duas áreas de tela (dobra em pé ou deitada), cada seção com lista e detalhe
+ * põe um lado em cada metade, sem nada em cima da dobra. */
+function telasDobravel(){
+  const r = document.documentElement; let s = null;
+  try { s = (window.viewport && window.viewport.segments) || (window.getWindowSegments && window.getWindowSegments()) || null; } catch (e) {}
+  let modo = '';
+  if (s && s.length === 2) {
+    const [a, b] = s, ax = a.x ?? a.left, ay = a.y ?? a.top, bx = b.x ?? b.left, by = b.y ?? b.top;
+    if (Math.abs(ay - by) < 2) { modo = 'h'; r.style.setProperty('--seg-a', a.width + 'px'); r.style.setProperty('--dobra', Math.max(0, bx - (ax + a.width)) + 'px'); }
+    else { modo = 'v'; r.style.setProperty('--seg-a', a.height + 'px'); r.style.setProperty('--dobra', Math.max(0, by - (ay + a.height)) + 'px'); }
+  }
+  r.classList.toggle('telas-h', modo === 'h'); r.classList.toggle('telas-v', modo === 'v');
+  r.classList.toggle('dobravel-aberto', !modo && window.innerWidth > 640 && window.innerWidth / window.innerHeight > .8 && window.innerWidth / window.innerHeight < 1.35 && matchMedia('(pointer:coarse)').matches);
+  if (modo && typeof mt !== 'undefined' && mt.mapa) setTimeout(() => mt.mapa.invalidateSize(), 200);
+}
+window.addEventListener('resize', () => { clearTimeout(telasDobravel.t); telasDobravel.t = setTimeout(telasDobravel, 100); });
+if (window.viewport && window.viewport.addEventListener) try { window.viewport.addEventListener('segmentschange', telasDobravel); } catch (e) {}
+telasDobravel();
+
 /* ===================== APP INSTALÁVEL (PWA) ===================== */
 let pedidoInstalacao = null;
 const ehIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -8694,8 +8740,8 @@ async function instalarApp(){
     html:`<p>No <b>Safari</b>:</p><ol style="margin:0;padding-left:20px;font-size:13.5px;line-height:1.9;color:var(--txt2)"><li>Toque em <b>Compartilhar</b> <i class="fa-solid fa-arrow-up-from-bracket"></i> na barra do navegador.</li><li>Escolha <b>Adicionar à Tela de Início</b>.</li><li>Confirme em <b>Adicionar</b>. O GABOrg abre em tela cheia, como um app.</li></ol>` });
   toast('Use o menu do navegador › "Instalar app" ou "Adicionar à tela inicial".');
 }
-// Sem service worker: o app é só index.html + arquivo.js. Remove o de versões anteriores (sw.js), se houver.
-if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister())).catch(() => {});
+// Service worker (sw.js): abre sem internet com os últimos dados guardados; página e arquivo.js vêm sempre da rede quando há conexão.
+if ('serviceWorker' in navigator && location.protocol === 'https:') window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 atualizarInstalavel();
 
 window.GABORG_VERSAO_JS = VERSAO;
