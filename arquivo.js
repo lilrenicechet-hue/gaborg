@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.42.1';
+const VERSAO = '1.43.0';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -82,6 +82,7 @@ const CAMPOS = {
   propSetores: ['id','propostaId','setorId','nome','sigla','tipo','paiId','ordem','status','responsavel','contato','competencias','entregas','orcamento','custoMensal','servidores','comissionados','impacto','impactoDescricao','positivos','negativos','layout','colunas','dx','dy','atualizadoEm','atualizadoPor','quantidade','excluido'],
   escolas: ['id','codigo','nome','dre','municipio','tipo','localidade','endereco','numero','cep','bairro','telefone','email','latitude','longitude','atualizadoEm','atualizadoPor','alunos','inclusiva','profissionais'],
   obras: ['id','origem','instrumento','codigo','dre','municipio','unidade','escolaCodigo','vinculo','rede','objeto','salas','alunos','empresa','status','valor','execFisica','execFinanceira','situacao','previsao','inaugurar','aptaSpat','aptaSagr','atoGs','dataInauguracao','obsSuob','obsSpat','obsSagr','observacoes','latitude','longitude','atualizadoEm','atualizadoPor'],
+  convenios: ['id','municipio','numero','objeto','escolaCodigo','rede','dataAssinatura','dataTermino','valorConcedente','valorContrapartida','valorRepassado','valorExecutado','execFisica','situacaoPrazo','prestacaoContas','situacao','observacoes','responsavel','dataAtualizacao','atualizadoEm','atualizadoPor'],
   chefias: ['id','setorId','titular','situacao','desde','atoNomeacao','substituto','atoSubstituto','contato','observacao','atualizadoEm','atualizadoPor'],
   etapas: ['id','propostaId','titulo','fase','responsavel','setorId','inicio','prazo','status','observacao','ordem','atualizadoEm','atualizadoPor'],
   metas: ['id','setorId','objetivo','titulo','indicador','unidade','linhaBase','meta','resultado','prazo','status','observacao','atualizadoEm','atualizadoPor'],
@@ -89,7 +90,7 @@ const CAMPOS = {
   parametros: ['id','valor','atualizadoEm','atualizadoPor'],
   servidores: ['id','matricula','nome','cargo','vinculo','tipoLotacao','unidade','lotacaoCod','lotacao','setorId','dataInicio','dataFinal','sugerido','importadoEm','importadoPor'],
 };
-const TABS_DB = ['setores','validacoes','vinculos','historico','rubricas','despesas','propostas','propSetores','escolas','chefias','etapas','metas','reunioes','parametros','servidores','obras'];
+const TABS_DB = ['setores','validacoes','vinculos','historico','rubricas','despesas','propostas','propSetores','escolas','chefias','etapas','metas','reunioes','parametros','servidores','obras','convenios'];
 
 /* ===================== ESTRUTURA DO DECRETO Nº 2.236/2026 =====================
    Hierarquia montada a partir do anexo (organograma). Cada nível = 2 espaços.
@@ -359,7 +360,7 @@ function confirmar(titulo, texto, rotulo, perigo){
 }
 
 /* ===================== ESTADO ===================== */
-let DB = { setores:[], validacoes:[], vinculos:[], historico:[], rubricas:[], despesas:[], propostas:[], propSetores:[], escolas:[], chefias:[], etapas:[], metas:[], reunioes:[], parametros:[], servidores:[], obras:[] };
+let DB = { setores:[], validacoes:[], vinculos:[], historico:[], rubricas:[], despesas:[], propostas:[], propSetores:[], escolas:[], chefias:[], etapas:[], metas:[], reunioes:[], parametros:[], servidores:[], obras:[], convenios:[] };
 let backendVersao = '';
 const URL_PADRAO = 'https://script.google.com/macros/s/AKfycbzZsM71FJARYYoqpRcFY4tHUAVBV-EdVW2NDL6eLaMId-iXY6Z-bnhuOkxA2nyfrdUz/exec';
 let cfg = Object.assign({ url:URL_PADRAO, login:'', usuario:'', perfil:'', modo:'' }, store.get('gaborg_cfg', {}));
@@ -382,7 +383,7 @@ const SECOES_ACESSO = [
   ['Análise', [['painel', 'Indicadores', 'fa-chart-line', ['painel'], 'Indicadores estratégicos (só leitura)', true], ['relatorios', 'Relatórios e minutas', 'fa-file-pdf', ['relatorios'], 'Montar relatórios, portarias e decretos', true], ['financeiro', 'Financeiro', 'fa-coins', ['financeiro'], 'Rubricas, despesas e custos'],
     ['propostas', 'Propostas', 'fa-lightbulb', ['propostas'], 'Cenários de reestruturação'], ['validacoes', 'Validações', 'fa-stamp', ['validacoes'], 'Pedidos e respostas de validação'], ['apresentacao', 'Apresentação', 'fa-person-chalkboard', ['apresentacao'], 'Apresentação animada por município ou DRE (receber prefeitos)', true]]],
   ['Gestão', [['reestruturacao', 'Reestruturação', 'fa-compass-drafting', ['reestruturacao'], 'Diagnóstico, metas, competências e minuta'], ['chefias', 'Chefias', 'fa-user-tie', ['chefias'], 'Titulares, substitutos e atos'],
-    ['servidores', 'Servidores', 'fa-id-card-clip', ['servidores'], 'Lotação, vínculos e importação'], ['regional', 'Gestão regional', 'fa-route', ['regional'], 'Análise das DREs e sugestões'], ['obras', 'Obras e inaugurações', 'fa-helmet-safety', ['obras'], 'Contratos, convênios, execução e inaugurações']]]
+    ['servidores', 'Servidores', 'fa-id-card-clip', ['servidores'], 'Lotação, vínculos e importação'], ['regional', 'Gestão regional', 'fa-route', ['regional'], 'Análise das DREs e sugestões'], ['obras', 'Obras e inaugurações', 'fa-helmet-safety', ['obras'], 'Contratos, convênios, execução e inaugurações'], ['convenios', 'Convênios', 'fa-handshake', ['convenios'], 'Convênios com municípios: repasse, execução, prazo e prestação de contas']]]
 ];
 const SECOES_LISTA = SECOES_ACESSO.flatMap(g => g[1]);
 const SEM_EDICAO = new Set(SECOES_LISTA.filter(x => x[5]).map(x => x[0]));
@@ -398,7 +399,7 @@ function perfilSistema(nome){
 }
 let perfisLista = [];
 const acesso = () => cfg.simulado || cfg.acesso || perfilSistema(cfg.perfil);
-const nivelSec = k => { const a = acesso(), sc = a.secoes || {}; if (a.administrar) return 'editar'; if (k === 'apresentacao' && !sc[k]) return sc.escolas && sc.escolas !== 'oculto' ? 'ver' : 'oculto'; if (k === 'obras' && !sc[k]) return sc.escolas || 'oculto'; return sc[k] || 'oculto'; };
+const nivelSec = k => { const a = acesso(), sc = a.secoes || {}; if (a.administrar) return 'editar'; if (k === 'apresentacao' && !sc[k]) return sc.escolas && sc.escolas !== 'oculto' ? 'ver' : 'oculto'; if (k === 'convenios' && !sc[k]) return sc.obras || sc.escolas || 'oculto'; if (k === 'obras' && !sc[k]) return sc.escolas || 'oculto'; return sc[k] || 'oculto'; };
 const podeVerSec = k => nivelSec(k) !== 'oculto';
 const podeEditarSec = k => !SEM_EDICAO.has(k) && nivelSec(k) === 'editar';
 const podeExtra = k => { const a = acesso(); return !!(a.administrar || (a.extras || {})[k]); };
@@ -463,7 +464,7 @@ async function renderPerfis(){
 const MODELOS_PERFIL = [
   ['branco', 'Em branco', 'fa-file', 'Tudo oculto; você escolhe seção por seção', {}, {}],
   ['consulta', 'Consulta total', 'fa-eye', 'Vê todas as seções, sem editar', { '*':'ver' }, { exportar:true, documentos:true }],
-  ['gabinete', 'Gabinete — análise e documentos', 'fa-landmark', 'Indicadores, relatórios, mapas e Apresentação', { estrutura:'ver', escolas:'ver', apresentacao:'ver', obras:'ver', painel:'ver', relatorios:'ver', tv:'ver', propostas:'ver', reestruturacao:'ver', resultados:'ver', regional:'ver', chefias:'ver' }, { documentos:true, exportar:true }],
+  ['gabinete', 'Gabinete — análise e documentos', 'fa-landmark', 'Indicadores, relatórios, mapas e Apresentação', { estrutura:'ver', escolas:'ver', apresentacao:'ver', obras:'ver', convenios:'ver', painel:'ver', relatorios:'ver', tv:'ver', propostas:'ver', reestruturacao:'ver', resultados:'ver', regional:'ver', chefias:'ver' }, { documentos:true, exportar:true }],
   ['pessoas', 'Gestão de pessoas', 'fa-id-card-clip', 'Edita servidores e chefias; consulta a estrutura', { estrutura:'ver', painel:'ver', servidores:'editar', chefias:'editar', implantacao:'ver', relatorios:'ver' }, { nomesServidores:true, exportar:true, documentos:true }],
   ['regional', 'DRE / Gestão regional', 'fa-map-location-dot', 'Edita escolas e alunos; vê DREs, servidores e indicadores', { estrutura:'ver', escolas:'editar', apresentacao:'ver', regional:'ver', painel:'ver', servidores:'ver', relatorios:'ver', tv:'ver' }, { documentos:true }],
   ['financeiro', 'Financeiro', 'fa-coins', 'Edita custos; vê estrutura e propostas', { estrutura:'ver', financeiro:'editar', propostas:'ver', painel:'ver', relatorios:'ver' }, { exportar:true, documentos:true }],
@@ -1426,6 +1427,7 @@ function atualizarVistaAtual(){
   else if (vistaAtual === 'relatorios') renderRelatorios();
   else if (vistaAtual === 'apresentacao') renderApresentacao();
   else if (vistaAtual === 'obras') renderObras();
+  else if (vistaAtual === 'convenios') renderConvenios();
   atualizarBadgeIm();
 }
 function redesenharTudo(){ indexar(); atualizarVistaAtual(); if (selId && porId.has(selId)) renderPainel(); else fecharPainel(); }
@@ -6205,6 +6207,7 @@ function apPrevia(){
       <label class="apx-campo"><span>Convidado (opcional)</span><input id="apx-conv" value="${esc(apConvidado)}" placeholder="${A.tipo === 'mun' ? 'Ex.: Prefeito(a) Fulano de Tal' : A.tipo === 'estado' ? 'Ex.: Comitiva do Ministério da Educação' : 'Ex.: Equipe da DRE'}" oninput="apConvidado=this.value" maxlength="80"><small>Aparece na capa de boas-vindas. Não é salvo.</small></label>
       <label class="apx-campo"><span>Avançar os slides</span><select onchange="apAuto=+this.value">${[[0, 'Manualmente (setas, clique ou passador)'], [10, 'Automático a cada 10 s'], [15, 'Automático a cada 15 s'], [25, 'Automático a cada 25 s']].map(([v, t]) => `<option value="${v}" ${apAuto === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
       <label class="apx-campo apx-rep"><input type="checkbox" ${apRepetir ? 'checked' : ''} onchange="apRepetir=this.checked;store.set('gaborg_ap_repetir',apRepetir)"><span><b><i class="fa-solid fa-repeat"></i> Repetir em loop</b><small>Ao terminar, volta ao início e recomeça sozinha (bom para telões e recepção). Se o avanço estiver manual, passa a cada 15 s.</small></span></label>
+      ${cvLista().length ? `<label class="apx-campo apx-rep"><input type="checkbox" ${store.get('gaborg_ap_cvnota', false) ? 'checked' : ''} onchange="store.set('gaborg_ap_cvnota',this.checked)"><span><b><i class="fa-solid fa-star-half-stroke"></i> Mostrar a nota dos convênios</b><small>Inclui a classificação (Ótima, Boa, Regular, Fraca) no slide de convênios. Desligado, o slide mostra só valores, execução e vigência.</small></span></label>` : ''}
       <div class="apx-not" id="apx-not"></div>
       <div class="apx-rot" id="apx-rot"><span>Roteiro · ${roteiro.length} telas</span><ol>${roteiro.map(t => `<li>${esc(t)}</li>`).join('')}</ol></div>
       <button class="btn btn-p apx-ir" onclick="apAbrir()"><i class="fa-solid fa-play"></i>Iniciar apresentação</button>
@@ -6240,13 +6243,13 @@ function apTipos(es){ const c = {}; es.forEach(e => { const g = grupoTipo(e.tipo
 function apRoteiro(D, A){
   if (A.tipo === 'estado') { const R = [['capa', 'Boas-vindas'], ['territorio', 'Mato Grosso no mapa'], ['numeros', 'A rede em números'], ['dres', 'As Diretorias Regionais'], ['distancias', 'Distâncias'], ['orgao', 'O órgão central']];
     if (apTemPessoas(D, A)) R.push(['pessoas', 'Pessoas']);
-    if (apObrasDe(D, A).length) R.push(['obras', 'Obras e investimentos'], ['obrasmapa', 'Investimentos no mapa']); if (apTemObrasDest(D, A)) R.push(['obrasdest', 'Obras em destaque']);
+    if (apObrasDe(D, A).length) R.push(['obras', 'Obras e investimentos'], ['obrasmapa', 'Investimentos no mapa']); if (apTemObrasDest(D, A)) R.push(['obrasdest', 'Obras em destaque']); if (apConvDe(D, A).length) R.push(['convenios', A.tipo === 'mun' ? 'Convênios com o município' : 'Convênios com os municípios']);
     R.push(['perfil', 'Perfil da rede'], ['satelite', 'Maiores escolas no satélite']); if (apNoticiasDe(A).length) R.push(['noticias', 'Boas notícias']); R.push(['fim', 'Encerramento']); return R; }
   const R = [['capa', 'Boas-vindas'], ['territorio', A.tipo === 'mun' ? 'O município no mapa' : 'A região no mapa'], ['numeros', 'A rede em números']];
   if (A.tipo === 'dre') R.push(['municipios', 'Municípios atendidos']);
   if (A.es.length) R.push(['perfil', 'Perfil da rede'], ['satelite', A.tipo === 'mun' ? 'Nossas escolas no satélite' : 'Maiores escolas no satélite']);
   if (apTemPessoas(D, A)) R.push(['pessoas', 'Pessoas']);
-  if (apObrasDe(D, A).length) R.push(['obras', 'Obras e investimentos'], ['obrasmapa', 'Investimentos no mapa']); if (apTemObrasDest(D, A)) R.push(['obrasdest', 'Obras em destaque']);
+  if (apObrasDe(D, A).length) R.push(['obras', 'Obras e investimentos'], ['obrasmapa', 'Investimentos no mapa']); if (apTemObrasDest(D, A)) R.push(['obrasdest', 'Obras em destaque']); if (apConvDe(D, A).length) R.push(['convenios', A.tipo === 'mun' ? 'Convênios com o município' : 'Convênios com os municípios']);
   if (A.tipo === 'mun' && A.dre) R.push(['dre', 'A DRE que atende']);
   if (apNoticiasDe(A).length) R.push(['noticias', 'Boas notícias']);
   R.push(['fim', 'Encerramento']); return R;
@@ -6286,6 +6289,7 @@ function apTela(D, A, k){
   if (k === 'satelite') return apSatHTML(A);
   if (k === 'obras') return apTelaObras(D, A);
   if (k === 'obrasdest') return apTelaObrasDest(D, A);
+  if (k === 'convenios') return apTelaConvenios(D, A);
   if (k === 'noticias') return apTelaNoticias(A);
   if (k === 'dre') return apTelaDre(D, A);
   return apTelaFim(D, A);
@@ -7290,6 +7294,332 @@ function apObFoco(o, voar){
     el.className = 'apx-om-foco'; void el.offsetWidth; el.className = 'apx-om-foco on'; }
 }
 function apObMapaParar(){ const S = apEstado; if (!S) return; clearTimeout(S.omT); if (S.lo) S.lo.m.stop(); }
+
+/* ===================== CONVÊNIOS COM MUNICÍPIOS =====================
+   Monitoramento dos convênios (repasse, execução física e financeira, vigência e prestação de contas),
+   com nota de desempenho e ranking por município. Importa a planilha "Monitoramento de Convênios" ou o modelo
+   do GABOrg e se liga às Obras pelo número do convênio. */
+let cvAba = store.get('gaborg_cv_aba', 'painel'), cvFil = { q:'', mun:'', dre:'', sit:'', cls:'', alerta:'' }, cvOrd = 'valor', cvLim = 100, cvMunTodos = false;
+const CV_ABAS = [['painel', 'Painel', 'fa-gauge-high'], ['municipios', 'Municípios', 'fa-ranking-star'], ['lista', 'Convênios', 'fa-list'], ['importar', 'Importar e modelo', 'fa-file-import']];
+const CV_PRAZO = ['No prazo', 'Atenção', 'Atrasado', 'Concluído no prazo', 'Concluído com atraso'];
+const CV_CONTAS = ['Regular', 'Com ressalvas', 'Pendente', 'Irregular', 'Não exigível ainda'];
+const CV_SIT = ['Em execução', 'Concluído', 'Suspenso', 'Rescindido', 'Não iniciado'];
+const CV_NP = { 'No prazo':100, 'Concluído no prazo':100, 'Atenção':60, 'Atrasado':20, 'Concluído com atraso':50 };
+const CV_NC = { 'Regular':100, 'Com ressalvas':70, 'Pendente':30, 'Irregular':0, 'Não exigível ainda':100 };
+const CV_COR = { 'Ótima':'#16a34a', 'Boa':'#2563eb', 'Regular':'#d97706', 'Fraca':'#dc2626', 'Sem nota':'#94a3b8',
+  'No prazo':'#16a34a', 'Concluído no prazo':'#15803d', 'Atenção':'#d97706', 'Atrasado':'#dc2626', 'Concluído com atraso':'#a16207',
+  'Com ressalvas':'#d97706', 'Pendente':'#ea580c', 'Irregular':'#dc2626', 'Não exigível ainda':'#64748b',
+  'Em execução':'#2563eb', 'Concluído':'#16a34a', 'Suspenso':'#d97706', 'Rescindido':'#dc2626', 'Não iniciado':'#64748b' };
+const cvLista = () => (DB.convenios || []);
+const cvCanon = (v, L) => { const n = norm(v); return n ? (L.find(x => norm(x) === n) || String(v).trim()) : ''; };
+const cvNumKey = v => { const m = String(v || '').match(/(\d+)\s*[\/\-.]\s*(\d{2,4})/); return m ? (+m[1]) + '/' + (m[2].length === 2 ? '20' + m[2] : m[2]) : norm(v).replace(/\s+/g, ''); };
+function cvParams(){ const p = param('convParametros', null) || {}; const n = (k, d) => isFinite(+p[k]) && p[k] !== '' ? +p[k] : d;
+  return { pf:n('pf', 35), pfin:n('pfin', 25), pp:n('pp', 20), pc:n('pc', 20), otima:n('otima', 85), boa:n('boa', 70), regular:n('regular', 50) }; }
+const cvT = v => { const t = /^\d{4}-\d{2}-\d{2}/.test(v || '') ? Date.parse(String(v).slice(0, 10) + 'T12:00:00') : NaN; return t; };
+const cvDias = c => { const t = cvT(c.dataTermino); return isFinite(t) ? Math.round((t - Date.now()) / 864e5) : null; };
+const cvAberto = c => !['Concluído', 'Rescindido'].includes(c.situacao);
+/* prazo: o informado; sem ele, sugerido pela vigência */
+function cvPrazo(c){
+  if (c.situacaoPrazo) return [c.situacaoPrazo, false];
+  const d = cvDias(c), f = num(c.execFisica);
+  if (c.situacao === 'Concluído') return ['', true];
+  if (d === null) return ['', true];
+  if (d < 0) return ['Atrasado', true];
+  if (d <= 90 && f < 90) return ['Atenção', true];
+  return ['No prazo', true];
+}
+function cvObra(c){
+  if (!cvObra.m || cvObra.n !== obLista()) { cvObra.n = obLista(); cvObra.m = new Map(); obLista().forEach(o => { if (o.codigo) cvObra.m.set(cvNumKey(o.codigo), o); }); }
+  return c.numero ? cvObra.m.get(cvNumKey(c.numero)) || null : null;
+}
+function cvDre(c){
+  if (cvDre.e !== DB.escolas || !cvDre.m) { cvDre.e = DB.escolas; const E = escolasLista(); cvDre.cod = new Map(E.map(e => [e.codigo, e.dre])); cvDre.m = new Map(); const q = new Map();
+    E.forEach(e => { const k = chaveMun(e.municipio), o = q.get(k) || {}; o[e.dre] = (o[e.dre] || 0) + 1; q.set(k, o); }); q.forEach((o, k) => cvDre.m.set(k, Object.entries(o).sort((a, b) => b[1] - a[1])[0][0])); }
+  return (c.escolaCodigo && cvDre.cod.get(c.escolaCodigo)) || cvDre.m.get(chaveMun(c.municipio)) || '';
+}
+/* cálculo de um convênio: execução financeira, notas e classificação (mesma regra da planilha de monitoramento) */
+function cvCalc(c){
+  const P = cvParams(), conc = num(c.valorConcedente), rep = num(c.valorRepassado), exe = num(c.valorExecutado), fis = c.execFisica === '' ? null : Math.max(0, Math.min(100, num(c.execFisica)));
+  const fin = conc > 0 && c.valorExecutado !== '' ? Math.min(1, exe / conc) : null, [prazo, auto] = cvPrazo(c), np = prazo in CV_NP ? CV_NP[prazo] : null, nc = c.prestacaoContas in CV_NC ? CV_NC[c.prestacaoContas] : null;
+  const nota = fis === null || fin === null || np === null || nc === null ? null : Math.round((fis / 100 * P.pf + fin * P.pfin + np * P.pp / 100 + nc * P.pc / 100) * 100 / Math.max(1, P.pf + P.pfin + P.pp + P.pc) * 100) / 100;
+  const cls = nota === null ? 'Sem nota' : nota >= P.otima ? 'Ótima' : nota >= P.boa ? 'Boa' : nota >= P.regular ? 'Regular' : 'Fraca';
+  const dias = cvDias(c), o = cvObra(c), al = [];
+  if (cvAberto(c) && dias !== null && dias < 0) al.push(['vencido', `Vigência terminou há ${-dias} dia${dias === -1 ? '' : 's'}`, '#dc2626']);
+  else if (cvAberto(c) && dias !== null && dias <= 60) al.push(['vence', `Vigência termina em ${dias} dia${dias === 1 ? '' : 's'}`, '#d97706']);
+  if (['Pendente', 'Irregular'].includes(c.prestacaoContas)) al.push(['contas', 'Prestação de contas ' + c.prestacaoContas.toLowerCase(), c.prestacaoContas === 'Irregular' ? '#dc2626' : '#ea580c']);
+  if (o) { const fo = obExec(o), so = obStatus(o);
+    if (fis !== null && o.execFisica !== '' && Math.abs(fo - fis) >= 15) al.push(['obra', `Execução física ${Math.round(fis)}% aqui e ${Math.round(fo)}% em Obras`, '#7c3aed']);
+    if (['Paralisada', 'Rescisão'].includes(so) && c.situacao !== 'Rescindido') al.push(['obra', `Obra ${so === 'Rescisão' ? 'em rescisão' : 'paralisada'} em Obras`, '#7c3aed']);
+    if (c.situacao === 'Concluído' && !['Concluída', 'Com pendência'].includes(so)) al.push(['obra', 'Convênio concluído, obra não concluída em Obras', '#7c3aed']); }
+  if (conc > 0 && rep > conc * 1.001) al.push(['valor', 'Repasse maior que o valor concedente', '#dc2626']);
+  if (rep > 0 && exe > rep * 1.001) al.push(['valor', 'Executado maior que o repassado', '#dc2626']);
+  return { conc, rep, exe, fis, fin, prazo, auto, np, nc, nota, cls, dias, obra:o, al, dre:cvDre(c) };
+}
+/* cache por registro: refaz quando o registro, os pesos, as obras ou o dia mudam */
+const cvCache = new WeakMap(), cvCalcTodos = { L:null };
+function cvK(c){ const sig = JSON.stringify(c) + JSON.stringify(param('convParametros', null)) + obLista().length + new Date().toDateString() + (DB.escolas || []).length, h = cvCache.get(c);
+  if (h && h.sig === sig) return h.x; const x = cvCalc(c); cvCache.set(c, { sig, x }); return x; }
+const cvMunOficial = nome => { const k = chaveMun(nome), m = apGeo().muns.find(x => x.k === k); return m ? m.nome : ''; };
+/* resumo por município (nota média ponderada pelo valor concedente) */
+function cvPorMun(L){
+  const P = cvParams(), g = new Map();
+  L.forEach(c => { const k = chaveMun(c.municipio), x = cvK(c); if (!g.has(k)) g.set(k, { k, nome:cvMunOficial(c.municipio) || c.municipio, dre:x.dre, L:[], conc:0, rep:0, exe:0, pn:0, pv:0, al:0 }); const m = g.get(k);
+    m.L.push(c); m.conc += x.conc; m.rep += x.rep; m.exe += x.exe; m.al += x.al.length; if (x.nota !== null) { m.pn += x.nota * x.conc; m.pv += x.conc; } });
+  return [...g.values()].map(m => { m.fin = m.conc ? Math.min(1, m.exe / m.conc) : 0; m.nota = m.pv ? m.pn / m.pv : null; m.cls = m.nota === null ? 'Sem nota' : m.nota >= P.otima ? 'Ótima' : m.nota >= P.boa ? 'Boa' : m.nota >= P.regular ? 'Regular' : 'Fraca'; return m; });
+}
+/* ---------- tela ---------- */
+function abaCv(k){ cvAba = k; store.set('gaborg_cv_aba', k); renderConvenios(); const r = $('#v-convenios .rolagem'); if (r) r.scrollTop = 0; }
+const backendSemConv = () => online() && backendVersao && svVerMaior('1.20.0', backendVersao);
+function renderConvenios(){
+  const el = $('#cv-corpo'); if (!el) return; const L = cvLista(), imp = param('convImport', null), pode = podeEditarSec('convenios');
+  const aviso = backendSemConv() ? `<div class="cartao bl" style="--c:#d97706"><h3><i class="fa-solid fa-triangle-exclamation"></i>Atualize o Codigo.gs para a versão 1.20.0</h3><p class="s">A planilha está com o backend ${esc(backendVersao)}. Sem a atualização, os convênios ficam só neste navegador.</p></div>` : '';
+  const topo = abasG(CV_ABAS, cvAba, 'abaCv') + (imp && imp.em ? `<p class="sv-orig"><i class="fa-solid fa-file-excel"></i>Última importação: <b>${esc(imp.arquivo || 'planilha')}</b> em ${fmtData(imp.em)} por ${esc(imp.por || '')} · ${fmtN(L.length)} convênios em ${fmtN(cvPorMun(L).length)} municípios</p>` : '');
+  if (!L.length && cvAba !== 'importar') { el.innerHTML = aviso + topo + `<div class="cartao vazio"><i class="fa-solid fa-handshake" style="font-size:34px;color:var(--marca);margin-bottom:10px"></i><h3 style="margin:0 0 6px">Nenhum convênio cadastrado ainda</h3><p class="s">${pode ? 'Baixe o modelo de planilha, preencha e importe, ou cadastre um convênio.' : 'Peça a quem acompanha os convênios para importar a planilha.'}</p>${pode ? `<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><button class="btn btn-p" onclick="abaCv('importar')"><i class="fa-solid fa-file-import"></i>Importar ou baixar o modelo</button><button class="btn btn-s" onclick="cvFicha('')"><i class="fa-solid fa-plus"></i>Novo convênio</button></div>` : ''}</div>`; return; }
+  const corpo = { painel:cvPainel, municipios:cvMunTela, lista:cvListaTela, importar:cvImportarTela }[cvAba] || cvPainel;
+  el.innerHTML = aviso + topo + corpo(L);
+}
+const cvChip = (t, auto) => t ? `<span class="cv-chip" style="--c:${CV_COR[t] || '#64748b'}" ${auto ? 'title="Sugerido pela vigência (não informado na planilha)"' : ''}>${esc(t)}${auto ? ' <i class="fa-solid fa-wand-magic-sparkles"></i>' : ''}</span>` : '<span class="s">—</span>';
+const cvNotaG = x => x.nota === null ? `<span class="cv-nota sem" title="Faltam dados para a nota">—</span>` : `<span class="cv-nota" style="--c:${CV_COR[x.cls]};--p:${x.nota.toFixed(1)}" title="${x.cls}"><b>${Math.round(x.nota)}</b></span>`;
+const cvIrLista = o => `cvFil=Object.assign({q:'',mun:'',dre:'',sit:'',cls:'',alerta:''},${esc(JSON.stringify(o))});cvLim=100;abaCv('lista')`;
+const cvVig = x => x.dias === null ? '—' : x.dias < 0 ? `<span class="cv-vig r">vencida há ${-x.dias} d</span>` : x.dias <= 60 ? `<span class="cv-vig a">${x.dias} dias</span>` : `<span class="cv-vig">${x.dias > 365 ? (x.dias / 365).toLocaleString('pt-BR', { maximumFractionDigits:1 }) + ' anos' : Math.round(x.dias / 30) + ' meses'}</span>`;
+const cvObjCurto = c => { const s = String(c.objeto || '').replace(/\s+/g, ' ').trim(); return s.length > 90 ? s.slice(0, 88) + '…' : s; };
+function cvPainel(L){
+  const X = L.map(cvK), som = k => X.reduce((t, x) => t + x[k], 0), conc = som('conc'), rep = som('rep'), exe = som('exe'), M = cvPorMun(L), P = cvParams();
+  const pn = X.filter(x => x.nota !== null), notaM = pn.length ? pn.reduce((t, x) => t + x.nota * x.conc, 0) / Math.max(1, pn.reduce((t, x) => t + x.conc, 0)) : null;
+  const clsM = notaM === null ? 'Sem nota' : notaM >= P.otima ? 'Ótima' : notaM >= P.boa ? 'Boa' : notaM >= P.regular ? 'Regular' : 'Fraca';
+  const cls = ['Ótima', 'Boa', 'Regular', 'Fraca', 'Sem nota'].map(v => [v, X.filter(x => x.cls === v).length, CV_COR[v], cvIrLista({ cls:v })]).filter(x => x[1]);
+  const prz = CV_PRAZO.map(v => [v, X.filter(x => x.prazo === v).length, CV_COR[v], '']).filter(x => x[1]);
+  const cts = CV_CONTAS.map(v => [v, L.filter(c => c.prestacaoContas === v).length, CV_COR[v], '']).filter(x => x[1]);
+  const vence = L.map((c, i) => [c, X[i]]).filter(([c, x]) => cvAberto(c) && x.dias !== null && x.dias <= 120).sort((a, b) => a[1].dias - b[1].dias);
+  const obraAl = L.map((c, i) => [c, X[i]]).filter(([, x]) => x.al.some(a => a[0] === 'obra' || a[0] === 'valor'));
+  const semMon = obLista().filter(o => o.origem === 'Convênio' && o.codigo && !L.some(c => cvNumKey(c.numero) === cvNumKey(o.codigo)));
+  const munSem = new Set(semMon.map(o => chaveMun(o.municipio)));
+  const lin = (c, x, extra, sob) => `<div class="ob-li" onclick="cvFicha(${arg(c.id)})"><i class="fa-solid ${obObjIc(c)}"></i><span><b>${esc(apNomeCurto(cvMunOficial(c.municipio) || c.municipio))} · ${esc(c.numero || 's/ nº')}</b><small>${esc(cvObjCurto(c))}</small>${sob || ''}</span>${extra}</div>`;
+  const nMun = new Set(L.map(c => chaveMun(c.municipio))).size, tot = apGeo().muns.length;
+  return `<div class="kpis">${kpiG('#0891b2', 'fa-handshake', 'Convênios', fmtN(L.length), `em ${nMun} município${nMun === 1 ? '' : 's'} de ${tot}`, "abaCv('lista')")}
+      ${kpiG('#1e3a8a', 'fa-file-signature', 'Valor concedente', fmtRc(conc), 'pactuado pela SEDUC')}
+      ${kpiG('#0f766e', 'fa-money-bill-transfer', 'Repassado', fmtRc(rep), `${fmtP(conc ? rep / conc * 100 : 0)} do pactuado`)}
+      ${kpiG('#16a34a', 'fa-receipt', 'Executado', fmtRc(exe), `${fmtP(conc ? exe / conc * 100 : 0)} do pactuado · ${fmtP(rep ? exe / rep * 100 : 0)} do repassado`)}
+      ${kpiG(CV_COR[clsM], 'fa-star-half-stroke', 'Nota média', notaM === null ? '—' : notaM.toLocaleString('pt-BR', { maximumFractionDigits:1 }), `${clsM} · ponderada pelo valor`, "abaCv('municipios')")}
+      ${kpiG('#dc2626', 'fa-bell', 'Alertas', fmtN(X.filter(x => x.al.length).length), `${vence.filter(([, x]) => x.dias < 0).length} vencidos · ${vence.filter(([, x]) => x.dias >= 0 && x.dias <= 60).length} vencem em 60 dias`, cvIrLista({ alerta:'sim' }))}</div>
+    <div class="cartao cv-cob"><div><b>${nMun} de ${tot} municípios com convênios monitorados</b><small>${semMon.length ? `Há ${semMon.length} convênios em Obras (${munSem.size} municípios) ainda sem monitoramento aqui.` : 'Todos os convênios de Obras já estão monitorados.'}</small></div>
+      <span class="cv-cob-b"><i style="width:${(nMun / Math.max(1, tot) * 100).toFixed(1)}%"></i></span>${semMon.length && podeEditarSec('convenios') ? `<button class="btn btn-s btn-sm" onclick="cvModeloObras()"><i class="fa-solid fa-file-arrow-down"></i>Planilha com os ${semMon.length} para preencher</button>` : ''}</div>
+    <div class="ob-g2"><div class="cartao"><h3><i class="fa-solid fa-medal"></i>Classificação dos convênios</h3>${obBarras(cls)}<p class="s" style="margin-top:8px">Nota = execução física ${P.pf}% + financeira ${P.pfin}% + prazo ${P.pp}% + prestação de contas ${P.pc}%. Ótima ≥ ${P.otima} · Boa ≥ ${P.boa} · Regular ≥ ${P.regular}.</p></div>
+      <div class="cartao"><h3><i class="fa-solid fa-signal"></i>Situação dos convênios</h3>${obBarras(CV_SIT.map(v => [v, L.filter(c => c.situacao === v).length, CV_COR[v], cvIrLista({ sit:v })]).filter(x => x[1]))}</div>
+      <div class="cartao"><h3><i class="fa-solid fa-hourglass-half"></i>Cumprimento de prazo</h3>${obBarras(prz)}${X.some(x => x.auto && x.prazo) ? '<p class="s" style="margin-top:8px"><i class="fa-solid fa-wand-magic-sparkles"></i> inclui prazos sugeridos pela vigência quando a planilha não informa.</p>' : ''}</div>
+      <div class="cartao"><h3><i class="fa-solid fa-file-invoice"></i>Prestação de contas</h3>${obBarras(cts)}</div>
+      <div class="cartao"><h3><i class="fa-solid fa-calendar-xmark"></i>Vigência terminando ou vencida</h3>${vence.slice(0, 8).map(([c, x]) => lin(c, x, `<span class="ob-qd">${cvVig(x)}</span>`)).join('') || '<p class="s">Nenhum convênio em aberto com vigência terminando nos próximos 4 meses.</p>'}${vence.length > 8 ? `<p class="s">e mais ${vence.length - 8}</p>` : ''}</div>
+      <div class="cartao"><h3><i class="fa-solid fa-code-compare"></i>Conferir com Obras</h3>${obraAl.slice(0, 8).map(([c, x]) => lin(c, x, x.obra ? `<span class="ob-qd">${Math.round(obExec(x.obra))}% obra</span>` : '', `<span class="cv-al">${x.al.filter(a => a[0] === 'obra' || a[0] === 'valor').map(a => `<small style="--c:${a[2]}">${esc(a[1])}</small>`).join('')}</span>`)).join('') || '<p class="s">Nenhuma divergência entre os convênios e as obras ligadas.</p>'}${obraAl.length > 8 ? `<button class="btn btn-s btn-sm" onclick="${cvIrLista({ alerta:'obra' })}">Ver todos (${obraAl.length})</button>` : ''}</div></div>`;
+}
+function cvMunTela(L){
+  const M = cvPorMun(L).sort((a, b) => (b.nota ?? -1) - (a.nota ?? -1) || b.conc - a.conc), dres = distanciasMT().dres;
+  const sem = cvMunTodos ? apGeo().muns.filter(m => !M.some(x => x.k === m.k)).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')) : [];
+  return `<div class="cartao"><div class="cv-mh"><h3 style="margin:0"><i class="fa-solid fa-ranking-star"></i>Ranking por município</h3><span class="s">${M.length} de ${apGeo().muns.length} municípios com convênios · nota média ponderada pelo valor concedente</span>
+      <label class="cv-ck"><input type="checkbox" ${cvMunTodos ? 'checked' : ''} onchange="cvMunTodos=this.checked;renderConvenios()">Mostrar também os municípios sem convênio</label></div>
+    <div class="tab-wrap"><table class="tab cv-tab"><thead><tr><th>#</th><th>Município</th><th class="n">Convênios</th><th class="n">Concedente</th><th class="n">Repassado</th><th class="n">Executado</th><th>Execução financeira</th><th class="n">Nota</th><th>Classificação</th><th class="n">Alertas</th></tr></thead><tbody>
+    ${M.map((m, i) => `<tr class="clic" onclick="${cvIrLista({ mun:m.k })}"><td>${m.nota === null ? '' : i + 1}</td><td><b>${esc(m.nome)}</b><small class="cv-dre" style="--c:${m.dre ? corDRE(dres, m.dre) : '#94a3b8'}">${m.dre ? 'DRE ' + esc(nomeDRE(m.dre)) : 'sem DRE'}</small></td><td class="n">${m.L.length}</td><td class="n">${fmtRc(m.conc)}</td><td class="n">${fmtRc(m.rep)}</td><td class="n">${fmtRc(m.exe)}</td>
+      <td><span class="cv-bar"><i style="width:${(m.fin * 100).toFixed(1)}%"></i></span><small>${fmtP(m.fin * 100)}</small></td><td class="n">${cvNotaG(m)}</td><td>${cvChip(m.cls === 'Sem nota' ? '' : m.cls)}</td><td class="n">${m.al ? `<span class="cv-alb">${m.al}</span>` : ''}</td></tr>`).join('')}
+    ${sem.map(m => `<tr class="cv-sem"><td></td><td><b>${esc(m.nome)}</b><small>nenhum convênio cadastrado</small></td><td class="n">0</td><td colspan="7"></td></tr>`).join('')}</tbody></table></div></div>`;
+}
+function cvFiltrar(L){
+  const q = norm(cvFil.q);
+  return L.filter(c => { const x = cvK(c); return (!q || norm([c.municipio, c.numero, c.objeto, c.observacoes, c.responsavel].join(' ')).includes(q)) && (!cvFil.mun || chaveMun(c.municipio) === cvFil.mun) && (!cvFil.dre || x.dre === cvFil.dre)
+    && (!cvFil.sit || c.situacao === cvFil.sit) && (!cvFil.cls || x.cls === cvFil.cls) && (!cvFil.alerta || (cvFil.alerta === 'sim' ? x.al.length : x.al.some(a => a[0] === cvFil.alerta))); });
+}
+function cvListaTela(L){
+  const F = cvFiltrar(L), ord = { valor:(a, b) => cvK(b).conc - cvK(a).conc, nota:(a, b) => (cvK(b).nota ?? -1) - (cvK(a).nota ?? -1), vig:(a, b) => (cvK(a).dias ?? 9e9) - (cvK(b).dias ?? 9e9), mun:(a, b) => String(a.municipio).localeCompare(b.municipio, 'pt-BR') }[cvOrd] || (() => 0);
+  const S = F.slice().sort(ord), dres = distanciasMT().dres, mus = cvPorMun(L).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')), pode = podeEditarSec('convenios');
+  const sel = (k, rot, ops) => `<select class="campo" onchange="cvFil.${k}=this.value;cvLim=100;renderConvenios()"><option value="">${rot}</option>${ops.map(([v, t]) => `<option value="${esc(v)}" ${cvFil[k] === v ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>`;
+  return `<div class="cartao cv-fil"><input class="campo" placeholder="Buscar município, nº, objeto..." value="${esc(cvFil.q)}" oninput="cvFil.q=this.value;clearTimeout(cvFil.t);cvFil.t=setTimeout(()=>{renderConvenios();const i=$('.cv-fil input');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length)}},250)">
+      ${sel('dre', 'Todas as DREs', dres.map(d => [d, nomeDRE(d)]))}${sel('mun', 'Todos os municípios', mus.map(m => [m.k, m.nome]))}${sel('sit', 'Toda situação', CV_SIT.map(v => [v, v]))}${sel('cls', 'Toda classificação', ['Ótima', 'Boa', 'Regular', 'Fraca', 'Sem nota'].map(v => [v, v]))}
+      ${sel('alerta', 'Com ou sem alerta', [['sim', 'Com algum alerta'], ['vencido', 'Vigência vencida'], ['vence', 'Vence em 60 dias'], ['contas', 'Contas pendentes/irregulares'], ['obra', 'Diverge de Obras'], ['valor', 'Valores inconsistentes']])}
+      <select class="campo" onchange="cvOrd=this.value;renderConvenios()">${[['valor', 'Maior valor'], ['nota', 'Maior nota'], ['vig', 'Vigência mais curta'], ['mun', 'Município (A–Z)']].map(([v, t]) => `<option value="${v}" ${cvOrd === v ? 'selected' : ''}>${t}</option>`).join('')}</select>
+      ${Object.entries(cvFil).some(([k, v]) => k !== 't' && v) ? `<button class="btn btn-g btn-sm" onclick="cvFil={q:'',mun:'',dre:'',sit:'',cls:'',alerta:''};renderConvenios()"><i class="fa-solid fa-xmark"></i>Limpar</button>` : ''}
+      <span style="flex:1"></span>${pode ? `<button class="btn btn-p btn-sm" onclick="cvFicha('')"><i class="fa-solid fa-plus"></i>Novo convênio</button>` : ''}</div>
+    <p class="s" style="margin:4px 2px 8px">${fmtN(F.length)} convênio${F.length === 1 ? '' : 's'} · ${fmtRc(F.reduce((t, c) => t + cvK(c).conc, 0))} concedidos · ${fmtRc(F.reduce((t, c) => t + cvK(c).rep, 0))} repassados</p>
+    <div class="cartao" style="padding:0"><div class="tab-wrap"><table class="tab cv-tab"><thead><tr><th>Município · nº</th><th>Objeto</th><th class="n">Concedente</th><th>Repasse</th><th class="n">Físico</th><th>Vigência</th><th>Prazo</th><th>Contas</th><th class="n">Nota</th></tr></thead><tbody>
+    ${S.slice(0, cvLim).map(c => { const x = cvK(c); return `<tr class="clic" onclick="cvFicha(${arg(c.id)})"><td><b>${esc(apNomeCurto(cvMunOficial(c.municipio) || c.municipio))}</b><small>${esc(c.numero || 's/ nº')}${x.obra ? ' · <i class="fa-solid fa-helmet-safety" title="Ligado a uma obra"></i>' : ''}</small></td>
+      <td class="cv-obj">${esc(cvObjCurto(c))}${x.al.length ? `<span class="cv-al">${x.al.map(a => `<small style="--c:${a[2]}">${esc(a[1])}</small>`).join('')}</span>` : ''}</td><td class="n">${fmtRc(x.conc)}</td>
+      <td><span class="cv-bar" title="Repassado ${fmtRc(x.rep)} · executado ${fmtRc(x.exe)}"><i style="width:${(x.conc ? Math.min(1, x.rep / x.conc) * 100 : 0).toFixed(1)}%"></i><em style="width:${(x.conc ? Math.min(1, x.exe / x.conc) * 100 : 0).toFixed(1)}%"></em></span><small>${fmtP(x.conc ? x.rep / x.conc * 100 : 0)}</small></td>
+      <td class="n">${x.fis === null ? '—' : Math.round(x.fis) + '%'}</td><td>${cvVig(x)}<small>${fmtDia(c.dataTermino)}</small></td><td>${cvChip(x.prazo, x.auto)}</td><td>${cvChip(c.prestacaoContas)}</td><td class="n">${cvNotaG(x)}</td></tr>`; }).join('') || '<tr><td colspan="9" class="s" style="padding:16px">Nenhum convênio com esses filtros.</td></tr>'}</tbody></table></div>
+    ${S.length > cvLim ? `<div style="padding:10px"><button class="btn btn-s btn-sm" onclick="cvLim+=200;renderConvenios()">Mostrar mais (${S.length - cvLim})</button></div>` : ''}</div>`;
+}
+/* ---------- ficha ---------- */
+function cvFicha(id){
+  const c0 = id ? cvLista().find(x => x.id === id) : null; if (id && !c0) return; const pode = podeEditarSec('convenios'), c = c0 || novoReg('convenios', { situacao:'Em execução' }), x = cvCalc(c);
+  const ro = pode ? '' : 'disabled', ip = (k, rot, t) => `<label><span class="rot">${rot}</span><input class="campo" name="${k}" ${t || ''} value="${esc(c[k] ?? '')}" ${ro}></label>`;
+  const so = (k, rot, ops) => `<label><span class="rot">${rot}</span><select class="campo" name="${k}" ${ro}>${['', ...ops].map(v => `<option value="${esc(v)}" ${String(c[k] || '') === v ? 'selected' : ''}>${v || '—'}</option>`).join('')}</select></label>`;
+  const escs = escolasLista().filter(e => chaveMun(e.municipio) === chaveMun(c.municipio)).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')), o = x.obra;
+  abrirModal({ titulo:id ? `Convênio ${c.numero || ''} · ${cvMunOficial(c.municipio) || c.municipio}` : 'Novo convênio', rotulo:pode ? 'Salvar' : 'Fechar', largura:860, html:`${pode ? '' : '<p class="s">Seu perfil pode ver os convênios, mas não alterar.</p>'}
+    ${id ? `<div class="cv-fi-top">${cvNotaG(x)}<div><b>${x.nota === null ? 'Sem nota' : 'Nota ' + x.nota.toLocaleString('pt-BR') + ' · ' + x.cls}</b><small>Físico ${x.fis === null ? '—' : Math.round(x.fis) + '%'} · financeiro ${x.fin === null ? '—' : fmtP(x.fin * 100)} · prazo ${x.np ?? '—'} · contas ${x.nc ?? '—'}</small></div>${cvChip(c.situacao)}${cvVig(x)}</div>
+      ${x.al.length ? `<div class="cv-al cv-al-f">${x.al.map(a => `<small style="--c:${a[2]}"><i class="fa-solid fa-triangle-exclamation"></i>${esc(a[1])}</small>`).join('')}</div>` : ''}
+      ${o ? `<div class="cv-ob" onclick="document.querySelectorAll('.modal').forEach(m=>m.remove());trocarVista('obras');setTimeout(()=>obFicha(${arg(o.id)}),60)"><i class="fa-solid ${obObjIc(o)}"></i><span><b>Obra ligada: ${esc(obNome(o))}</b><small>${esc(obObj(o))} · ${esc(o.empresa || 'sem empresa')} · ${obStatus(o)} · ${Math.round(obExec(o))}% físico · ${fmtRc(obValor(o))}</small></span><i class="fa-solid fa-arrow-up-right-from-square"></i></div>` : ''}` : ''}
+    <div class="g3">${ip('municipio', 'Município', 'required list="cv-muns"')}${ip('numero', 'Nº convênio', 'placeholder="0000-2025"')}${so('situacao', 'Situação do convênio', CV_SIT)}</div><datalist id="cv-muns">${apGeo().muns.map(m => `<option value="${esc(m.nome)}">`).join('')}</datalist>
+    <label><span class="rot">Objeto / finalidade</span><textarea class="campo" name="objeto" rows="2" ${ro}>${esc(c.objeto || '')}</textarea></label>
+    <div class="g2"><label><span class="rot">Escola estadual da base (opcional)</span><select class="campo" name="escolaCodigo" ${ro}><option value="">— nenhuma / escola municipal —</option>${escs.map(e => `<option value="${esc(e.codigo)}" ${e.codigo === c.escolaCodigo ? 'selected' : ''}>${esc(e.nome)} (${esc(e.codigo)})</option>`).join('')}</select></label>${so('rede', 'Rede da escola', ['Estadual', 'Municipal'])}</div>
+    <div class="g3">${ip('dataAssinatura', 'Data de assinatura', 'type="date"')}${ip('dataTermino', 'Data de término (vigência)', 'type="date"')}${ip('dataAtualizacao', 'Data da atualização', 'type="date"')}</div>
+    <div class="cv-g4">${ip('valorConcedente', 'Valor concedente (R$)', 'type="number" step="0.01" min="0"')}${ip('valorContrapartida', 'Contrapartida (R$)', 'type="number" step="0.01" min="0"')}${ip('valorRepassado', 'Valor repassado (R$)', 'type="number" step="0.01" min="0"')}${ip('valorExecutado', 'Valor executado (R$)', 'type="number" step="0.01" min="0"')}</div>
+    <div class="g3">${ip('execFisica', 'Execução física (%)', 'type="number" step="0.1" min="0" max="100"')}${so('situacaoPrazo', 'Situação do prazo', CV_PRAZO)}${so('prestacaoContas', 'Prestação de contas', CV_CONTAS)}</div>
+    <div class="g2"><label><span class="rot">Observações / pendências</span><textarea class="campo" name="observacoes" rows="2" ${ro}>${esc(c.observacoes || '')}</textarea></label>${ip('responsavel', 'Responsável pelo acompanhamento')}</div>
+    <p class="s">Sem "Situação do prazo", o sistema sugere pela vigência (Atrasado se venceu; Atenção se faltam até 90 dias e a execução física está abaixo de 90%). A nota segue os pesos da aba Importar e modelo.</p>
+    ${pode && id ? `<button type="button" class="btn btn-g btn-sm" style="color:#dc2626;margin-top:6px" onclick="cvExcluir(${arg(id)})"><i class="fa-solid fa-trash"></i>Excluir convênio</button>` : ''}`,
+    aoConfirmar:m => { if (!pode) return true; const f = m.querySelector('form'), v = k => String((f.elements[k] || {}).value ?? '').trim(), mud = {};
+      ['municipio', 'numero', 'objeto', 'escolaCodigo', 'rede', 'dataAssinatura', 'dataTermino', 'situacaoPrazo', 'prestacaoContas', 'situacao', 'observacoes', 'responsavel', 'dataAtualizacao'].forEach(k => { mud[k] = v(k); });
+      ['valorConcedente', 'valorContrapartida', 'valorRepassado', 'valorExecutado'].forEach(k => { mud[k] = v(k) === '' ? '' : String(Math.round(Math.max(0, num(v(k))) * 100) / 100); });
+      mud.execFisica = v('execFisica') === '' ? '' : String(Math.max(0, Math.min(100, num(v('execFisica')))));
+      if (!mud.municipio) throw new Error('Informe o município.'); mud.municipio = cvMunOficial(mud.municipio) || mud.municipio;
+      if (mud.numero && cvLista().some(y => y !== c0 && cvNumKey(y.numero) === cvNumKey(mud.numero))) throw new Error('Já existe um convênio com o nº ' + mud.numero + '.');
+      const r = c0 || c; Object.assign(r, mud, { atualizadoEm:agora(), atualizadoPor:cfg.usuario || '' }); if (!c0) { r.id = 'cv_' + (mud.numero ? obHash(cvNumKey(mud.numero)) : Date.now().toString(36)); DB.convenios = DB.convenios || []; DB.convenios.push(r); }
+      enfileirar('convenios', r); toast('Convênio salvo.'); renderConvenios(); return true; } });
+}
+async function cvExcluir(id){
+  if (!await confirmar('Excluir convênio', 'Excluir este convênio do GABOrg? Ele volta se você importar a planilha de novo.', 'Excluir', true)) return;
+  const c = cvLista().find(x => x.id === id); if (!c) return; DB.convenios = cvLista().filter(x => x.id !== id); enfileirar('convenios', c, true); document.querySelectorAll('.modal').forEach(m => m.remove()); renderConvenios();
+}
+/* ---------- importar, exportar e modelo ---------- */
+const CV_COLS = [['municipio', 'Município', ['municipio']], ['numero', 'Nº convênio', ['no convenio', 'n convenio', 'numero do convenio', 'numero convenio', 'convenio', 'numero']], ['objeto', 'Objeto / finalidade', ['objeto / finalidade', 'objeto', 'finalidade']],
+  ['dataAssinatura', 'Data assinatura', ['data assinatura', 'data de assinatura']], ['dataTermino', 'Data término', ['data termino', 'data de termino', 'data termino (vigencia)', 'termino da vigencia', 'vigencia']],
+  ['valorConcedente', 'Valor concedente (R$)', ['valor concedente', 'valor pactuado', 'concedente']], ['valorRepassado', 'Valor repassado (R$)', ['valor repassado', 'repassado']], ['valorExecutado', 'Valor executado (R$)', ['valor executado', 'executado']],
+  ['execFisica', 'Execução física (%)', ['execucao fisica', '% execucao fisica', 'execucao fisica %']], ['situacaoPrazo', 'Situação do prazo', ['situacao do prazo', 'prazo']], ['prestacaoContas', 'Prestação de contas', ['prestacao de contas']],
+  ['situacao', 'Situação do convênio', ['situacao do convenio', 'situacao']], ['observacoes', 'Observações / pendências', ['observacoes / pendencias', 'observacoes', 'pendencias']], ['responsavel', 'Responsável', ['responsavel']],
+  ['dataAtualizacao', 'Data da atualização', ['data da atualizacao', 'data atualizacao', 'atualizado em']], ['valorContrapartida', 'Contrapartida (R$)', ['contrapartida', 'valor contrapartida', 'contrapartida do municipio']],
+  ['escolaCodigo', 'Código da escola (opcional)', ['codigo da escola', 'codigo da escola (opcional)', 'cod escola']], ['rede', 'Rede da escola', ['rede da escola', 'rede']]];
+const cvNh = s => norm(s).replace(/[º°]/g, 'o').replace(/\(r\$\)|\(%\)|r\$/g, '').replace(/[–—]/g, '-').replace(/\s+/g, ' ').trim();
+function cvImportarTela(){
+  const imp = param('convImport', null), pode = podeEditarSec('convenios'), P = cvParams(), semMon = obLista().filter(o => o.origem === 'Convênio' && o.codigo && !cvLista().some(c => cvNumKey(c.numero) === cvNumKey(o.codigo)));
+  const pi = (k, rot, suf) => `<label><span class="rot">${rot}</span><span class="cv-pi"><input class="campo" type="number" min="0" max="100" step="1" name="${k}" value="${P[k]}" ${pode ? '' : 'disabled'}><em>${suf}</em></span></label>`;
+  return `<div class="ob-g2"><div class="cartao bl" style="--c:#0891b2"><h3><i class="fa-solid fa-file-excel"></i>1. Baixe o modelo de planilha</h3>
+      <p class="s">O modelo tem a aba <b>Convênios</b> com listas prontas (os 142 municípios, situação do prazo, prestação de contas e situação do convênio), notas calculadas na própria planilha e uma aba <b>Leia-me</b> com o passo a passo. É o mesmo formato da planilha de monitoramento que vocês já usam: dá para importar qualquer uma das duas.</p>
+      <div class="cv-bts"><button class="btn btn-p" onclick="cvBaixarModelo()"><i class="fa-solid fa-file-arrow-down"></i>Modelo em branco (.xlsx)</button>
+        ${semMon.length ? `<button class="btn btn-s" onclick="cvModeloObras()"><i class="fa-solid fa-helmet-safety"></i>Modelo com os ${semMon.length} convênios de Obras ainda sem monitoramento</button>` : ''}
+        ${cvLista().length ? `<button class="btn btn-s" onclick="cvExportar()"><i class="fa-solid fa-table"></i>Exportar os ${cvLista().length} convênios cadastrados</button>` : ''}</div>
+      <p class="s" style="margin-top:8px">A exportação sai no mesmo formato do modelo: dá para editar e importar de volta.</p></div>
+    <div class="cartao bl" style="--c:#0f766e"><h3><i class="fa-solid fa-file-import"></i>2. Importe a planilha preenchida</h3>
+      <p class="s">O sistema procura, em todas as abas, a linha de títulos com <b>Município</b> e <b>Nº convênio</b>. Colunas de nota e classificação da planilha são ignoradas: o GABOrg recalcula.</p>
+      <p class="s">A importação <b>soma</b> aos convênios já cadastrados: o mesmo nº de convênio é atualizado, os novos são incluídos e nada é apagado. Assim vocês podem mandar um município por vez.</p>
+      ${pode ? `<label class="btn btn-p" style="margin-top:6px"><i class="fa-solid fa-file-excel"></i>Escolher planilha<input type="file" accept=".xlsx,.xls,.csv" hidden onchange="cvImportar(this.files[0]);this.value=''"></label>` : '<p class="s">Seu perfil não pode importar convênios.</p>'}
+      ${imp && imp.em ? `<p class="s" style="margin-top:10px">Última importação: <b>${esc(imp.arquivo)}</b> em ${fmtData(imp.em)} · ${fmtN(imp.novos || 0)} novos · ${fmtN(imp.atualizados || 0)} atualizados.</p>` : ''}</div>
+    <div class="cartao"><h3><i class="fa-solid fa-sliders"></i>Pesos e faixas da nota</h3>
+      <form id="cv-par" class="cv-par" onsubmit="event.preventDefault();cvSalvarParams()"><div class="cv-g4">${pi('pf', 'Execução física', '%')}${pi('pfin', 'Execução financeira', '%')}${pi('pp', 'Cumprimento de prazo', '%')}${pi('pc', 'Prestação de contas', '%')}</div>
+      <div class="cv-g4">${pi('otima', 'Ótima a partir de', 'pts')}${pi('boa', 'Boa a partir de', 'pts')}${pi('regular', 'Regular a partir de', 'pts')}<label><span class="rot">&nbsp;</span>${pode ? '<button class="btn btn-p" type="submit"><i class="fa-solid fa-floppy-disk"></i>Salvar</button>' : ''}</label></div></form>
+      <p class="s">Notas por item: prazo (No prazo e Concluído no prazo 100 · Atenção 60 · Concluído com atraso 50 · Atrasado 20) e contas (Regular e Não exigível ainda 100 · Com ressalvas 70 · Pendente 30 · Irregular 0). A classificação é um indicador gerencial e não substitui a análise técnica, jurídica ou da prestação de contas.</p></div>
+    <div class="cartao"><h3><i class="fa-solid fa-lightbulb"></i>Dicas para a planilha</h3><p class="s" style="line-height:1.7">• Preencha a <b>Execução física</b> com a medição da obra, não com o percentual pago. Quando os dois números são iguais, a nota conta o mesmo dado duas vezes.<br>• O <b>Nº do convênio</b> é a chave: com ele o GABOrg liga o convênio à obra e atualiza o registro certo.<br>• Use os nomes de município da lista. Nomes com outra grafia (ex.: "Alta floresta") são corrigidos automaticamente.<br>• Se o valor executado não for acompanhado à parte, deixe em branco em vez de repetir o repassado.</p></div></div>`;
+}
+function cvSalvarParams(){
+  const f = $('#cv-par'); if (!f) return; const p = {}; ['pf', 'pfin', 'pp', 'pc', 'otima', 'boa', 'regular'].forEach(k => { p[k] = Math.max(0, Math.min(100, num(f.elements[k].value))); });
+  if (p.pf + p.pfin + p.pp + p.pc <= 0) { toast('Os pesos precisam somar mais que zero.', 'erro'); return; }
+  if (!(p.otima >= p.boa && p.boa >= p.regular)) { toast('As faixas precisam estar em ordem: Ótima ≥ Boa ≥ Regular.', 'erro'); return; }
+  salvarParam('convParametros', p); toast(p.pf + p.pfin + p.pp + p.pc === 100 ? 'Pesos salvos.' : `Pesos salvos (somam ${p.pf + p.pfin + p.pp + p.pc}%; a nota é proporcional).`); renderConvenios();
+}
+const cvLib = () => carregarScript(['https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js', 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js']);
+/* o modelo completo (listas, validações e fórmulas) fica ao lado do index.html; sem ele, gera um modelo simples */
+async function cvBaixarModelo(){
+  try { const r = await fetch('modelo-convenios-gaborg.xlsx', { cache:'no-cache' }); if (!r.ok) throw new Error(r.status);
+    const u = new Uint8Array(await r.arrayBuffer()); if (u[0] !== 0x50 || u[1] !== 0x4b) throw new Error('arquivo inválido');
+    baixarArquivo('modelo-convenios-gaborg.xlsx', u, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'); }
+  catch (e) { try { await cvPlanilha('modelo-convenios-gaborg.xlsx', [], 'CADASTRO E AVALIAÇÃO DOS CONVÊNIOS | SEDUC/MT'); toast('Modelo simples gerado (o modelo completo, com listas e fórmulas, não está publicado junto do sistema).'); } catch (e2) { toast('Falha ao gerar o modelo: ' + e2.message, 'erro'); } }
+}
+/* planilha simples no formato do modelo (títulos na linha 4), para exportar ou pré-preencher */
+async function cvPlanilha(nome, linhas, titulo){
+  await cvLib();
+  const cab = CV_COLS.map(c => c[1]), aoa = [[titulo], ['Preencha e importe no GABOrg (Convênios › Importar e modelo). Datas em dd/mm/aaaa; execução física em %. Listas de valores: veja a aba Listas.'], [], cab, ...linhas];
+  const ws = XLSX.utils.aoa_to_sheet(aoa, { cellDates:true }); ws['!cols'] = CV_COLS.map(([k]) => ({ wch:k === 'objeto' ? 60 : k === 'observacoes' ? 40 : k === 'municipio' ? 24 : 16 })); ws['!freeze'] = { xSplit:0, ySplit:4 };
+  for (let r = 4; r < aoa.length; r++) CV_COLS.forEach(([k], c) => { const a = ws[XLSX.utils.encode_cell({ r, c })]; if (!a) return; if (/^valor/.test(k)) a.z = '#,##0.00'; if (k === 'execFisica') a.z = '0.0%'; if (/^data/.test(k) && a.t === 'd') a.z = 'dd/mm/yyyy'; });
+  const lst = [['Municípios', 'Situação do prazo', 'Prestação de contas', 'Situação do convênio', 'Rede'], ...apGeo().muns.map(m => m.nome).sort((a, b) => a.localeCompare(b, 'pt-BR')).map((m, i) => [m, CV_PRAZO[i] || '', CV_CONTAS[i] || '', CV_SIT[i] || '', ['Estadual', 'Municipal'][i] || ''])];
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Convenios'); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(lst), 'Listas');
+  XLSX.writeFile(wb, nome);
+}
+const cvDataX = v => { const t = cvT(v); return isFinite(t) ? new Date(t) : (v || ''); };
+async function cvExportar(){
+  try { const L = cvLista().slice().sort((a, b) => String(a.municipio).localeCompare(b.municipio, 'pt-BR') || String(a.numero).localeCompare(b.numero));
+    await cvPlanilha('convenios-gaborg-' + new Date().toISOString().slice(0, 10) + '.xlsx', L.map(c => CV_COLS.map(([k]) => /^valor/.test(k) ? (c[k] === '' ? '' : num(c[k])) : k === 'execFisica' ? (c[k] === '' ? '' : num(c[k]) / 100) : /^data/.test(k) ? cvDataX(c[k]) : (c[k] || ''))), 'CADASTRO E AVALIAÇÃO DOS CONVÊNIOS | SEDUC/MT · exportado do GABOrg em ' + new Date().toLocaleDateString('pt-BR'));
+    toast('Planilha exportada.'); } catch (e) { toast('Falha ao exportar: ' + e.message, 'erro'); }
+}
+async function cvModeloObras(){
+  try { const semMon = obLista().filter(o => o.origem === 'Convênio' && o.codigo && !cvLista().some(c => cvNumKey(c.numero) === cvNumKey(o.codigo))).sort((a, b) => String(a.municipio).localeCompare(b.municipio, 'pt-BR'));
+    await cvPlanilha('modelo-convenios-a-preencher-' + new Date().toISOString().slice(0, 10) + '.xlsx', semMon.map(o => CV_COLS.map(([k]) => ({ municipio:cvMunOficial(o.municipio) || o.municipio, numero:o.codigo, objeto:[o.objeto, o.unidade].filter(Boolean).join(' – '), execFisica:o.execFisica === '' ? '' : num(o.execFisica) / 100, escolaCodigo:o.escolaCodigo || '', rede:/MUNIC/i.test(o.rede) ? 'Municipal' : /ESTAD/i.test(o.rede) ? 'Estadual' : '', observacoes:o.status ? 'Status em Obras: ' + o.status : '' })[k] ?? '')),
+      'CONVÊNIOS DE OBRAS A MONITORAR | pré-preenchido pelo GABOrg (confira a execução física, que veio de Obras)');
+    toast(`Planilha com ${semMon.length} convênios para preencher.`); } catch (e) { toast('Falha ao gerar: ' + e.message, 'erro'); }
+}
+async function cvImportar(f){
+  if (!f) return;
+  try {
+    toast('Lendo a planilha de convênios...'); await cvLib();
+    const wb = XLSX.read(await f.arrayBuffer(), { type:'array', cellDates:true }), novos = [], desc = new Set(); let ign = 0;
+    wb.SheetNames.forEach(nome => {
+      const L = XLSX.utils.sheet_to_json(wb.Sheets[nome], { header:1, raw:true, defval:'' });
+      const hi = L.findIndex(l => l.some(c => cvNh(c) === 'municipio') && l.some(c => /convenio/.test(cvNh(c)) && /^n|numero/.test(cvNh(c)))); if (hi < 0) return;
+      const cab = L[hi].map(cvNh), idx = {}; CV_COLS.forEach(([k, , alts]) => { const i = alts.map(a => cab.indexOf(a)).find(i => i >= 0); if (i !== undefined) idx[k] = i; });
+      L.slice(hi + 1).forEach(r => { const g = k => idx[k] === undefined ? '' : r[idx[k]], s = k => String(g(k) ?? '').replace(/\s+/g, ' ').trim();
+        const mun = s('municipio'), numero = s('numero'); if (!mun && !numero) return; if (!numero && !s('objeto') && !s('valorConcedente')) return; if (!mun) { ign++; return; }
+        const mo = cvMunOficial(mun); if (!mo) desc.add(mun);
+        const val = k => { const v = g(k); if (v === '' || v == null) return ''; const n = typeof v === 'number' ? v : num(String(v).replace(/R\$|\s/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.')); return isFinite(n) ? String(Math.round(n * 100) / 100) : ''; };
+        const pct = v => { if (v === '' || v == null) return ''; const t = String(v), n = typeof v === 'number' ? v : num(t.replace('%', '').replace(',', '.')); if (!isFinite(n)) return ''; const p = typeof v === 'number' ? (n <= 1.0001 ? n * 100 : n) : (/%/.test(t) || n > 1.0001 ? n : n * 100); return String(Math.round(Math.max(0, Math.min(100, p)) * 10) / 10); };
+        const dt = v => { if (v instanceof Date && isFinite(v)) return v.getFullYear() < 1950 ? '' : new Date(v.getTime() + 12 * 36e5).toISOString().slice(0, 10); if (typeof v === 'number') return obData(v); const m = String(v || '').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/); return m ? `${m[3].length === 2 ? '20' + m[3] : m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : /^\d{4}-\d{2}-\d{2}/.test(String(v)) ? String(v).slice(0, 10) : ''; };
+        const rd = s('rede'), c = { municipio:mo || mun, numero, objeto:s('objeto'), dataAssinatura:dt(g('dataAssinatura')), dataTermino:dt(g('dataTermino')), valorConcedente:val('valorConcedente'), valorContrapartida:val('valorContrapartida'), valorRepassado:val('valorRepassado'), valorExecutado:val('valorExecutado'),
+          execFisica:pct(g('execFisica')), situacaoPrazo:cvCanon(s('situacaoPrazo'), CV_PRAZO), prestacaoContas:cvCanon(s('prestacaoContas'), CV_CONTAS), situacao:cvCanon(s('situacao'), CV_SIT), observacoes:s('observacoes'), responsavel:s('responsavel'), dataAtualizacao:dt(g('dataAtualizacao')),
+          escolaCodigo:s('escolaCodigo').replace(/\D/g, ''), rede:/munic/i.test(rd) ? 'Municipal' : /estad/i.test(rd) ? 'Estadual' : '' };
+        if (!c.rede) c.rede = /ESTADUAL/i.test(c.objeto) ? 'Estadual' : /MUNICIPAL/i.test(c.objeto) ? 'Municipal' : '';
+        c.id = 'cv_' + obHash(numero ? cvNumKey(numero) : chaveMun(c.municipio) + '|' + norm(c.objeto)); novos.push(c); });
+    });
+    if (!novos.length) throw new Error('Não encontrei uma aba com as colunas "Município" e "Nº convênio".');
+    const vist = new Map(); novos.forEach(c => vist.set(c.id, c)); const U = [...vist.values()], dup = novos.length - U.length;
+    const atuais = new Map(cvLista().map(c => [c.id, c])), nNov = U.filter(c => !atuais.has(c.id)).length, nAt = U.length - nNov;
+    const ligObra = U.filter(c => cvObra(c)).length, munN = new Set(U.map(c => chaveMun(c.municipio))).size;
+    const eqFis = U.filter(c => c.execFisica !== '' && num(c.valorConcedente) > 0 && c.valorExecutado !== '' && Math.abs(num(c.execFisica) - num(c.valorExecutado) / num(c.valorConcedente) * 100) < .6 && num(c.execFisica) > 0 && num(c.execFisica) < 100).length;
+    if (!await confirmar('Importar convênios', `<b>${U.length}</b> convênios de <b>${munN}</b> município${munN === 1 ? '' : 's'} · ${fmtRc(U.reduce((t, c) => t + num(c.valorConcedente), 0))} concedidos.<br>
+      <b>${nNov}</b> novo${nNov === 1 ? '' : 's'} e <b>${nAt}</b> já cadastrado${nAt === 1 ? '' : 's'} (serão atualizados). Nada será apagado.<br>
+      Ligados a obras pelo nº: <b>${ligObra}</b> de ${U.length}.${desc.size ? `<br><span style="color:#b45309"><i class="fa-solid fa-triangle-exclamation"></i> Município não reconhecido: ${[...desc].map(esc).join(', ')} (será gravado como está).</span>` : ''}
+      ${dup ? `<br>${dup} linha${dup === 1 ? '' : 's'} com nº repetido (vale a última).` : ''}${ign ? `<br>${ign} linha${ign === 1 ? '' : 's'} sem município ou sem nº/objeto foram ignoradas.` : ''}
+      ${eqFis ? `<br><span style="color:#7c3aed"><i class="fa-solid fa-circle-info"></i> Em ${eqFis} convênio${eqFis === 1 ? '' : 's'} a execução física é igual à financeira; confira se é a medição da obra.</span>` : ''}<br><br>Gravar na planilha do GABOrg?`, 'Importar')) return;
+    const quando = agora(), por = cfg.usuario || '', ops = [];
+    U.forEach(c => { const a = atuais.get(c.id), r = novoReg('convenios', Object.assign({}, a || {}, Object.fromEntries(Object.entries(c).filter(([k, v]) => v !== '' || !a)), { atualizadoEm:quando, atualizadoPor:por + ' (planilha)' }));
+      if (a) Object.assign(a, r); else { DB.convenios = DB.convenios || []; DB.convenios.push(r); } ops.push({ op:'upsert', table:'convenios', record:Object.assign({}, a || r) }); });
+    svEnfileirarLote(ops); salvarParam('convImport', { arquivo:f.name, em:quando, por, novos:nNov, atualizados:nAt });
+    toast(`${U.length} convênios importados (${nNov} novos, ${nAt} atualizados).`); abaCv('painel');
+  } catch (e) { toast('Falha ao importar: ' + e.message, 'erro'); }
+}
+/* ---------- apresentação: convênios do município, da DRE ou do estado ---------- */
+function apConvDe(D, A){
+  const L = cvLista(); if (!L.length) return [];
+  if (A.tipo === 'estado') return L;
+  if (A.tipo === 'mun') return L.filter(c => chaveMun(c.municipio) === A.m.k);
+  return L.filter(c => cvK(c).dre === A.d);
+}
+const AP_APERTO = `<svg viewBox="0 0 160 110" class="cv-aperto"><g class="mE"><path d="M4,58L40,40L62,46L78,40L96,52L70,70L52,72L30,82Z" fill="#38bdf8"/><path d="M4,58L30,82L22,90L0,66Z" fill="#0ea5e9"/></g>
+  <g class="mD"><path d="M156,52L120,38L100,44L80,62L96,74L112,66L128,80L156,70Z" fill="#fbbf24"/><path d="M156,52L160,74L156,70Z" fill="#f59e0b"/>${[0, 1, 2, 3].map(i => `<rect x="${78 + i * 9}" y="${58 + i * 4}" width="14" height="7" rx="3.5" fill="#fcd34d" transform="rotate(35 ${85 + i * 9} ${61 + i * 4})"/>`).join('')}</g>
+  ${[[80, 20], [56, 14], [106, 14], [80, 4]].map(([x, y], i) => `<path class="br" style="--d:${i}" d="M${x},${y + 8}V${y}" stroke="#fde68a" stroke-width="3" stroke-linecap="round"/>`).join('')}</svg>`;
+/* na apresentação, a execução física vem da medição da obra ligada (seção Obras) quando existe */
+const cvFisReal = x => x.obra && x.obra.execFisica !== '' ? obExec(x.obra) : x.fis;
+function apTelaConvenios(D, A){
+  const L = apConvDe(D, A), X = L.map(cvK), som = k => X.reduce((t, x) => t + x[k], 0), conc = som('conc'), rep = som('rep'), exe = som('exe'), [mv, ms, md] = apMoeda(conc);
+  const pr = conc ? rep / conc : 0, pe = conc ? exe / conc : 0, fisM = (() => { const q = X.filter(x => cvFisReal(x) !== null && x.conc); const t = q.reduce((s, x) => s + x.conc, 0); return t ? q.reduce((s, x) => s + cvFisReal(x) * x.conc, 0) / t : null; })();
+  const nc = L.filter(c => c.situacao === 'Concluído').length, ne = L.filter(c => c.situacao === 'Em execução').length, mostraNota = !!store.get('gaborg_ap_cvnota', false);
+  const tanque = (rot, ic, v, p, cor, i) => `<div class="cv-tq apx-in" style="--i:${i};--c:${cor};--p:${(p * 100).toFixed(1)}"><div class="cv-tq-v"><span class="ag"></span><span class="ag b"></span>${[0, 1, 2].map(j => `<i class="moeda" style="--j:${j}"></i>`).join('')}<b>${apCont(Math.round(p * 100), '%')}</b></div><span class="cv-tq-r"><i class="fa-solid ${ic}"></i>${rot}</span><small>${fmtRc(v)}</small></div>`;
+  let dir = '';
+  if (A.tipo === 'mun') {
+    const C = L.map((c, i) => [c, X[i]]).sort((a, b) => b[1].conc - a[1].conc).slice(0, 6);
+    dir = `<div class="cv-cards">${C.map(([c, x], i) => { const tipo = obObj(c), p = cvFisReal(x) ?? 0, cor = c.situacao === 'Concluído' ? '#22c55e' : '#38bdf8';
+      return `<article class="apx-in" style="--i:${i + 6}"><span class="mini">${OB_ANIM[tipo] || OB_ANIM.Outro}</span><span class="tx"><b>${esc(apCvNome(c))}</b><small>${esc(tipo)} · ${fmtRc(x.conc)}</small>
+        <span class="cv-tags">${c.situacao ? `<em style="--c:${CV_COR[c.situacao]}">${esc(c.situacao)}</em>` : ''}${x.dias !== null && cvAberto(c) ? `<em style="--c:${x.dias < 0 ? '#f87171' : x.dias <= 90 ? '#fbbf24' : '#94a3b8'}"><i class="fa-solid fa-hourglass-half"></i>${x.dias < 0 ? 'vigência encerrada' : x.dias <= 90 ? x.dias + ' dias de vigência' : 'vigente até ' + new Date(cvT(c.dataTermino)).toLocaleDateString('pt-BR', { month:'short', year:'numeric' })}</em>` : ''}${mostraNota && x.nota !== null ? `<em style="--c:${CV_COR[x.cls]}"><i class="fa-solid fa-star"></i>${x.cls}</em>` : ''}</span></span>
+        <span class="pg"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15.9" class="f"/><circle cx="18" cy="18" r="15.9" class="v" style="stroke:${cor};--p:${p.toFixed(1)}"/></svg><b>${Math.round(p)}%</b><small>obra</small></span></article>`; }).join('')}${L.length > 6 ? `<p class="cv-mais apx-in" style="--i:12">e mais ${L.length - 6} convênio${L.length - 6 === 1 ? '' : 's'}</p>` : ''}</div>`;
+  } else {
+    const M = cvPorMun(L).sort((a, b) => b.conc - a.conc).slice(0, 8), mx = Math.max(1, ...M.map(m => m.conc));
+    dir = `<div class="cv-rk"><span class="tit apx-in" style="--i:6"><i class="fa-solid fa-city"></i>${cvPorMun(L).length} municípios parceiros${M.length < cvPorMun(L).length ? ' · os maiores' : ''}</span>${M.map((m, i) => `<div class="apx-in" style="--i:${i + 7}"><span class="n"><b>${esc(apNomeCurto(m.nome))}</b><small>${m.L.length} convênio${m.L.length === 1 ? '' : 's'}${mostraNota && m.nota !== null ? ' · ' + m.cls : ''}</small></span>
+      <span class="b"><i class="c" style="--w:${(m.conc / mx * 100).toFixed(1)}%"></i><i class="r" style="--w:${(m.rep / mx * 100).toFixed(1)}%"></i></span><b class="v">${fmtRc(m.conc)}</b></div>`).join('')}
+      <span class="lg apx-in" style="--i:16"><i class="c"></i>concedido <i class="r"></i>já repassado</span></div>`;
+  }
+  return `<div class="apx-l apx-l-larga apx-cv"><span class="apx-k apx-in" style="--i:0"><i class="fa-solid fa-handshake"></i> Convênios</span>
+    <div class="apx-cv-g"><div class="apx-cv-e"><div class="apx-cv-h apx-in" style="--i:1">${AP_APERTO}<h2>${A.tipo === 'mun' ? 'Parceria SEDUC e ' + esc(A.nome) : A.tipo === 'estado' ? 'Estado e municípios, juntos pelas escolas' : 'Parcerias com os municípios da região'}</h2></div>
+      <div class="apx-cv-tot apx-in" style="--i:2"><small>em ${L.length} convênio${L.length === 1 ? '' : 's'}${A.tipo === 'mun' ? '' : ` com ${cvPorMun(L).length} municípios`}</small><b><span class="pre">R$</span>${apCont(mv, '', md)}<span class="suf">${ms}</span></b>
+        <em><i class="fa-solid fa-person-digging"></i>${ne} em execução${nc ? `<i class="fa-solid fa-circle-check"></i>${nc} concluído${nc === 1 ? '' : 's'}` : ''}${fisM !== null ? `<i class="fa-solid fa-helmet-safety"></i>${Math.round(fisM)}% de execução física média` : ''}</em></div>
+      <div class="cv-tqs">${tanque('Pactuado', 'fa-file-signature', conc, 1, '#60a5fa', 3)}<span class="cv-seta apx-in" style="--i:4"><i class="fa-solid fa-angles-right"></i></span>${tanque('Repassado', 'fa-money-bill-transfer', rep, pr, '#34d399', 4)}<span class="cv-seta apx-in" style="--i:5"><i class="fa-solid fa-angles-right"></i></span>${tanque('Executado', 'fa-receipt', exe, pe, '#fbbf24', 5)}</div></div>
+      <div class="apx-cv-d">${dir}</div></div></div>`;
+}
+const apCvNome = c => { const o = cvObra(c); if (o && o.unidade) return obNome(o);
+  const s = String(c.objeto || ''), m = s.match(/escola\s+(estadual|municipal)?\s*(de\s+educa[cç][aã]o\s+infantil)?\s*(ind[ií]gena)?\s*(denominada\s+)?([^,;()–-]{3,60})/i);
+  if (m) return apNomeCurto(((m[1] ? (/est/i.test(m[1]) ? 'EE ' : 'EM ') : 'Escola ') + m[5]).replace(/\s+(localizad|no munic|do munic|com |e da quadra).*/i, '').trim());
+  return s.length > 60 ? s.slice(0, 58) + '…' : s; };
 
 /* Erros inesperados depois de aberto: avisa em vez de falhar em silêncio */
 window.addEventListener('error', e => { if (window.GABORG_INICIADO && e.message && typeof toast === 'function') toast('Erro: ' + e.message + ' — recarregue a página. Se repetir, envie esta mensagem ao suporte.', 'erro'); });

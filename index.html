@@ -1022,6 +1022,7 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background
   .nav-b[data-vista="relatorios"] span{font-size:0}.nav-b[data-vista="relatorios"] span::after{content:'Relatórios';font-size:10px}
   .nav-b[data-vista="apresentacao"] span{font-size:0}.nav-b[data-vista="apresentacao"] span::after{content:'Apresentar';font-size:10px}
   .nav-b[data-vista="obras"] span{font-size:0}.nav-b[data-vista="obras"] span::after{content:'Obras';font-size:10px}
+  .nav-b[data-vista="convenios"] span{font-size:0}.nav-b[data-vista="convenios"] span::after{content:'Convênios';font-size:10px}
   .nav-b[data-vista="regional"] span{font-size:0}.nav-b[data-vista="regional"] span::after{content:'Regional';font-size:10px}
   .lado-pe .av{width:38px;height:38px;cursor:pointer;box-shadow:0 0 0 2px #1e293b}
   .vista{padding-top:env(safe-area-inset-top)}
@@ -1752,13 +1753,110 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background
 .apx-zero{margin-left:8px;padding:2px 9px;border-radius:999px;background:#fef3c7;color:#b45309!important;font-weight:700;cursor:pointer}
 .apx-col-h{gap:6px}.apx-col-h b{margin-right:auto}
 
+/* ===== Convênios ===== */
+.cv-g4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+@media (max-width:760px){.cv-g4{grid-template-columns:1fr 1fr}}
+.cv-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:700;white-space:nowrap;color:var(--c);background:color-mix(in srgb,var(--c) 13%,transparent);border:1px solid color-mix(in srgb,var(--c) 35%,transparent)}
+.cv-chip i{font-size:9px;opacity:.8}
+.cv-nota{--p:0;position:relative;display:inline-grid;place-items:center;width:38px;height:38px;border-radius:50%;background:conic-gradient(var(--c) calc(var(--p) * 1%),color-mix(in srgb,var(--c) 14%,transparent) 0)}
+.cv-nota::before{content:'';position:absolute;inset:4px;border-radius:50%;background:var(--card,#fff)}
+.cv-nota b{position:relative;font-size:12.5px;color:var(--c)}
+.cv-nota.sem{background:var(--linha,#e2e8f0);color:var(--mut)}.cv-nota.sem::before{display:none}
+.cv-vig{display:inline-block;font-size:12px;font-weight:700;color:var(--mut)}.cv-vig.a{color:#d97706}.cv-vig.r{color:#dc2626}
+.cv-al{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.cv-al small{font-size:11px;padding:1px 7px;border-radius:6px;color:var(--c);background:color-mix(in srgb,var(--c) 10%,transparent)}
+.cv-al-f{margin:4px 0 10px}.cv-al-f small{font-size:12px;padding:4px 9px}.cv-al-f small i{margin-right:5px}
+.cv-cob{display:grid;grid-template-columns:minmax(260px,auto) 1fr auto;gap:16px;align-items:center;margin-top:14px}
+.cv-cob b{display:block;font-size:15px}.cv-cob small{display:block;color:var(--mut);margin-top:2px}
+.cv-cob-b{height:12px;border-radius:99px;background:color-mix(in srgb,#0891b2 12%,transparent);overflow:hidden}
+.cv-cob-b i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#0891b2,#22d3ee);animation:cvCresce 1.2s cubic-bezier(.16,1,.3,1)}
+@keyframes cvCresce{from{width:0}}
+@media (max-width:820px){.cv-cob{grid-template-columns:1fr}}
+.cv-mh{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;margin-bottom:10px}.cv-ck{margin-left:auto;display:flex;gap:6px;align-items:center;font-size:13px;cursor:pointer}
+.cv-tab td{vertical-align:middle}.cv-tab td small{display:block;color:var(--mut);font-size:11.5px}
+.cv-tab .n{text-align:right;white-space:nowrap}.cv-tab tr.clic{cursor:pointer}.cv-tab tr.clic:hover td{background:color-mix(in srgb,var(--marca) 5%,transparent)}
+.cv-tab .cv-obj{white-space:normal;min-width:240px;max-width:400px;font-size:12.5px;line-height:1.35}
+.cv-tab .cv-obj .cv-al{white-space:normal}
+.cv-dre{color:var(--c)!important;font-weight:600}
+.cv-bar{position:relative;display:block;width:90px;height:8px;border-radius:99px;background:color-mix(in srgb,#0f766e 12%,transparent);overflow:hidden}
+.cv-bar i{position:absolute;inset:0 auto 0 0;background:#5eead4;border-radius:99px}.cv-bar em{position:absolute;inset:0 auto 0 0;background:#0f766e;border-radius:99px}
+.cv-alb{display:inline-grid;place-items:center;min-width:22px;height:22px;border-radius:99px;background:#fee2e2;color:#dc2626;font-weight:800;font-size:12px}
+.cv-sem td{opacity:.55}
+.cv-fil{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px}.cv-fil .campo{width:auto;min-width:150px;flex:0 1 auto}.cv-fil input.campo{flex:1 1 220px}
+.cv-fi-top{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:8px}.cv-fi-top>div{flex:1}.cv-fi-top b{display:block}.cv-fi-top small{color:var(--mut)}
+.cv-fi-top .cv-nota{width:52px;height:52px}.cv-fi-top .cv-nota b{font-size:16px}
+.cv-ob{display:flex;gap:12px;align-items:center;padding:10px 12px;border-radius:12px;background:color-mix(in srgb,#ea580c 8%,transparent);border:1px solid color-mix(in srgb,#ea580c 25%,transparent);cursor:pointer;margin-bottom:10px}
+.cv-ob>i:first-child{font-size:20px;color:#ea580c}.cv-ob span{flex:1}.cv-ob b{display:block}.cv-ob small{color:var(--mut)}
+.cv-bts{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.cv-pi{display:flex;align-items:center;gap:6px}.cv-pi em{font-style:normal;color:var(--mut);font-size:12px}
+/* ---- apresentação ---- */
+.apx-cv-g{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:clamp(18px,2.4vw,40px);align-items:stretch;margin-top:10px}
+.apx-cv-e{display:flex;flex-direction:column;gap:clamp(10px,1.6vh,20px)}
+.apx-cv-h{display:flex;align-items:center;gap:16px}.apx-cv-h h2{margin:0}
+.cv-aperto{width:clamp(90px,8vw,140px);flex:none;overflow:visible}
+.apx-s.on .cv-aperto .mE{animation:cvMaoE 2.4s cubic-bezier(.16,1,.3,1) .5s both,cvBalanca 1.8s ease-in-out 2.9s infinite}
+.apx-s.on .cv-aperto .mD{animation:cvMaoD 2.4s cubic-bezier(.16,1,.3,1) .5s both,cvBalanca 1.8s ease-in-out 2.9s infinite}
+.apx-s.on .cv-aperto .br{animation:cvBrilho 1.8s ease-out calc(2.2s + var(--d) * .12s) infinite}
+.cv-aperto .br{opacity:0}
+@keyframes cvMaoE{from{transform:translateX(-46px) rotate(-8deg);opacity:0}to{transform:none;opacity:1}}
+@keyframes cvMaoD{from{transform:translateX(46px) rotate(8deg);opacity:0}to{transform:none;opacity:1}}
+@keyframes cvBalanca{0%,100%{transform:translateY(0)}50%{transform:translateY(5px)}}
+@keyframes cvBrilho{0%{opacity:0;transform:translateY(6px)}30%{opacity:1}100%{opacity:0;transform:translateY(-8px)}}
+.apx-cv-tot{display:flex;flex-direction:column}
+.apx-cv-tot small{color:#bfdbfe;font-size:clamp(13px,1.05vw,17px)}
+.apx-cv-tot b{display:flex;align-items:baseline;gap:8px;font-size:clamp(50px,5.6vw,98px);font-weight:900;letter-spacing:-.05em;line-height:1;background:linear-gradient(90deg,#a5f3fc,#34d399);-webkit-background-clip:text;background-clip:text;color:transparent}
+.apx-cv-tot b .pre,.apx-cv-tot b .suf{font-size:.42em;letter-spacing:-.02em}
+.apx-cv-tot em{font-style:normal;display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:8px;color:#e2e8f0;font-size:clamp(13px,1.05vw,16px)}.apx-cv-tot em i{color:#67e8f9;margin-right:6px}
+.cv-tqs{display:flex;align-items:flex-end;gap:clamp(8px,1vw,16px);flex:1;min-height:0}
+.cv-seta{align-self:center;color:#64748b;font-size:clamp(16px,1.6vw,26px)}
+.apx-s.on .cv-seta i{animation:cvSeta 1.6s ease-in-out 2s infinite}
+@keyframes cvSeta{0%,100%{transform:translateX(0);opacity:.5}50%{transform:translateX(6px);opacity:1;color:#e2e8f0}}
+.cv-tq{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0}
+.cv-tq-v{position:relative;width:100%;height:clamp(150px,28vh,300px);border-radius:22px 22px 26px 26px;border:3px solid color-mix(in srgb,var(--c) 55%,transparent);background:rgba(255,255,255,.04);overflow:hidden;box-shadow:inset 0 0 30px rgba(0,0,0,.25)}
+.cv-tq-v .ag{position:absolute;left:-50%;width:200%;bottom:0;height:0;background:linear-gradient(180deg,color-mix(in srgb,var(--c) 85%,#fff 15%),color-mix(in srgb,var(--c) 70%,#000 30%));border-radius:40% 45% 0 0;transition:height 2.4s cubic-bezier(.16,1,.3,1)}
+.cv-tq-v .ag.b{opacity:.45;border-radius:45% 40% 0 0}
+.apx-s.on .cv-tq-v .ag{height:calc(var(--p) * 1% + 6px);animation:cvOnda 5s linear infinite}
+.apx-s.on .cv-tq-v .ag.b{animation-duration:7s;animation-direction:reverse}
+.apx-s.on .cv-tq:nth-of-type(1) .ag{transition-delay:.9s}.apx-s.on .cv-tq:nth-of-type(2) .ag{transition-delay:1.5s}.apx-s.on .cv-tq:nth-of-type(3) .ag{transition-delay:2.1s}
+@keyframes cvOnda{from{transform:translateX(0)}to{transform:translateX(25%)}}
+.cv-tq-v b{position:absolute;inset:auto 0 12px;text-align:center;font-size:clamp(22px,2.4vw,40px);font-weight:900;color:#fff;text-shadow:0 2px 12px rgba(0,0,0,.45);z-index:2}
+.cv-tq-v .moeda{position:absolute;top:-24px;left:calc(28% + var(--j) * 22%);width:18px;height:18px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#fef3c7,#f59e0b 60%,#b45309);box-shadow:0 0 0 2px #fbbf24 inset;z-index:1;opacity:0}
+.apx-s.on .cv-tq-v .moeda{animation:cvMoeda 2.2s cubic-bezier(.55,0,.8,.5) calc(1.4s + var(--j) * .7s) infinite}
+@keyframes cvMoeda{0%{opacity:0;top:-24px;transform:rotateY(0)}10%{opacity:1}80%{opacity:1}100%{opacity:0;top:calc(100% - var(--p) * 1% - 14px);transform:rotateY(720deg)}}
+.cv-tq-r{font-weight:800;color:#f8fafc;font-size:clamp(14px,1.2vw,19px)}.cv-tq-r i{color:var(--c);margin-right:6px}
+.cv-tq small{color:#cbd5e1;font-size:clamp(12px,1vw,15px)}
+.apx-cv-d{min-width:0;display:flex;flex-direction:column;justify-content:center}
+.cv-cards{display:flex;flex-direction:column;gap:clamp(6px,1vh,10px)}
+.cv-cards article{display:grid;grid-template-columns:clamp(48px,4.2vw,64px) 1fr auto;gap:12px;align-items:center;padding:clamp(7px,1vh,11px) 12px;border-radius:16px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08)}
+.cv-cards .mini{width:100%;aspect-ratio:1;border-radius:14px;background:rgba(255,255,255,.07);padding:3px;box-sizing:border-box}
+.cv-cards .tx{min-width:0}.cv-cards .tx b{display:block;color:#f8fafc;font-size:clamp(13px,1.1vw,17px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cv-cards .tx small{color:#cbd5e1;font-size:clamp(11px,.9vw,14px)}
+.cv-tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:4px}
+.cv-tags em{font-style:normal;font-size:clamp(10px,.8vw,12.5px);font-weight:700;padding:2px 8px;border-radius:99px;color:var(--c);background:color-mix(in srgb,var(--c) 16%,transparent)}.cv-tags em i{margin-right:4px}
+.cv-cards .pg{position:relative;width:clamp(46px,3.8vw,58px);aspect-ratio:1;display:grid;place-items:center}.cv-cards .pg svg{position:absolute;inset:0;transform:rotate(-90deg)}
+.cv-cards .pg b{font-size:clamp(11px,.9vw,14px);color:#fff;line-height:1}.cv-cards .pg small{position:absolute;bottom:-14px;font-size:10px;color:#94a3b8}
+.cv-cards .pg .f{fill:none;stroke:rgba(255,255,255,.12);stroke-width:3.6}.cv-cards .pg .v{fill:none;stroke-width:3.6;stroke-linecap:round;stroke-dasharray:0 100;transition:stroke-dasharray 1.8s cubic-bezier(.16,1,.3,1) 1.4s}
+.apx-s.on .cv-cards .pg .v{stroke-dasharray:var(--p) 100}
+.cv-mais{color:#94a3b8;margin:4px 0 0;text-align:right}
+.cv-rk{display:flex;flex-direction:column;gap:clamp(6px,1.1vh,12px)}
+.cv-rk .tit{color:#bfdbfe;font-weight:700;letter-spacing:.04em}.cv-rk .tit i{margin-right:8px;color:#67e8f9}
+.cv-rk>div{display:grid;grid-template-columns:minmax(120px,30%) 1fr auto;gap:12px;align-items:center}
+.cv-rk .n b{display:block;color:#f8fafc;font-size:clamp(13px,1.1vw,17px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cv-rk .n small{color:#94a3b8;font-size:12px}
+.cv-rk .b{position:relative;height:clamp(14px,1.6vh,20px);border-radius:99px;background:rgba(255,255,255,.06);overflow:hidden}
+.cv-rk .b i{position:absolute;inset:0 auto 0 0;width:0;border-radius:99px;transition:width 1.8s cubic-bezier(.16,1,.3,1)}
+.cv-rk .b .c{background:rgba(96,165,250,.45)}.cv-rk .b .r{background:linear-gradient(90deg,#10b981,#34d399);transition-delay:.5s}
+.apx-s.on .cv-rk .b i{width:var(--w)}
+.cv-rk .v{color:#e2e8f0;font-weight:800;font-size:clamp(12px,1vw,15px)}
+.cv-rk .lg{color:#94a3b8;font-size:12px;display:flex;gap:8px;align-items:center}.cv-rk .lg i{display:inline-block;width:14px;height:8px;border-radius:4px}.cv-rk .lg .c{background:rgba(96,165,250,.6)}.cv-rk .lg .r{background:#34d399;margin-left:8px}
+@media (max-width:1100px){.apx-cv-g{grid-template-columns:1fr}.cv-tq-v{height:clamp(120px,20vh,200px)}}
+
 </style>
 </head>
 <body>
 <!-- Vigia de inicialização: se o arquivo.js não carregar ou falhar, mostra o motivo em vez de uma tela vazia -->
 <script>
-window.GABORG_VERSAO_HTML = '1.42.1'; window.GABORG_ERROS = [];
-window.GABORG_NOVIDADES = "Apresentação: sempre os 142 municípios de MT (Boa Esperança do Norte incluída mesmo sem a malha do IBGE); municípios sem escola vinculada aparecem destacados para conferência. Apresentação: opção Repetir em loop (volta ao início ao terminar e recomeça; botão e tecla R). Apresentação: usa os limites municipais atuais do IBGE (142 municípios, com Boa Esperança do Norte). Escolas: cada escola usa o município oficial (base 2026), corrigindo a contagem para 142 municípios; Campos de Júlio com o nome completo. Apresentação: animações sempre ativas no modo apresentação; nova tela Pessoas (equipe ilustrada, pictogramas de estudantes por profissional, vínculos e cargos com ícones) também para municípios e DREs; nova tela Investimentos no mapa, com bolhas animadas por tipo de obra e passeio pelas maiores obras.";
+window.GABORG_VERSAO_HTML = '1.43.0'; window.GABORG_ERROS = [];
+window.GABORG_NOVIDADES = "Nova seção Convênios: monitoramento dos convênios com municípios (repasse, execução, vigência, prestação de contas, nota e ranking), ligada às Obras pelo nº do convênio, com modelo de planilha para importar e exportar; novo slide de convênios na Apresentação (requer Codigo.gs 1.20.0). Apresentação: sempre os 142 municípios de MT (Boa Esperança do Norte incluída mesmo sem a malha do IBGE); municípios sem escola vinculada aparecem destacados para conferência. Apresentação: opção Repetir em loop (volta ao início ao terminar e recomeça; botão e tecla R). Apresentação: usa os limites municipais atuais do IBGE (142 municípios, com Boa Esperança do Norte). Escolas: cada escola usa o município oficial (base 2026), corrigindo a contagem para 142 municípios; Campos de Júlio com o nome completo. Apresentação: animações sempre ativas no modo apresentação; nova tela Pessoas (equipe ilustrada, pictogramas de estudantes por profissional, vínculos e cargos com ícones) também para municípios e DREs; nova tela Investimentos no mapa, com bolhas animadas por tipo de obra e passeio pelas maiores obras.";
 window.addEventListener('error', function (e) {
   var alvo = e.target || {};
   if (alvo.tagName === 'SCRIPT') window.GABORG_ERROS.push('Não foi possível baixar o arquivo ' + (alvo.getAttribute('src') || '') + '.');
@@ -1858,6 +1956,7 @@ window.addEventListener('load', function () { setTimeout(function () { window.GA
       <button class="nav-b" data-vista="chefias"><i class="fa-solid fa-user-tie"></i><span>Chefias</span></button>
       <button class="nav-b" data-vista="servidores"><i class="fa-solid fa-id-card-clip"></i><span>Servidores</span></button>
       <button class="nav-b" data-vista="obras"><i class="fa-solid fa-helmet-safety"></i><span>Obras</span></button>
+      <button class="nav-b" data-vista="convenios"><i class="fa-solid fa-handshake"></i><span>Convênios</span></button>
       <button class="nav-b" data-vista="regional"><i class="fa-solid fa-route"></i><span>Gestão regional</span></button>
       <h6>SISTEMA</h6>
       <button class="nav-b so-adm" data-vista="usuarios"><i class="fa-solid fa-user-shield"></i><span>Administração</span></button>
@@ -2032,6 +2131,10 @@ window.addEventListener('load', function () { setTimeout(function () { window.GA
       <div class="topo"><div><h1><i class="fa-solid fa-helmet-safety"></i>Obras e inaugurações</h1><p>Contratos e convênios de obras nas escolas: execução, investimento, mapa e o caminho até a inauguração.</p></div></div>
       <div class="rolagem" id="ob-corpo"></div>
     </section>
+    <section class="vista fora" id="v-convenios">
+      <div class="topo"><div><h1><i class="fa-solid fa-handshake"></i>Convênios com municípios</h1><p>Monitoramento dos convênios: repasse, execução, vigência, prestação de contas e nota de desempenho por município.</p></div></div>
+      <div class="rolagem" id="cv-corpo"></div>
+    </section>
     <section class="vista fora" id="v-servidores">
       <div class="topo"><div><h1><i class="fa-solid fa-id-card-clip"></i>Servidores</h1><p>Quem está lotado em cada unidade do Órgão Central e das DREs, vínculos, cargos e correspondência com a nova estrutura.</p></div></div>
       <div class="rolagem" id="sv-corpo"></div>
@@ -2103,6 +2206,6 @@ window.addEventListener('load', function () { setTimeout(function () { window.GA
 
 <div id="toast"><i class="fa-solid fa-check"></i><span></span></div>
 
-<script src="arquivo.js?v=1.42.1" onerror="window.GABORG_ERROS.push('O arquivo arquivo.js não foi encontrado no servidor (erro 404).');GABORG_DIAGNOSTICO()"></script>
+<script src="arquivo.js?v=1.43.0" onerror="window.GABORG_ERROS.push('O arquivo arquivo.js não foi encontrado no servidor (erro 404).');GABORG_DIAGNOSTICO()"></script>
 </body>
 </html>
