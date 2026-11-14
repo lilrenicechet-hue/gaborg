@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.43.0';
+const VERSAO = '1.44.0';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -7300,7 +7300,7 @@ function apObMapaParar(){ const S = apEstado; if (!S) return; clearTimeout(S.omT
    com nota de desempenho e ranking por município. Importa a planilha "Monitoramento de Convênios" ou o modelo
    do GABOrg e se liga às Obras pelo número do convênio. */
 let cvAba = store.get('gaborg_cv_aba', 'painel'), cvFil = { q:'', mun:'', dre:'', sit:'', cls:'', alerta:'' }, cvOrd = 'valor', cvLim = 100, cvMunTodos = false;
-const CV_ABAS = [['painel', 'Painel', 'fa-gauge-high'], ['municipios', 'Municípios', 'fa-ranking-star'], ['lista', 'Convênios', 'fa-list'], ['importar', 'Importar e modelo', 'fa-file-import']];
+const CV_ABAS = [['painel', 'Painel', 'fa-gauge-high'], ['mapa', 'Mapa', 'fa-map-location-dot'], ['municipios', 'Municípios', 'fa-ranking-star'], ['lista', 'Convênios', 'fa-list'], ['importar', 'Importar e modelo', 'fa-file-import']];
 const CV_PRAZO = ['No prazo', 'Atenção', 'Atrasado', 'Concluído no prazo', 'Concluído com atraso'];
 const CV_CONTAS = ['Regular', 'Com ressalvas', 'Pendente', 'Irregular', 'Não exigível ainda'];
 const CV_SIT = ['Em execução', 'Concluído', 'Suspenso', 'Rescindido', 'Não iniciado'];
@@ -7311,6 +7311,10 @@ const CV_COR = { 'Ótima':'#16a34a', 'Boa':'#2563eb', 'Regular':'#d97706', 'Frac
   'Com ressalvas':'#d97706', 'Pendente':'#ea580c', 'Irregular':'#dc2626', 'Não exigível ainda':'#64748b',
   'Em execução':'#2563eb', 'Concluído':'#16a34a', 'Suspenso':'#d97706', 'Rescindido':'#dc2626', 'Não iniciado':'#64748b' };
 const cvLista = () => (DB.convenios || []);
+/* tipo de obra do convênio (o objeto vem em texto livre) */
+const CV_TIPO_IC = { 'Quadra poliesportiva':'fa-basketball', 'Construção nova':'fa-school', 'Reforma e/ou ampliação':'fa-trowel-bricks' };
+const cvTipo = c => { const s = String(c.objeto || '').toUpperCase(); return /QUADRA/.test(s) && !/UNIDADE ESCOLAR|ESCOLA E QUADRA/.test(s) ? 'Quadra poliesportiva' : /CONSTRU|NOVA UNIDADE|NOVA ESCOLA/.test(s) && !/^(REFORMA|AMPLIA)/.test(s) ? 'Construção nova' : /REFORMA|AMPLIA/.test(s) ? 'Reforma e/ou ampliação' : obObj(c); };
+const cvTipoIc = c => CV_TIPO_IC[cvTipo(c)] || obObjIc(c);
 const cvCanon = (v, L) => { const n = norm(v); return n ? (L.find(x => norm(x) === n) || String(v).trim()) : ''; };
 const cvNumKey = v => { const m = String(v || '').match(/(\d+)\s*[\/\-.]\s*(\d{2,4})/); return m ? (+m[1]) + '/' + (m[2].length === 2 ? '20' + m[2] : m[2]) : norm(v).replace(/\s+/g, ''); };
 function cvParams(){ const p = param('convParametros', null) || {}; const n = (k, d) => isFinite(+p[k]) && p[k] !== '' ? +p[k] : d;
@@ -7375,8 +7379,11 @@ function renderConvenios(){
   const aviso = backendSemConv() ? `<div class="cartao bl" style="--c:#d97706"><h3><i class="fa-solid fa-triangle-exclamation"></i>Atualize o Codigo.gs para a versão 1.20.0</h3><p class="s">A planilha está com o backend ${esc(backendVersao)}. Sem a atualização, os convênios ficam só neste navegador.</p></div>` : '';
   const topo = abasG(CV_ABAS, cvAba, 'abaCv') + (imp && imp.em ? `<p class="sv-orig"><i class="fa-solid fa-file-excel"></i>Última importação: <b>${esc(imp.arquivo || 'planilha')}</b> em ${fmtData(imp.em)} por ${esc(imp.por || '')} · ${fmtN(L.length)} convênios em ${fmtN(cvPorMun(L).length)} municípios</p>` : '');
   if (!L.length && cvAba !== 'importar') { el.innerHTML = aviso + topo + `<div class="cartao vazio"><i class="fa-solid fa-handshake" style="font-size:34px;color:var(--marca);margin-bottom:10px"></i><h3 style="margin:0 0 6px">Nenhum convênio cadastrado ainda</h3><p class="s">${pode ? 'Baixe o modelo de planilha, preencha e importe, ou cadastre um convênio.' : 'Peça a quem acompanha os convênios para importar a planilha.'}</p>${pode ? `<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><button class="btn btn-p" onclick="abaCv('importar')"><i class="fa-solid fa-file-import"></i>Importar ou baixar o modelo</button><button class="btn btn-s" onclick="cvFicha('')"><i class="fa-solid fa-plus"></i>Novo convênio</button></div>` : ''}</div>`; return; }
-  const corpo = { painel:cvPainel, municipios:cvMunTela, lista:cvListaTela, importar:cvImportarTela }[cvAba] || cvPainel;
-  el.innerHTML = aviso + topo + corpo(L);
+  const corpo = { painel:cvPainel, mapa:cvMapaTela, municipios:cvMunTela, lista:cvListaTela, importar:cvImportarTela }[cvAba] || cvPainel;
+  const relK = cvFil.mun || cvMapaSel || ((cvPorMun(L).sort((a, b) => b.conc - a.conc)[0]) || {}).k || '';
+  el.innerHTML = aviso + topo.replace('</div>', `<span style="flex:1"></span>${L.length ? `<button class="btn btn-p btn-sm cv-relbt" onclick="cvRelatorio('${relK}')"><i class="fa-solid fa-file-lines"></i>Relatório de 1 página</button>` : ''}</div>`) + corpo(L);
+  if (cvAba === 'mapa') setTimeout(cvDesenharMapa, 30); else if (cvMapa) { try { cvMapa.remove(); } catch (e) {} cvMapa = null; }
+  cvAnimarNums(el);
 }
 const cvChip = (t, auto) => t ? `<span class="cv-chip" style="--c:${CV_COR[t] || '#64748b'}" ${auto ? 'title="Sugerido pela vigência (não informado na planilha)"' : ''}>${esc(t)}${auto ? ' <i class="fa-solid fa-wand-magic-sparkles"></i>' : ''}</span>` : '<span class="s">—</span>';
 const cvNotaG = x => x.nota === null ? `<span class="cv-nota sem" title="Faltam dados para a nota">—</span>` : `<span class="cv-nota" style="--c:${CV_COR[x.cls]};--p:${x.nota.toFixed(1)}" title="${x.cls}"><b>${Math.round(x.nota)}</b></span>`;
@@ -7394,7 +7401,7 @@ function cvPainel(L){
   const obraAl = L.map((c, i) => [c, X[i]]).filter(([, x]) => x.al.some(a => a[0] === 'obra' || a[0] === 'valor'));
   const semMon = obLista().filter(o => o.origem === 'Convênio' && o.codigo && !L.some(c => cvNumKey(c.numero) === cvNumKey(o.codigo)));
   const munSem = new Set(semMon.map(o => chaveMun(o.municipio)));
-  const lin = (c, x, extra, sob) => `<div class="ob-li" onclick="cvFicha(${arg(c.id)})"><i class="fa-solid ${obObjIc(c)}"></i><span><b>${esc(apNomeCurto(cvMunOficial(c.municipio) || c.municipio))} · ${esc(c.numero || 's/ nº')}</b><small>${esc(cvObjCurto(c))}</small>${sob || ''}</span>${extra}</div>`;
+  const lin = (c, x, extra, sob) => `<div class="ob-li" onclick="cvFicha(${arg(c.id)})"><i class="fa-solid ${cvTipoIc(c)}"></i><span><b>${esc(apNomeCurto(cvMunOficial(c.municipio) || c.municipio))} · ${esc(c.numero || 's/ nº')}</b><small>${esc(cvObjCurto(c))}</small>${sob || ''}</span>${extra}</div>`;
   const nMun = new Set(L.map(c => chaveMun(c.municipio))).size, tot = apGeo().muns.length;
   return `<div class="kpis">${kpiG('#0891b2', 'fa-handshake', 'Convênios', fmtN(L.length), `em ${nMun} município${nMun === 1 ? '' : 's'} de ${tot}`, "abaCv('lista')")}
       ${kpiG('#1e3a8a', 'fa-file-signature', 'Valor concedente', fmtRc(conc), 'pactuado pela SEDUC')}
@@ -7402,6 +7409,7 @@ function cvPainel(L){
       ${kpiG('#16a34a', 'fa-receipt', 'Executado', fmtRc(exe), `${fmtP(conc ? exe / conc * 100 : 0)} do pactuado · ${fmtP(rep ? exe / rep * 100 : 0)} do repassado`)}
       ${kpiG(CV_COR[clsM], 'fa-star-half-stroke', 'Nota média', notaM === null ? '—' : notaM.toLocaleString('pt-BR', { maximumFractionDigits:1 }), `${clsM} · ponderada pelo valor`, "abaCv('municipios')")}
       ${kpiG('#dc2626', 'fa-bell', 'Alertas', fmtN(X.filter(x => x.al.length).length), `${vence.filter(([, x]) => x.dias < 0).length} vencidos · ${vence.filter(([, x]) => x.dias >= 0 && x.dias <= 60).length} vencem em 60 dias`, cvIrLista({ alerta:'sim' }))}</div>
+    ${cvHero(L, X)}
     <div class="cartao cv-cob"><div><b>${nMun} de ${tot} municípios com convênios monitorados</b><small>${semMon.length ? `Há ${semMon.length} convênios em Obras (${munSem.size} municípios) ainda sem monitoramento aqui.` : 'Todos os convênios de Obras já estão monitorados.'}</small></div>
       <span class="cv-cob-b"><i style="width:${(nMun / Math.max(1, tot) * 100).toFixed(1)}%"></i></span>${semMon.length && podeEditarSec('convenios') ? `<button class="btn btn-s btn-sm" onclick="cvModeloObras()"><i class="fa-solid fa-file-arrow-down"></i>Planilha com os ${semMon.length} para preencher</button>` : ''}</div>
     <div class="ob-g2"><div class="cartao"><h3><i class="fa-solid fa-medal"></i>Classificação dos convênios</h3>${obBarras(cls)}<p class="s" style="margin-top:8px">Nota = execução física ${P.pf}% + financeira ${P.pfin}% + prazo ${P.pp}% + prestação de contas ${P.pc}%. Ótima ≥ ${P.otima} · Boa ≥ ${P.boa} · Regular ≥ ${P.regular}.</p></div>
@@ -7416,10 +7424,10 @@ function cvMunTela(L){
   const sem = cvMunTodos ? apGeo().muns.filter(m => !M.some(x => x.k === m.k)).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')) : [];
   return `<div class="cartao"><div class="cv-mh"><h3 style="margin:0"><i class="fa-solid fa-ranking-star"></i>Ranking por município</h3><span class="s">${M.length} de ${apGeo().muns.length} municípios com convênios · nota média ponderada pelo valor concedente</span>
       <label class="cv-ck"><input type="checkbox" ${cvMunTodos ? 'checked' : ''} onchange="cvMunTodos=this.checked;renderConvenios()">Mostrar também os municípios sem convênio</label></div>
-    <div class="tab-wrap"><table class="tab cv-tab"><thead><tr><th>#</th><th>Município</th><th class="n">Convênios</th><th class="n">Concedente</th><th class="n">Repassado</th><th class="n">Executado</th><th>Execução financeira</th><th class="n">Nota</th><th>Classificação</th><th class="n">Alertas</th></tr></thead><tbody>
+    <div class="tab-wrap"><table class="tab cv-tab"><thead><tr><th>#</th><th>Município</th><th class="n">Convênios</th><th class="n">Concedente</th><th class="n">Repassado</th><th class="n">Executado</th><th>Execução financeira</th><th class="n">Nota</th><th>Classificação</th><th class="n">Alertas</th><th></th></tr></thead><tbody>
     ${M.map((m, i) => `<tr class="clic" onclick="${cvIrLista({ mun:m.k })}"><td>${m.nota === null ? '' : i + 1}</td><td><b>${esc(m.nome)}</b><small class="cv-dre" style="--c:${m.dre ? corDRE(dres, m.dre) : '#94a3b8'}">${m.dre ? 'DRE ' + esc(nomeDRE(m.dre)) : 'sem DRE'}</small></td><td class="n">${m.L.length}</td><td class="n">${fmtRc(m.conc)}</td><td class="n">${fmtRc(m.rep)}</td><td class="n">${fmtRc(m.exe)}</td>
-      <td><span class="cv-bar"><i style="width:${(m.fin * 100).toFixed(1)}%"></i></span><small>${fmtP(m.fin * 100)}</small></td><td class="n">${cvNotaG(m)}</td><td>${cvChip(m.cls === 'Sem nota' ? '' : m.cls)}</td><td class="n">${m.al ? `<span class="cv-alb">${m.al}</span>` : ''}</td></tr>`).join('')}
-    ${sem.map(m => `<tr class="cv-sem"><td></td><td><b>${esc(m.nome)}</b><small>nenhum convênio cadastrado</small></td><td class="n">0</td><td colspan="7"></td></tr>`).join('')}</tbody></table></div></div>`;
+      <td><span class="cv-bar"><i style="width:${(m.fin * 100).toFixed(1)}%"></i></span><small>${fmtP(m.fin * 100)}</small></td><td class="n">${cvNotaG(m)}</td><td>${cvChip(m.cls === 'Sem nota' ? '' : m.cls)}</td><td class="n">${m.al ? `<span class="cv-alb">${m.al}</span>` : ''}</td><td><button class="btn btn-g btn-sm" title="Relatório de 1 página" onclick="event.stopPropagation();cvRelatorio('${m.k}')"><i class="fa-solid fa-file-lines"></i></button></td></tr>`).join('')}
+    ${sem.map(m => `<tr class="cv-sem"><td></td><td><b>${esc(m.nome)}</b><small>nenhum convênio cadastrado</small></td><td class="n">0</td><td colspan="8"></td></tr>`).join('')}</tbody></table></div></div>`;
 }
 function cvFiltrar(L){
   const q = norm(cvFil.q);
@@ -7435,7 +7443,7 @@ function cvListaTela(L){
       ${sel('alerta', 'Com ou sem alerta', [['sim', 'Com algum alerta'], ['vencido', 'Vigência vencida'], ['vence', 'Vence em 60 dias'], ['contas', 'Contas pendentes/irregulares'], ['obra', 'Diverge de Obras'], ['valor', 'Valores inconsistentes']])}
       <select class="campo" onchange="cvOrd=this.value;renderConvenios()">${[['valor', 'Maior valor'], ['nota', 'Maior nota'], ['vig', 'Vigência mais curta'], ['mun', 'Município (A–Z)']].map(([v, t]) => `<option value="${v}" ${cvOrd === v ? 'selected' : ''}>${t}</option>`).join('')}</select>
       ${Object.entries(cvFil).some(([k, v]) => k !== 't' && v) ? `<button class="btn btn-g btn-sm" onclick="cvFil={q:'',mun:'',dre:'',sit:'',cls:'',alerta:''};renderConvenios()"><i class="fa-solid fa-xmark"></i>Limpar</button>` : ''}
-      <span style="flex:1"></span>${pode ? `<button class="btn btn-p btn-sm" onclick="cvFicha('')"><i class="fa-solid fa-plus"></i>Novo convênio</button>` : ''}</div>
+      <span style="flex:1"></span>${cvFil.mun ? `<button class="btn btn-s btn-sm" onclick="cvRelatorio('${cvFil.mun}')"><i class="fa-solid fa-file-lines"></i>Relatório deste município</button>` : ''}${pode ? `<button class="btn btn-p btn-sm" onclick="cvFicha('')"><i class="fa-solid fa-plus"></i>Novo convênio</button>` : ''}</div>
     <p class="s" style="margin:4px 2px 8px">${fmtN(F.length)} convênio${F.length === 1 ? '' : 's'} · ${fmtRc(F.reduce((t, c) => t + cvK(c).conc, 0))} concedidos · ${fmtRc(F.reduce((t, c) => t + cvK(c).rep, 0))} repassados</p>
     <div class="cartao" style="padding:0"><div class="tab-wrap"><table class="tab cv-tab"><thead><tr><th>Município · nº</th><th>Objeto</th><th class="n">Concedente</th><th>Repasse</th><th class="n">Físico</th><th>Vigência</th><th>Prazo</th><th>Contas</th><th class="n">Nota</th></tr></thead><tbody>
     ${S.slice(0, cvLim).map(c => { const x = cvK(c); return `<tr class="clic" onclick="cvFicha(${arg(c.id)})"><td><b>${esc(apNomeCurto(cvMunOficial(c.municipio) || c.municipio))}</b><small>${esc(c.numero || 's/ nº')}${x.obra ? ' · <i class="fa-solid fa-helmet-safety" title="Ligado a uma obra"></i>' : ''}</small></td>
@@ -7445,8 +7453,8 @@ function cvListaTela(L){
     ${S.length > cvLim ? `<div style="padding:10px"><button class="btn btn-s btn-sm" onclick="cvLim+=200;renderConvenios()">Mostrar mais (${S.length - cvLim})</button></div>` : ''}</div>`;
 }
 /* ---------- ficha ---------- */
-function cvFicha(id){
-  const c0 = id ? cvLista().find(x => x.id === id) : null; if (id && !c0) return; const pode = podeEditarSec('convenios'), c = c0 || novoReg('convenios', { situacao:'Em execução' }), x = cvCalc(c);
+function cvFicha(id, pre){
+  const c0 = id ? cvLista().find(x => x.id === id) : null; if (id && !c0) return; const pode = podeEditarSec('convenios'), c = c0 || novoReg('convenios', Object.assign({ situacao:'Em execução' }, pre || {})), x = cvCalc(c);
   const ro = pode ? '' : 'disabled', ip = (k, rot, t) => `<label><span class="rot">${rot}</span><input class="campo" name="${k}" ${t || ''} value="${esc(c[k] ?? '')}" ${ro}></label>`;
   const so = (k, rot, ops) => `<label><span class="rot">${rot}</span><select class="campo" name="${k}" ${ro}>${['', ...ops].map(v => `<option value="${esc(v)}" ${String(c[k] || '') === v ? 'selected' : ''}>${v || '—'}</option>`).join('')}</select></label>`;
   const escs = escolasLista().filter(e => chaveMun(e.municipio) === chaveMun(c.municipio)).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')), o = x.obra;
@@ -7599,7 +7607,7 @@ function apTelaConvenios(D, A){
   let dir = '';
   if (A.tipo === 'mun') {
     const C = L.map((c, i) => [c, X[i]]).sort((a, b) => b[1].conc - a[1].conc).slice(0, 6);
-    dir = `<div class="cv-cards">${C.map(([c, x], i) => { const tipo = obObj(c), p = cvFisReal(x) ?? 0, cor = c.situacao === 'Concluído' ? '#22c55e' : '#38bdf8';
+    dir = `<div class="cv-cards">${C.map(([c, x], i) => { const tipo = cvTipo(c), p = cvFisReal(x) ?? 0, cor = c.situacao === 'Concluído' ? '#22c55e' : '#38bdf8';
       return `<article class="apx-in" style="--i:${i + 6}"><span class="mini">${OB_ANIM[tipo] || OB_ANIM.Outro}</span><span class="tx"><b>${esc(apCvNome(c))}</b><small>${esc(tipo)} · ${fmtRc(x.conc)}</small>
         <span class="cv-tags">${c.situacao ? `<em style="--c:${CV_COR[c.situacao]}">${esc(c.situacao)}</em>` : ''}${x.dias !== null && cvAberto(c) ? `<em style="--c:${x.dias < 0 ? '#f87171' : x.dias <= 90 ? '#fbbf24' : '#94a3b8'}"><i class="fa-solid fa-hourglass-half"></i>${x.dias < 0 ? 'vigência encerrada' : x.dias <= 90 ? x.dias + ' dias de vigência' : 'vigente até ' + new Date(cvT(c.dataTermino)).toLocaleDateString('pt-BR', { month:'short', year:'numeric' })}</em>` : ''}${mostraNota && x.nota !== null ? `<em style="--c:${CV_COR[x.cls]}"><i class="fa-solid fa-star"></i>${x.cls}</em>` : ''}</span></span>
         <span class="pg"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15.9" class="f"/><circle cx="18" cy="18" r="15.9" class="v" style="stroke:${cor};--p:${p.toFixed(1)}"/></svg><b>${Math.round(p)}%</b><small>obra</small></span></article>`; }).join('')}${L.length > 6 ? `<p class="cv-mais apx-in" style="--i:12">e mais ${L.length - 6} convênio${L.length - 6 === 1 ? '' : 's'}</p>` : ''}</div>`;
@@ -7620,6 +7628,256 @@ const apCvNome = c => { const o = cvObra(c); if (o && o.unidade) return obNome(o
   const s = String(c.objeto || ''), m = s.match(/escola\s+(estadual|municipal)?\s*(de\s+educa[cç][aã]o\s+infantil)?\s*(ind[ií]gena)?\s*(denominada\s+)?([^,;()–-]{3,60})/i);
   if (m) return apNomeCurto(((m[1] ? (/est/i.test(m[1]) ? 'EE ' : 'EM ') : 'Escola ') + m[5]).replace(/\s+(localizad|no munic|do munic|com |e da quadra).*/i, '').trim());
   return s.length > 60 ? s.slice(0, 58) + '…' : s; };
+
+/* ===================== CONVÊNIOS: gráficos, mapa e relatório de 1 página ===================== */
+/* números dos cartões sobem do zero (mantém o formato: R$, mi, %, vírgula) */
+function cvAnimarNums(raiz){
+  if (!raiz || document.body.classList.contains('sem-anim')) return;
+  raiz.querySelectorAll('.kpi .v, [data-cv-n]').forEach(el => { const t = el.textContent, m = t.match(/\d{1,3}(?:\.\d{3})*(?:,\d+)?|\d+(?:,\d+)?/); if (!m) return;
+    const dec = (m[0].split(',')[1] || '').length, alvo = num(m[0].replace(/\./g, '').replace(',', '.')), pre = t.slice(0, m.index), suf = t.slice(m.index + m[0].length), t0 = performance.now(), dur = 900;
+    const passo = agora => { const k = Math.min(1, (agora - t0) / dur), e = 1 - Math.pow(1 - k, 3); el.textContent = pre + (alvo * e).toLocaleString('pt-BR', { minimumFractionDigits:dec, maximumFractionDigits:dec }) + suf; if (k < 1) requestAnimationFrame(passo); else el.textContent = t; };
+    requestAnimationFrame(passo); });
+}
+/* ---------- gráficos do painel ---------- */
+const cvFunil = (conc, rep, exe, pequeno) => { const it = [['Pactuado', 'fa-file-signature', conc, '#2563eb'], ['Repassado', 'fa-money-bill-transfer', rep, '#0d9488'], ['Executado', 'fa-receipt', exe, '#f59e0b']];
+  return `<div class="cv-fun ${pequeno ? 'p' : ''}">${it.map(([t, ic, v, c], i) => `<div class="cv-fun-l" style="--c:${c};--w:${(conc ? Math.max(2, v / conc * 100) : 0).toFixed(1)}%;--i:${i}"><span class="ic"><i class="fa-solid ${ic}"></i></span><span class="tx"><b>${t}</b><small>${fmtRc(v)}</small></span><span class="br"><i></i></span><b class="pc">${conc ? Math.round(v / conc * 100) : 0}%</b></div>`).join('')}</div>`; };
+function cvRosca(fatias, centro, sub, on){
+  const tot = fatias.reduce((t, f) => t + f[1], 0) || 1; let ac = 0;
+  return `<div class="cv-rosca"><svg viewBox="0 0 42 42">${fatias.map(([n, v, c], i) => { const p = v / tot * 100, d = `<circle class="fa" cx="21" cy="21" r="15.915" style="stroke:${c};--p:${p.toFixed(2)};--o:${(25 - ac).toFixed(2)};--i:${i}" ${on ? `onclick="${on(n)}"` : ''}><title>${esc(n)}: ${v}</title></circle>`; ac += p; return d; }).join('')}</svg>
+    <div class="ce"><b data-cv-n>${centro}</b><small>${sub}</small></div></div>
+    <div class="cv-leg">${fatias.map(([n, v, c]) => `<span ${on ? `class="clic" onclick="${on(n)}"` : ''}><i style="background:${c}"></i>${esc(n)} <b>${v}</b></span>`).join('')}</div>`;
+}
+function cvVigGraf(L){
+  const hoje = new Date(), q0 = hoje.getFullYear() * 4 + Math.floor(hoje.getMonth() / 3), B = [['Vencidos', 0, 0, '#dc2626']];
+  for (let i = 0; i < 8; i++) { const q = q0 + i; B.push([`${Math.floor(q / 4) % 100 < 10 ? '0' : ''}${Math.floor(q / 4) % 100}T${q % 4 + 1}`.replace(/^(\d\d)T(\d)$/, '$2º tri/$1'), 0, 0, i < 1 ? '#f59e0b' : i < 3 ? '#0ea5e9' : '#6366f1']); }
+  B.push(['Depois', 0, 0, '#94a3b8']);
+  L.forEach(c => { if (!cvAberto(c)) return; const t = cvT(c.dataTermino); if (!isFinite(t)) return; const d = new Date(t), q = d.getFullYear() * 4 + Math.floor(d.getMonth() / 3);
+    const i = t < Date.now() ? 0 : q - q0 + 1 > 8 ? 9 : q - q0 + 1; B[i][1]++; B[i][2] += num(c.valorConcedente); });
+  const mx = Math.max(1, ...B.map(b => b[1]));
+  return `<div class="cv-vg">${B.map(([t, n, v, c], i) => `<div class="cv-vg-c" title="${esc(t)}: ${n} convênio(s) · ${fmtRc(v)}" style="--c:${c};--h:${(n / mx * 100).toFixed(1)}%;--i:${i}"><b>${n || ''}</b><span><i></i></span><small>${t}</small></div>`).join('')}</div>`;
+}
+function cvHero(L, X){
+  const som = k => X.reduce((t, x) => t + x[k], 0), conc = som('conc'), rep = som('rep'), exe = som('exe');
+  const cls = ['Ótima', 'Boa', 'Regular', 'Fraca', 'Sem nota'].map(v => [v, X.filter(x => x.cls === v).length, CV_COR[v]]).filter(f => f[1]);
+  const fis = (() => { const q = X.filter(x => cvFisReal(x) !== null && x.conc), t = q.reduce((s, x) => s + x.conc, 0); return t ? Math.round(q.reduce((s, x) => s + cvFisReal(x) * x.conc, 0) / t) : 0; })();
+  const tipos = {}; L.forEach((c, i) => { const k = cvTipo(c); tipos[k] = tipos[k] || [0, 0]; tipos[k][0]++; tipos[k][1] += X[i].conc; });
+  const T = Object.entries(tipos).sort((a, b) => b[1][1] - a[1][1]).slice(0, 4);
+  return `<div class="cv-hero"><div class="cartao cv-h1"><h3><i class="fa-solid fa-filter-circle-dollar"></i>Caminho do recurso</h3>${cvFunil(conc, rep, exe)}
+      <div class="cv-tipos">${T.map(([k, [n, v]], i) => `<button class="cv-tp" style="--i:${i}" onclick="${cvIrLista({ q:k.split(' ')[0] })}"><span class="ic">${OB_ANIM[k] || OB_ANIM.Outro}</span><b>${n}</b><small>${esc(k)}<br>${fmtRc(v)}</small></button>`).join('')}</div></div>
+    <div class="cartao cv-h2"><h3><i class="fa-solid fa-chart-pie"></i>Classificação</h3>${cvRosca(cls, String(L.length), 'convênios', n => cvIrLista({ cls:n }))}
+      <div class="cv-fis"><span class="cv-anel" style="--p:${fis}"><b data-cv-n>${fis}%</b></span><span><b>Execução física média</b><small>medição das obras (seção Obras) quando ligadas; ponderada pelo valor</small></span></div></div>
+    <div class="cartao cv-h3"><h3><i class="fa-solid fa-calendar-days"></i>Fim da vigência dos convênios em aberto</h3>${cvVigGraf(L)}<p class="s">Por trimestre. Passe o mouse para ver o valor; em vermelho, os já vencidos.</p></div></div>`;
+}
+/* ---------- mapa ---------- */
+let cvMapa = null, cvMapaCor = store.get('gaborg_cv_mapacor', 'nota'), cvMapaSel = '', cvMapaCam = null;
+const CV_MODOS = [['nota', 'Nota', 'fa-star-half-stroke'], ['valor', 'Valor concedente', 'fa-sack-dollar'], ['repasse', '% repassado', 'fa-money-bill-transfer'], ['alerta', 'Alertas', 'fa-bell']];
+function cvMapaTela(L){
+  return `<div class="cv-mp"><div class="cartao cv-mp-m"><div class="cv-mp-ctl">${CV_MODOS.map(([k, t, ic]) => `<button class="${cvMapaCor === k ? 'on' : ''}" onclick="cvMapaCor='${k}';store.set('gaborg_cv_mapacor','${k}');document.querySelectorAll('.cv-mp-ctl button').forEach(b=>b.classList.toggle('on',b.textContent.trim()==='${t}'));cvMapaPintar()"><i class="fa-solid ${ic}"></i>${t}</button>`).join('')}</div>
+      <div id="cv-mapa"></div><div class="cv-mp-leg" id="cv-mp-leg"></div></div><aside class="cartao cv-mp-p" id="cv-mp-p">${cvMapaPainel()}</aside></div>`;
+}
+function cvMapaDados(){
+  const M = new Map(cvPorMun(cvLista()).map(m => [m.k, m])), sem = new Map();
+  obLista().forEach(o => { if (o.origem !== 'Convênio' || !o.codigo || cvLista().some(c => cvNumKey(c.numero) === cvNumKey(o.codigo))) return; const k = chaveMun(o.municipio); sem.set(k, (sem.get(k) || 0) + 1); });
+  return { M, sem };
+}
+const cvEsc = (v, cores) => cores[Math.max(0, Math.min(cores.length - 1, Math.floor(v * cores.length)))];
+function cvMapaCorDe(m, mxV){
+  if (!m) return null;
+  if (cvMapaCor === 'nota') return CV_COR[m.cls];
+  if (cvMapaCor === 'valor') return cvEsc(Math.sqrt(m.conc / mxV), ['#ccfbf1', '#5eead4', '#14b8a6', '#0f766e', '#134e4a']);
+  if (cvMapaCor === 'repasse') return cvEsc(m.conc ? m.rep / m.conc : 0, ['#dc2626', '#f97316', '#eab308', '#84cc16', '#16a34a']);
+  return m.al ? (m.al >= 5 ? '#dc2626' : '#f97316') : '#16a34a';
+}
+async function cvDesenharMapa(){
+  const el = $('#cv-mapa'); if (!el) return;
+  try { await carregarLeaflet(); } catch (e) { el.innerHTML = '<p class="s" style="padding:20px">Mapa indisponível sem internet.</p>'; return; }
+  if (cvMapa) { try { cvMapa.remove(); } catch (e) {} }
+  const m = cvMapa = L.map(el, { zoomSnap:.25, attributionControl:true }); L.tileLayer(BASES_MT.claro[1], { maxZoom:18, attribution:BASES_MT.claro[2] }).addTo(m);
+  cvMapaCam = { pol:new Map(), bol:L.layerGroup().addTo(m) };
+  const { M, sem } = cvMapaDados(), b = L.latLngBounds([]);
+  apGeo().muns.forEach(g => { const d = M.get(g.k), lay = L.geoJSON(g.geo, { style:{ weight:d ? 1.2 : sem.get(g.k) ? 1.4 : .6, color:sem.get(g.k) && !d ? '#ea580c' : '#ffffff', dashArray:sem.get(g.k) && !d ? '4 3' : null, fillOpacity:d ? .72 : .18, fillColor:'#cbd5e1' } }).addTo(m);
+    lay.on('mouseover', e => { e.layer.setStyle({ weight:3, color:'#0f172a' }); e.layer.bringToFront(); });
+    lay.on('mouseout', () => cvMapaEstilo(g.k));
+    lay.on('click', () => cvMapaEscolher(g.k));
+    lay.bindTooltip(() => { const x = cvMapaDados().M.get(g.k), s = cvMapaDados().sem.get(g.k); return `<b>${esc(g.nome)}</b><br>${x ? `${x.L.length} convênio${x.L.length === 1 ? '' : 's'} · ${fmtRc(x.conc)}<br>repassado ${fmtP(x.conc ? x.rep / x.conc * 100 : 0)}${x.nota !== null ? ' · nota ' + Math.round(x.nota) + ' (' + x.cls + ')' : ''}` : 'sem convênio monitorado'}${s ? `<br><span style="color:#ea580c">${s} convênio(s) em Obras sem monitoramento</span>` : ''}`; }, { sticky:true, className:'cv-tt' });
+    cvMapaCam.pol.set(g.k, lay); const bb = L_bounds(g.geo); b.extend([[bb[0], bb[1]], [bb[2], bb[3]]]); });
+  m.fitBounds(b.pad(.02)); cvMapaPintar();
+  if (cvMapaSel) cvMapaEscolher(cvMapaSel, true);
+}
+function cvMapaEstilo(k){
+  const lay = cvMapaCam && cvMapaCam.pol.get(k); if (!lay) return; const { M, sem } = cvMapaDados(), d = M.get(k), mxV = Math.max(1, ...[...M.values()].map(x => x.conc)), c = cvMapaCorDe(d, mxV), sel = k === cvMapaSel;
+  lay.setStyle({ fillColor:c || (sem.get(k) ? '#fed7aa' : '#cbd5e1'), fillOpacity:d ? .75 : sem.get(k) ? .35 : .15, weight:sel ? 3.5 : d ? 1.2 : sem.get(k) ? 1.4 : .6, color:sel ? '#0f172a' : sem.get(k) && !d ? '#ea580c' : '#ffffff', dashArray:sem.get(k) && !d && !sel ? '4 3' : null });
+}
+function cvMapaPintar(){
+  if (!cvMapa || !cvMapaCam) return; const { M, sem } = cvMapaDados(), mxV = Math.max(1, ...[...M.values()].map(x => x.conc));
+  cvMapaCam.pol.forEach((l, k) => cvMapaEstilo(k));
+  cvMapaCam.bol.clearLayers();
+  [...M.values()].sort((a, b) => b.conc - a.conc).forEach((d, i) => { const g = apGeo().muns.find(x => x.k === d.k); if (!g) return; const bb = L_bounds(g.geo), r = 7 + Math.sqrt(d.conc / mxV) * 22;
+    const ic = L.divIcon({ className:'cv-bolha', iconSize:[r * 2, r * 2], html:`<span style="--c:${cvMapaCorDe(d, mxV)};--d:${Math.min(i, 30) * 40}ms" class="${d.al ? 'al' : ''}"><b>${d.L.length}</b></span>` });
+    L.marker([(bb[0] + bb[2]) / 2, (bb[1] + bb[3]) / 2], { icon:ic, title:d.nome, riseOnHover:true }).on('click', () => cvMapaEscolher(d.k)).addTo(cvMapaCam.bol); });
+  const leg = $('#cv-mp-leg'); if (!leg) return;
+  const it = cvMapaCor === 'nota' ? ['Ótima', 'Boa', 'Regular', 'Fraca', 'Sem nota'].map(v => [v, CV_COR[v]]) : cvMapaCor === 'valor' ? [['menor valor', '#ccfbf1'], ['', '#5eead4'], ['', '#14b8a6'], ['', '#0f766e'], ['maior valor', '#134e4a']]
+    : cvMapaCor === 'repasse' ? [['0–20%', '#dc2626'], ['20–40%', '#f97316'], ['40–60%', '#eab308'], ['60–80%', '#84cc16'], ['80–100%', '#16a34a']] : [['sem alerta', '#16a34a'], ['1 a 4 alertas', '#f97316'], ['5 ou mais', '#dc2626']];
+  leg.innerHTML = it.map(([t, c]) => `<span><i style="background:${c}"></i>${t}</span>`).join('') + `<span><i class="tr"></i>convênio em Obras sem monitoramento</span><span><i class="bo"></i>bolha = nº de convênios</span>`;
+}
+function cvMapaEscolher(k, semZoom){
+  const ant = cvMapaSel; cvMapaSel = k; if (ant) cvMapaEstilo(ant); cvMapaEstilo(k);
+  const p = $('#cv-mp-p'); if (p) { p.innerHTML = cvMapaPainel(); cvAnimarNums(p); }
+  const lay = cvMapaCam && cvMapaCam.pol.get(k); if (lay && cvMapa && !semZoom) cvMapa.flyToBounds(lay.getBounds().pad(.6), { duration:.8, maxZoom:9 });
+}
+function cvMapaPainel(){
+  const { M, sem } = cvMapaDados();
+  if (!cvMapaSel) { const T = [...M.values()].sort((a, b) => b.conc - a.conc).slice(0, 8);
+    return `<h3><i class="fa-solid fa-hand-pointer"></i>Clique num município</h3><p class="s">O mapa colore cada município pelo critério escolhido acima. Os maiores em valor:</p>
+      ${T.map((m, i) => `<button class="cv-mp-it" style="--i:${i}" onclick="cvMapaEscolher('${m.k}')"><span class="cv-mp-dot" style="background:${CV_COR[m.cls]}"></span><span><b>${esc(m.nome)}</b><small>${m.L.length} convênio${m.L.length === 1 ? '' : 's'} · ${m.cls}</small></span><b>${fmtRc(m.conc)}</b></button>`).join('')}
+      <p class="s" style="margin-top:10px"><i class="fa-solid fa-circle-info"></i> ${sem.size} municípios têm convênios em Obras ainda sem monitoramento (borda laranja tracejada).</p>`; }
+  const g = apGeo().muns.find(x => x.k === cvMapaSel), d = M.get(cvMapaSel), nome = g ? g.nome : cvMapaSel, s = sem.get(cvMapaSel) || 0, pode = podeEditarSec('convenios');
+  const fech = `<button class="btn btn-g btn-sm cv-mp-x" onclick="cvMapaEscolher('');cvMapaSel='';if(cvMapa)cvMapa.flyToBounds(L.latLngBounds([[-18.1,-61.7],[-7.3,-50.2]]),{duration:.8})" title="Voltar ao estado"><i class="fa-solid fa-xmark"></i></button>`;
+  if (!d) return `${fech}<h3 style="margin-top:0">${esc(nome)}</h3><p class="s">Nenhum convênio monitorado neste município.</p>
+    ${s ? `<div class="cv-al cv-al-f"><small style="--c:#ea580c"><i class="fa-solid fa-helmet-safety"></i>${s} convênio${s === 1 ? '' : 's'} em Obras ainda sem monitoramento</small></div>${obLista().filter(o => o.origem === 'Convênio' && chaveMun(o.municipio) === cvMapaSel && !cvLista().some(c => cvNumKey(c.numero) === cvNumKey(o.codigo))).slice(0, 6).map(o => `<div class="ob-li" ${pode ? `onclick="cvFicha('',{municipio:${arg(nome)},numero:${arg(o.codigo)},objeto:${arg([o.objeto, o.unidade].filter(Boolean).join(' – '))},escolaCodigo:${arg(o.escolaCodigo || '')},rede:${arg(/MUNIC/i.test(o.rede) ? 'Municipal' : 'Estadual')}})"` : ''}><i class="fa-solid ${obObjIc(o)}"></i><span><b>${esc(o.codigo)} · ${esc(obNome(o))}</b><small>${esc(obObj(o))} · ${fmtRc(obValor(o))} · ${obStatus(o)}</small></span>${pode ? '<span class="ob-qd"><i class="fa-solid fa-plus"></i></span>' : ''}</div>`).join('')}` : ''}
+    ${pode ? `<button class="btn btn-p btn-sm" style="margin-top:10px" onclick="cvFicha('',{municipio:${arg(nome)}})"><i class="fa-solid fa-plus"></i>Cadastrar convênio</button>` : ''}`;
+  const X = d.L.map(cvK);
+  return `${fech}<div class="cv-mp-h"><span class="cv-nota" style="--c:${CV_COR[d.cls]};--p:${(d.nota || 0).toFixed(1)}"><b>${d.nota === null ? '—' : Math.round(d.nota)}</b></span><div><h3 style="margin:0">${esc(d.nome)}</h3><small>${d.dre ? 'DRE ' + esc(nomeDRE(d.dre)) : ''} · ${d.L.length} convênio${d.L.length === 1 ? '' : 's'} · ${d.cls}</small></div></div>
+    ${cvFunil(d.conc, d.rep, d.exe, true)}
+    <div class="cv-mp-lst">${d.L.map((c, i) => { const x = X[i], p = cvFisReal(x); return `<div class="ob-li" onclick="cvFicha(${arg(c.id)})"><i class="fa-solid ${cvTipoIc(c)}"></i><span><b>${esc(c.numero || 's/ nº')} · ${esc(apCvNome(c))}</b><small>${fmtRc(x.conc)} · ${esc(c.situacao || '—')}${x.dias !== null && cvAberto(c) ? ' · ' + (x.dias < 0 ? 'vencido' : x.dias + ' dias') : ''}</small>${x.al.length ? `<span class="cv-al">${x.al.slice(0, 2).map(a => `<small style="--c:${a[2]}">${esc(a[1])}</small>`).join('')}</span>` : ''}</span><span class="cv-mini" style="--p:${p ?? 0}" title="Execução física">${p === null ? '—' : Math.round(p) + '%'}</span></div>`; }).join('')}</div>
+    <div class="cv-mp-bts"><button class="btn btn-p btn-sm" onclick="cvRelatorio('${d.k}')"><i class="fa-solid fa-file-lines"></i>Relatório de 1 página</button><button class="btn btn-s btn-sm" onclick="${cvIrLista({ mun:d.k })}"><i class="fa-solid fa-list"></i>Na lista</button>
+      ${podeVerVista('apresentacao') ? `<button class="btn btn-s btn-sm" onclick="apModo='mun';apSel='${d.k}';trocarVista('apresentacao')"><i class="fa-solid fa-person-chalkboard"></i>Apresentação</button>` : ''}</div>
+    ${s ? `<p class="s" style="margin-top:8px;color:#c2410c"><i class="fa-solid fa-helmet-safety"></i> Mais ${s} convênio${s === 1 ? '' : 's'} em Obras sem monitoramento.</p>` : ''}`;
+}
+/* ---------- relatório de 1 página para o prefeito (editável, com prévia e impressão/PDF) ---------- */
+let cvRelK = '';
+const cvRelPadrao = (d, X) => {
+  const conc = d.conc, rep = d.rep, fis = (() => { const q = X.filter(x => cvFisReal(x) !== null && x.conc), t = q.reduce((s, x) => s + x.conc, 0); return t ? Math.round(q.reduce((s, x) => s + cvFisReal(x) * x.conc, 0) / t) : null; })();
+  const tipos = [...new Set(d.L.map(c => cvTipo(c).toLowerCase()))].slice(0, 3), nE = d.L.filter(c => c.situacao === 'Em execução').length, nC = d.L.filter(c => c.situacao === 'Concluído').length;
+  const tx = `A Secretaria de Estado de Educação mantém ${d.L.length} convênio${d.L.length === 1 ? '' : 's'} com o Município de ${d.nome}, que somam ${fmtM0(conc)} em recursos estaduais para ${tipos.length > 1 ? tipos.slice(0, -1).join(', ') + ' e ' + tipos.slice(-1) : tipos[0] || 'obras'} nas escolas. Até ${new Date().toLocaleDateString('pt-BR')}, foram repassados ${fmtM0(rep)} (${conc ? Math.round(rep / conc * 100) : 0}% do pactuado)${fis !== null ? ` e a execução física média das obras é de ${fis}%` : ''}. ${nE ? `${nE} convênio${nE === 1 ? ' está' : 's estão'} em execução` : ''}${nE && nC ? ' e ' : ''}${nC ? `${nC} ${nC === 1 ? 'foi concluído' : 'foram concluídos'}` : ''}.`;
+  const at = []; d.L.forEach((c, i) => X[i].al.filter(a => a[0] !== 'obra' || /paralisada|rescis/i.test(a[1])).slice(0, 2).forEach(a => at.push(`Convênio ${c.numero || 's/ nº'} – ${apCvNome(c)}: ${a[1].charAt(0).toLowerCase() + a[1].slice(1)}.`)));
+  const px = []; const temV = X.some((x, i) => cvAberto(d.L[i]) && x.dias !== null && x.dias <= 90), temC = d.L.filter(c => ['Pendente', 'Irregular'].includes(c.prestacaoContas)), temP = X.some(x => x.obra && ['Paralisada', 'Rescisão'].includes(obStatus(x.obra)));
+  if (temV) px.push('Avaliar a necessidade de aditivo de prazo para os convênios com vigência próxima do fim.');
+  if (temC.length) px.push(`Encaminhar a prestação de contas pendente (${temC.slice(0, 4).map(c => c.numero).join(', ')}${temC.length > 4 ? '…' : ''}).`);
+  if (temP) px.push('Retomar as obras paralisadas e enviar à SEDUC o novo cronograma de execução.');
+  px.push('Manter a medição física das obras atualizada a cada 30 dias junto à SEDUC.');
+  return { assunto:`Convênios SEDUC-MT e Município de ${d.nome}`, destinatario:`Excelentíssimo(a) Senhor(a) Prefeito(a) Municipal de ${d.nome}`, abertura:tx, atencao:(at.length ? at.slice(0, 6) : ['Nenhuma pendência registrada nos convênios do município.']).join('\n'), proximos:px.join('\n') };
+};
+function cvRelatorio(k){
+  const d = cvPorMun(cvLista()).find(m => m.k === k); if (!d) { toast('Este município não tem convênios cadastrados.', 'erro'); return; }
+  if (!$('#cv-rel-css')) { const st = document.createElement('style'); st.id = 'cv-rel-css'; st.textContent = CV_REL_CSS; document.head.appendChild(st); }
+  cvRelK = k; const X = d.L.map(cvK), P = cvRelPadrao(d, X), salvo = store.get('gaborg_cv_rel_' + k, {}) || {}, ass = store.get('gaborg_cv_rel_ass', {}) || {}, op = store.get('gaborg_cv_rel_op', { nota:false, obra:true, max:10 }) || {};
+  const v = Object.assign({}, P, salvo, { destinatario:P.destinatario });   /* o destinatário não é guardado */
+  document.querySelectorAll('.cv-rel').forEach(e => e.remove());
+  const el = document.createElement('div'); el.className = 'cv-rel';
+  const ta = (n, rot, r, dica) => `<label><span class="rot">${rot}</span><textarea class="campo" name="${n}" rows="${r}" oninput="cvRelPrevia()">${esc(v[n] || '')}</textarea>${dica ? `<small class="s">${dica}</small>` : ''}</label>`;
+  el.innerHTML = `<div class="cv-rel-cx"><header><b><i class="fa-solid fa-file-lines"></i>Relatório de convênios · ${esc(d.nome)}</b><span class="s">Edite à esquerda; a prévia mostra exatamente o que será impresso (A4, 1 página).</span><span style="flex:1"></span>
+      <button class="btn btn-s btn-sm" onclick="cvRelRestaurar()"><i class="fa-solid fa-rotate-left"></i>Textos padrão</button><button class="btn btn-p btn-sm" onclick="cvRelImprimir()"><i class="fa-solid fa-print"></i>Imprimir ou salvar PDF</button><button class="btn btn-g btn-sm" onclick="this.closest('.cv-rel').remove()" title="Fechar"><i class="fa-solid fa-xmark"></i></button></header>
+    <div class="cv-rel-g"><form class="cv-rel-f" onsubmit="event.preventDefault()">
+      <label><span class="rot">Município</span><select class="campo" name="mun" onchange="cvRelatorio(this.value)">${cvPorMun(cvLista()).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')).map(m => `<option value="${m.k}" ${m.k === k ? 'selected' : ''}>${esc(m.nome)} (${m.L.length})</option>`).join('')}</select></label>
+      <label><span class="rot">Destinatário</span><input class="campo" name="destinatario" value="${esc(v.destinatario)}" oninput="cvRelPrevia()"><small class="s">Pode pôr o nome do(a) prefeito(a). Não é salvo no sistema.</small></label>
+      <label><span class="rot">Assunto</span><input class="campo" name="assunto" value="${esc(v.assunto)}" oninput="cvRelPrevia()"></label>
+      ${ta('abertura', 'Texto de abertura', 5)}${ta('atencao', 'Pontos de atenção', 4, 'Um item por linha.')}${ta('proximos', 'Próximos passos', 4, 'Um item por linha.')}
+      <div class="g2"><label><span class="rot">Assinatura · nome</span><input class="campo" name="assNome" value="${esc(ass.nome || '')}" placeholder="Nome de quem assina" oninput="cvRelPrevia()"></label><label><span class="rot">Cargo</span><input class="campo" name="assCargo" value="${esc(ass.cargo || '')}" placeholder="Ex.: Secretário(a) Adjunto(a)" oninput="cvRelPrevia()"></label></div>
+      <div class="cv-rel-op"><label><input type="checkbox" name="nota" ${op.nota ? 'checked' : ''} onchange="cvRelPrevia()">Mostrar a nota e a classificação</label><label><input type="checkbox" name="obra" ${op.obra !== false ? 'checked' : ''} onchange="cvRelPrevia()">Usar a execução física da seção Obras</label><label><input type="checkbox" name="simb" ${op.simb !== false ? 'checked' : ''} onchange="cvRelPrevia()">Brasão e bandeira do município</label>
+        <label>Convênios na tabela: <input class="campo" type="number" name="max" min="3" max="20" value="${op.max || 10}" style="width:70px" oninput="cvRelPrevia()"></label></div>
+      <p class="s"><i class="fa-solid fa-floppy-disk"></i> Os textos ficam guardados neste navegador para o próximo relatório deste município.</p></form>
+    <div class="cv-rel-v"><div class="cv-rel-pg" id="cv-rel-pg"></div></div></div></div>`;
+  document.body.appendChild(el); cvRelPrevia();
+  el.addEventListener('keydown', e => { if (e.key === 'Escape') el.remove(); });
+}
+function cvRelRestaurar(){ store.set('gaborg_cv_rel_' + cvRelK, {}); cvRelatorio(cvRelK); }
+function cvRelValores(){
+  const f = document.querySelector('.cv-rel-f'); if (!f) return null; const g = n => (f.elements[n] || {}).value ?? '', ck = n => !!(f.elements[n] || {}).checked;
+  const v = { destinatario:g('destinatario'), assunto:g('assunto'), abertura:g('abertura'), atencao:g('atencao'), proximos:g('proximos'), assNome:g('assNome'), assCargo:g('assCargo'), nota:ck('nota'), obra:ck('obra'), simb:ck('simb'), max:Math.max(3, Math.min(20, Math.round(num(g('max')) || 10))) };
+  store.set('gaborg_cv_rel_' + cvRelK, { assunto:v.assunto, abertura:v.abertura, atencao:v.atencao, proximos:v.proximos });
+  store.set('gaborg_cv_rel_ass', { nome:v.assNome, cargo:v.assCargo }); store.set('gaborg_cv_rel_op', { nota:v.nota, obra:v.obra, simb:v.simb, max:v.max });
+  return v;
+}
+function cvRelHTML(v){
+  const d = cvPorMun(cvLista()).find(m => m.k === cvRelK); if (!d) return ''; const X = d.L.map(cvK), fisDe = x => v.obra ? cvFisReal(x) : x.fis, g = apGeo().muns.find(m => m.k === d.k);
+  const fq = X.filter(x => fisDe(x) !== null && x.conc), ft = fq.reduce((s, x) => s + x.conc, 0), fis = ft ? Math.round(fq.reduce((s, x) => s + fisDe(x) * x.conc, 0) / ft) : null;
+  const pr = d.conc ? d.rep / d.conc : 0, pe = d.conc ? d.exe / d.conc : 0, linhas = d.L.map((c, i) => [c, X[i]]).sort((a, b) => b[1].conc - a[1].conc), tab = linhas.slice(0, v.max);
+  const anel = (p, cor, t, s) => `<div class="r-anel"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15.9" fill="none" stroke="#e2e8f0" stroke-width="3.4"/><circle cx="18" cy="18" r="15.9" fill="none" stroke="${cor}" stroke-width="3.4" stroke-linecap="round" stroke-dasharray="${Math.max(0, Math.min(100, p)).toFixed(1)} 100" transform="rotate(-90 18 18)"/></svg><b>${Math.round(p)}%</b><span><strong>${t}</strong><small>${s}</small></span></div>`;
+  const barra = (t, val, p, c) => `<div class="r-fb"><span class="t">${t}</span><span class="b"><i style="width:${Math.max(1.5, p * 100).toFixed(1)}%;background:${c}"></i></span><span class="v">${fmtM0(val)}</span></div>`;
+  const lis = s => String(s || '').split('\n').map(x => x.trim()).filter(Boolean).map(x => `<li>${esc(x)}</li>`).join('');
+  const tipos = {}; d.L.forEach((c, i) => { const k = cvTipo(c); tipos[k] = (tipos[k] || 0) + 1; });
+  const hoje = new Date().toLocaleDateString('pt-BR', { day:'2-digit', month:'long', year:'numeric' });
+  return `<div class="r-a4"><div class="r-in">
+    <header class="r-cab"><div class="r-cab-t"><small>GOVERNO DO ESTADO DE MATO GROSSO · SECRETARIA DE ESTADO DE EDUCAÇÃO</small><h1>Convênios com o Município de ${esc(d.nome)}</h1><p>${d.dre ? 'DRE ' + esc(nomeDRE(d.dre)) + ' · ' : ''}Resumo para a Prefeitura · ${hoje}</p></div>${v.simb && g && g.cod ? `<div class="apx-simb r-simb" data-cod="${esc(g.cod)}"></div>` : ''}</header>
+    <div class="r-dest"><p><b>A/C:</b> ${esc(v.destinatario)}</p><p><b>Assunto:</b> ${esc(v.assunto)}</p></div>
+    <p class="r-ab">${esc(v.abertura)}</p>
+    <div class="r-kpi"><div><small>Convênios</small><b>${d.L.length}</b><span>${Object.entries(tipos).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([k, n]) => n + ' ' + k.toLowerCase()).join(' · ')}</span></div>
+      <div><small>Valor pactuado</small><b>${fmtRc(d.conc)}</b><span>recursos do Estado</span></div><div><small>Já repassado</small><b>${fmtRc(d.rep)}</b><span>${Math.round(pr * 100)}% do pactuado</span></div>
+      <div><small>Execução física média</small><b>${fis === null ? '—' : fis + '%'}</b><span>${v.obra ? 'medição das obras' : 'informada nos convênios'}</span></div></div>
+    <div class="r-gr"><div class="r-fun"><h2>Caminho do recurso</h2>${barra('Pactuado', d.conc, 1, '#1d4ed8')}${barra('Repassado', d.rep, pr, '#0d9488')}${barra('Executado', d.exe, pe, '#f59e0b')}</div>
+      <div class="r-an">${anel(pr * 100, '#0d9488', 'Repassado', 'do valor pactuado')}${anel(fis || 0, '#2563eb', 'Obras', 'execução física média')}${v.nota && d.nota !== null ? `<div class="r-nota" style="--c:${CV_COR[d.cls]}"><b>${Math.round(d.nota)}</b><span><strong>${d.cls}</strong><small>nota média dos convênios</small></span></div>` : ''}</div></div>
+    <h2>Convênios</h2>
+    <table class="r-tab"><thead><tr><th>Nº</th><th>Objeto</th><th class="n">Pactuado</th><th class="n">Repassado</th><th class="n">Físico</th><th>Vigência</th><th>Situação</th>${v.nota ? '<th>Nota</th>' : ''}</tr></thead><tbody>
+      ${tab.map(([c, x]) => { const p = fisDe(x); return `<tr><td class="nw">${esc(c.numero || '—')}</td><td><b>${esc(apCvNome(c))}</b><small>${esc(cvTipo(c))}</small></td><td class="n">${fmtRc(x.conc)}</td><td class="n">${fmtRc(x.rep)}<small>${x.conc ? Math.round(x.rep / x.conc * 100) : 0}%</small></td>
+        <td class="n"><span class="r-pb"><i style="width:${(p ?? 0).toFixed(0)}%"></i></span>${p === null ? '—' : Math.round(p) + '%'}</td><td class="nw">${c.dataTermino ? fmtDia(c.dataTermino) : '—'}${x.dias !== null && cvAberto(c) && x.dias <= 90 ? `<small class="${x.dias < 0 ? 'r' : 'a'}">${x.dias < 0 ? 'vencida' : x.dias + ' dias'}</small>` : ''}</td>
+        <td><span class="r-st" style="--c:${CV_COR[c.situacao] || '#64748b'}">${esc(c.situacao || '—')}</span></td>${v.nota ? `<td><span class="r-st" style="--c:${CV_COR[x.cls]}">${x.nota === null ? '—' : Math.round(x.nota)}</span></td>` : ''}</tr>`; }).join('')}</tbody></table>
+    ${linhas.length > tab.length ? `<p class="r-mais">e mais ${linhas.length - tab.length} convênio${linhas.length - tab.length === 1 ? '' : 's'} (${fmtRc(linhas.slice(tab.length).reduce((t, [, x]) => t + x.conc, 0))}).</p>` : ''}
+    <div class="r-cols"><div class="r-box a"><h2><span>!</span>Pontos de atenção</h2><ul>${lis(v.atencao)}</ul></div><div class="r-box p"><h2><span>→</span>Próximos passos</h2><ul>${lis(v.proximos)}</ul></div></div>
+    <footer class="r-pe">${v.assNome || v.assCargo ? `<div class="r-ass"><i></i><b>${esc(v.assNome)}</b><small>${esc(v.assCargo)}</small></div>` : '<div></div>'}<small class="r-fonte">Fonte: GABOrg · monitoramento de convênios da SEDUC-MT, dados de ${fmtDia(cvLista().reduce((m, c) => (c.atualizadoEm || '') > m ? c.atualizadoEm : m, '') || agora())}. Valores em reais; a execução física vem da medição das obras quando disponível.</small></footer>
+  </div></div>`;
+}
+function cvRelPrevia(){
+  const box = $('#cv-rel-pg'); if (!box) return; const v = cvRelValores(); if (!v) return;
+  box.innerHTML = cvRelHTML(v); apPreencherSimb(box); cvRelEncaixar(box);
+  const wrap = box.parentElement, esc = Math.min(1, (wrap.clientWidth - 24) / 794); box.style.setProperty('--z', esc.toFixed(3)); box.style.height = (1123 * esc) + 'px';
+}
+/* diminui a letra até caber em 1 página A4 (794 × 1123 px a 96 dpi) */
+function cvRelEncaixar(box){
+  const a4 = box.querySelector('.r-a4'), inn = box.querySelector('.r-in'); if (!a4 || !inn) return; let f = 1;
+  a4.style.setProperty('--f', f); while (inn.scrollHeight > 1123 - 2 && f > .7) { f -= .025; a4.style.setProperty('--f', f.toFixed(3)); }
+  a4.classList.toggle('apertado', inn.scrollHeight > 1123 - 2);
+}
+function cvRelImprimir(){
+  const box = $('#cv-rel-pg'); if (!box) return; const a4 = box.querySelector('.r-a4'); if (!a4) return;
+  if (a4.classList.contains('apertado')) toast('O conteúdo passa de 1 página: reduza os textos ou o nº de convênios na tabela.', 'erro');
+  const f = document.createElement('iframe'); f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0'; document.body.appendChild(f);
+  const d = f.contentWindow.document, mun = (cvPorMun(cvLista()).find(m => m.k === cvRelK) || {}).nome || '';
+  d.open(); d.write(`<!doctype html><html><head><meta charset="utf-8"><title>Convênios · ${esc(mun)}</title><link rel="preconnect" href="https://fonts.gstatic.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"><style>@page{size:A4;margin:0}html,body{margin:0;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}${CV_REL_CSS}.r-a4{transform:none!important;box-shadow:none!important;margin:0!important}</style></head><body>${a4.outerHTML}</body></html>`); d.close();
+  const imgs = () => [...d.images].every(i => i.complete);
+  let n = 0; const tenta = () => { if ((imgs() && d.fonts && d.fonts.status === 'loaded') || n++ > 25) { try { f.contentWindow.focus(); f.contentWindow.print(); } catch (e) {} setTimeout(() => f.remove(), 3000); } else setTimeout(tenta, 120); };
+  setTimeout(tenta, 250);
+}
+const CV_REL_CSS = `.r-a4{--f:1;width:794px;height:1123px;background:#fff;color:#0f172a;font-family:Inter,system-ui,-apple-system,'Segoe UI',sans-serif;position:relative;overflow:hidden;box-sizing:border-box}
+.r-in{padding:0 0 18px;font-size:calc(11.5px * var(--f));line-height:1.45;max-height:1123px}
+.r-cab{display:flex;align-items:center;gap:16px;padding:calc(22px * var(--f)) 40px calc(18px * var(--f));background:linear-gradient(120deg,#0b1f4b 0%,#123a7a 55%,#0e7490 100%);color:#fff;position:relative}
+.r-cab::after{content:'';position:absolute;left:0;right:0;bottom:0;height:4px;background:linear-gradient(90deg,#22c55e,#facc15,#38bdf8)}
+.r-cab-t{flex:1}.r-cab small{font-size:calc(8.5px * var(--f));letter-spacing:.12em;opacity:.8;font-weight:700}
+.r-cab h1{margin:4px 0 2px;font-size:calc(23px * var(--f));line-height:1.15;font-weight:900;letter-spacing:-.02em}.r-cab p{margin:0;opacity:.85;font-size:calc(10.5px * var(--f))}
+.r-simb{display:flex;gap:8px;align-items:center}.r-simb img{height:calc(56px * var(--f));width:auto;border-radius:4px;background:#fff;padding:2px;box-shadow:0 2px 8px rgba(0,0,0,.25)}
+.r-dest{padding:calc(12px * var(--f)) 40px 0;color:#334155}.r-dest p{margin:0 0 2px}
+.r-ab{margin:calc(8px * var(--f)) 40px calc(10px * var(--f));text-align:justify;color:#1e293b}
+.r-kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:0 40px}
+.r-kpi>div{border:1px solid #e2e8f0;border-radius:10px;padding:calc(8px * var(--f)) 10px;border-top:3px solid #1d4ed8}
+.r-kpi>div:nth-child(2){border-top-color:#0e7490}.r-kpi>div:nth-child(3){border-top-color:#0d9488}.r-kpi>div:nth-child(4){border-top-color:#f59e0b}
+.r-kpi small{display:block;color:#64748b;font-size:calc(9px * var(--f));font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+.r-kpi b{display:block;font-size:calc(19px * var(--f));font-weight:900;letter-spacing:-.02em;margin:2px 0}.r-kpi span{color:#64748b;font-size:calc(9.5px * var(--f))}
+.r-a4 h2{font-size:calc(12px * var(--f));margin:calc(12px * var(--f)) 40px calc(6px * var(--f));color:#0b1f4b;text-transform:uppercase;letter-spacing:.06em}
+.r-gr{display:grid;grid-template-columns:1.25fr 1fr;gap:14px;margin:0 40px;align-items:center}.r-gr h2{margin:calc(10px * var(--f)) 0 calc(6px * var(--f))}
+.r-fb{display:grid;grid-template-columns:72px 1fr 96px;gap:8px;align-items:center;margin:calc(5px * var(--f)) 0}.r-fb .t{font-weight:700;color:#334155}
+.r-fb .b{height:calc(14px * var(--f));background:#f1f5f9;border-radius:99px;overflow:hidden}.r-fb .b i{display:block;height:100%;border-radius:99px}.r-fb .v{text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+.r-an{display:flex;gap:10px;justify-content:space-around;align-items:center;flex-wrap:wrap}
+.r-anel{display:grid;grid-template-columns:calc(54px * var(--f)) auto;gap:8px;align-items:center;position:relative}
+.r-anel svg{width:calc(54px * var(--f));height:calc(54px * var(--f))}.r-anel>b{position:absolute;left:0;width:calc(54px * var(--f));text-align:center;font-size:calc(12.5px * var(--f));font-weight:900}
+.r-anel strong,.r-nota strong{display:block;font-size:calc(11px * var(--f))}.r-anel small,.r-nota small{color:#64748b;font-size:calc(9px * var(--f))}
+.r-nota{display:flex;gap:8px;align-items:center}.r-nota>b{display:grid;place-items:center;width:calc(46px * var(--f));height:calc(46px * var(--f));border-radius:50%;background:var(--c);color:#fff;font-size:calc(15px * var(--f));font-weight:900}
+.r-tab{width:calc(100% - 80px);margin:0 40px;border-collapse:collapse;font-size:calc(10px * var(--f))}
+.r-tab th{background:#0b1f4b;color:#fff;text-align:left;padding:calc(5px * var(--f)) 6px;font-size:calc(9px * var(--f));text-transform:uppercase;letter-spacing:.04em}
+.r-tab th:first-child{border-radius:6px 0 0 0}.r-tab th:last-child{border-radius:0 6px 0 0}
+.r-tab td{padding:calc(5px * var(--f)) 6px;border-bottom:1px solid #e2e8f0;vertical-align:middle}.r-tab tr:nth-child(even) td{background:#f8fafc}
+.r-tab td b{display:block;font-weight:700}.r-tab td small{display:block;color:#64748b;font-size:calc(8.5px * var(--f))}.r-tab td small.a{color:#b45309;font-weight:700}.r-tab td small.r{color:#b91c1c;font-weight:700}
+.r-tab .n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}.r-tab .nw{white-space:nowrap}
+.r-pb{display:inline-block;width:calc(34px * var(--f));height:5px;background:#e2e8f0;border-radius:9px;margin-right:5px;vertical-align:middle;overflow:hidden}.r-pb i{display:block;height:100%;background:#2563eb}
+.r-st{display:inline-block;padding:1px 7px;border-radius:99px;font-weight:700;font-size:calc(9px * var(--f));color:var(--c);background:color-mix(in srgb,var(--c) 13%,#fff);white-space:nowrap}
+.r-mais{margin:4px 40px 0;color:#64748b;font-size:calc(9.5px * var(--f))}
+.r-cols{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:calc(12px * var(--f)) 40px 0}
+.r-box{border-radius:10px;padding:calc(8px * var(--f)) 12px calc(6px * var(--f));border:1px solid}.r-box.a{background:#fff7ed;border-color:#fed7aa}.r-box.p{background:#eff6ff;border-color:#bfdbfe}
+.r-box h2{margin:0 0 4px;display:flex;align-items:center;gap:6px}.r-box h2 span{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;color:#fff;font-size:11px}.r-box.a h2 span{background:#ea580c}.r-box.p h2 span{background:#2563eb}
+.r-box ul{margin:0;padding-left:16px}.r-box li{margin:2px 0}
+.r-pe{position:absolute;left:40px;right:40px;bottom:calc(16px * var(--f));display:flex;justify-content:space-between;align-items:flex-end;gap:20px}
+.r-ass{text-align:center;min-width:230px}.r-ass i{display:block;border-top:1px solid #334155;margin-bottom:4px}.r-ass b{display:block;font-size:calc(11px * var(--f))}.r-ass small{color:#475569;font-size:calc(9.5px * var(--f))}
+.r-fonte{color:#94a3b8;font-size:calc(8px * var(--f));max-width:380px;text-align:right}
+.r-in{padding-bottom:calc(84px * var(--f))}`;
 
 /* Erros inesperados depois de aberto: avisa em vez de falhar em silêncio */
 window.addEventListener('error', e => { if (window.GABORG_INICIADO && e.message && typeof toast === 'function') toast('Erro: ' + e.message + ' — recarregue a página. Se repetir, envie esta mensagem ao suporte.', 'erro'); });
