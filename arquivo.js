@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.49.7';
+const VERSAO = '1.49.8';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -8109,7 +8109,15 @@ const RX_CSS = `.rx-a4{--f:1;width:794px;height:1123px;background:#fff;color:#0f
 .rx-acoes ul{margin:0;padding-left:16px}.rx-acoes li{margin:2px 0}.rx-acoes h3 span{display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;color:#fff;font-size:10px}.rx-acoes h3::before{display:none}
 .rx-dest{background:#f0fdf4;border-color:#bbf7d0}.rx-dest h3 span{background:#16a34a}.rx-prox{background:#eff6ff;border-color:#bfdbfe}.rx-prox h3 span{background:#1d4ed8}
 .rx-pe{position:absolute;left:36px;right:36px;bottom:16px;display:flex;justify-content:space-between;align-items:flex-end;gap:16px;border-top:1px solid #e2e8f0;padding-top:8px}
-.rx-pe>small{color:#94a3b8;font-size:8px;max-width:440px;text-align:right}.rx-ass{text-align:center;min-width:220px}.rx-ass i{display:block;border-top:1px solid #334155;margin-bottom:3px}.rx-ass b{display:block;font-size:10.5px}.rx-ass small{color:#475569;font-size:9px}`;
+.rx-pe>small{color:#94a3b8;font-size:8px;max-width:440px;text-align:right}.rx-ass{text-align:center;min-width:220px}.rx-ass i{display:block;border-top:1px solid #334155;margin-bottom:3px}.rx-ass b{display:block;font-size:10.5px}.rx-ass small{color:#475569;font-size:9px}
+.rx-bras{height:38px!important}.rx-bras-alt{width:34px!important;height:38px!important}.rx-band{width:40px!important;height:28px!important}
+.rx-a4 .rx-tit{position:relative;border:0;border-radius:12px;padding:calc(12px * var(--f)) 14px calc(12px * var(--f)) 20px;overflow:hidden;color:#fff;background:#1e293b;background:linear-gradient(115deg,#111827 0%,#1e293b 55%,#334155 100%);box-shadow:inset 5px 0 0 var(--c),0 2px 8px rgba(15,23,42,.18);-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.rx-a4 .rx-tit::after{content:'';position:absolute;left:5px;right:0;bottom:0;height:3px;background:linear-gradient(90deg,#f7c600,#f59e0b 40%,transparent)}
+.rx-a4 .rx-tit small{color:#fcd34d}.rx-a4 .rx-tit h1{color:#fff;font-size:calc(22px * var(--f))}.rx-a4 .rx-tit p{color:#cbd5e1}
+.rx-a4 .rx-tit-d{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:10px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16)}
+.rx-a4 .rx-tit .rl-tit-3d{background:none;border:0;padding:0;margin:0}.rx-a4 .rx-tit .rl-3d{width:calc(92px * var(--f));height:calc(62px * var(--f))}
+.rx-a4 .rx-tit .rx-simb,.rx-a4 .rx-tit .apx-simb{gap:6px}.rx-a4 .rx-tit .apx-simb img{filter:none;box-shadow:none}
+.rx-a4 .rx-tit .apx-simb img.c{height:calc(40px * var(--f));width:auto}.rx-a4 .rx-tit .apx-simb img.b{height:calc(26px * var(--f));width:auto;border-radius:3px;box-shadow:0 0 0 1px rgba(255,255,255,.3)}`;
 
 /* ===================== RELATÓRIOS DE OBRAS E DE CONVÊNIOS (município, DRE ou estado) =====================
    Mesma identidade do relatório executivo (Secretaria de Estado de Educação, brasão e bandeira de MT),
