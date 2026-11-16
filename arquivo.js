@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.54.0';
+const VERSAO = '1.54.1';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -8109,7 +8109,9 @@ function rxCab(A, pg, tot, sub){
   return `<header class="rx-cab"><div class="rx-id">${rxBrasao()}<div><small>GOVERNO DE MATO GROSSO</small><b>Secretaria de Estado de Educação</b><span>SEDUC-MT</span></div>${RX_BANDEIRA_MT}</div>
     <div class="rx-doc">${RX_SIGILO}<small>RELATÓRIO EXECUTIVO${tot > 1 ? ` · ${pg}/${tot}` : ''}</small><b>${esc(sub)}</b></div></header><div class="rx-fita"><i></i><i></i><i></i><i></i></div>`;
 }
-function rxPaginas(uma){
+/* uma: arranjo das seções nas 2 páginas · cmp: 0 normal, 1 e 2 enxugam tabelas e listas para caber em frente e verso */
+function rxPaginas(uma, cmp){
+  cmp = cmp || 0;
   const D = apDados(), A = rxAlvo(D); if (!A) return []; const sec = store.get('gaborg_rx_sec', {}) || {}, on = k => sec[k] !== false;
   const P = Object.assign(rxPadrao(D, A), store.get('gaborg_rx_txt_' + rxChave(A), {}) || {}), ass = store.get('gaborg_cv_rel_ass', {}) || {};
   const es = A.es, al = A.al, pf = apProf(A), inc = apIncl(A), sv = (() => { try { return apSvDe(D, A); } catch (e) { return null; } })(), ob = rxObras(D, A), cv = rxConv(D, A), hoje = new Date().toLocaleDateString('pt-BR', { day:'2-digit', month:'long', year:'numeric' });
@@ -8120,8 +8122,8 @@ function rxPaginas(uma){
     ['fa-chalkboard-user', 'Profissionais', pf.tem ? fmtN(pf.n) : sv ? fmtN(sv.n) : '—', pf.tem ? `1 para cada ${Math.round(pf.razao)} estudantes` : sv ? 'servidores lotados' : 'não informado', '#059669'],
     A.tipo === 'mun' ? ['fa-route', 'Até a sede da DRE', (() => { const k = es.length ? Math.round(es.reduce((t, e) => t + distEscola(e), 0) / es.length) : 0; return k ? fmtN(k) + ' km' : '—'; })(), A.dre ? 'DRE ' + nomeDRE(A.dre) : '', '#ea580c']
       : ['fa-sack-dollar', 'Investimento em obras', ob.length ? fmtRc(ob.reduce((t, o) => t + obValor(o), 0)) : '—', ob.length ? `${ob.length} obras` : 'sem obras registradas', '#ea580c']];
-  const tipos = apTipos(es).slice(0, 7).map(([t, n]) => [t, n, CORES_TIPO[t] || '#64748b', iconeTipoSVG(t, CORES_TIPO[t] || '#64748b', 13), fmtN(alunosDe(es.filter(e => grupoTipo(e.tipo) === t))) + ' est.']);
-  const maiores = [...es].sort((a, b) => num(b.alunos) - num(a.alunos)).slice(0, A.tipo === 'mun' ? 8 : 6);
+  const tipos = apTipos(es).slice(0, [7, 6, 4][cmp]).map(([t, n]) => [t, n, CORES_TIPO[t] || '#64748b', iconeTipoSVG(t, CORES_TIPO[t] || '#64748b', 13), fmtN(alunosDe(es.filter(e => grupoTipo(e.tipo) === t))) + ' est.']);
+  const maiores = [...es].sort((a, b) => num(b.alunos) - num(a.alunos)).slice(0, (A.tipo === 'mun' ? [8, 6, 4] : [6, 5, 4])[cmp]);
   const terr = A.tipo === 'dre' ? A.ms.map(m => [m.nome, m.es.length, m.al]).sort((a, b) => b[2] - a[2]) : A.tipo === 'estado' ? D.dres.map(d => { const e2 = D.E.filter(e => e.dre === d); return ['DRE ' + nomeDRE(d), e2.length, alunosDe(e2), D.muns.filter(m => m.dre === d).length, apCorDre(D, d)]; }).sort((a, b) => b[2] - a[2]) : [];
   /* seções do relatório (numeradas na ordem em que aparecem) */
   const kpiH = `<section class="rx-kpi">${kpi.map(([ic, t, v, s, c]) => `<div style="--c:${c}"><i class="fa-solid ${ic}"></i><small>${t}</small><b>${v}</b><span>${esc(s)}</span></div>`).join('')}</section>`;
@@ -8133,11 +8135,11 @@ function rxPaginas(uma){
   const gerais = (on('rede') ? kpiH : '') + (perfilH || pessoasH ? `<div class="rx-g2">${perfilH}${pessoasH}</div>` : '') + escolasH;
   const dist = A.tipo === 'mun' && es.length ? Math.round(es.reduce((t, e) => t + distEscola(e), 0) / es.length) : 0;
   const local = A.tipo === 'mun' ? `<div class="rl-fatos">${[['fa-route', A.dre ? 'DRE ' + nomeDRE(A.dre) : 'Sem DRE', 'Diretoria Regional que atende'], ['fa-location-dot', A.dre ? apSedeNome(A.dre) : '—', 'sede da DRE'], ['fa-road', dist ? fmtN(dist) + ' km' : '—', 'distância média das escolas à sede'], ['fa-tree-city', `${es.filter(e => e.localidade !== 'RURAL').length} urbana(s) · ${es.filter(e => e.localidade === 'RURAL').length} rural(is)`, 'localização das escolas'], ['fa-ranking-star', A.m.pos ? A.m.pos + 'º' : '—', 'posição no estado em nº de estudantes']].map(([ic, b, sm]) => `<div><i class="fa-solid ${ic}"></i><b>${esc(b)}</b><small>${sm}</small></div>`).join('')}</div>`
-    : `<div class="rx-terr">${terr.slice(0, A.tipo === 'estado' ? 16 : 18).map(([n, e, a, nm, c]) => `<div style="--c:${c || A.cor}"><b>${esc(/^DRE /.test(n) ? n : apNomeCurto(n))}</b><small>${e} escola${e === 1 ? '' : 's'} · ${fmtN(a)} est.${nm ? ` · ${nm} mun.` : ''}</small></div>`).join('')}</div>${terr.length > 18 ? `<p class="rx-mais">e mais ${terr.length - 18}.</p>` : ''}`;
+    : `<div class="rx-terr">${terr.slice(0, (A.tipo === 'estado' ? [16, 12, 8] : [18, 12, 8])[cmp]).map(([n, e, a, nm, c]) => `<div style="--c:${c || A.cor}"><b>${esc(/^DRE /.test(n) ? n : apNomeCurto(n))}</b><small>${e} escola${e === 1 ? '' : 's'} · ${fmtN(a)} est.${nm ? ` · ${nm} mun.` : ''}</small></div>`).join('')}</div>${terr.length > (A.tipo === 'estado' ? [16, 12, 8] : [18, 12, 8])[cmp] ? `<p class="rx-mais">e mais ${terr.length - (A.tipo === 'estado' ? [16, 12, 8] : [18, 12, 8])[cmp]}.</p>` : ''}`;
   const terrH = on('mapa') || on('territorio') ? `<div class="rx-g2 rl-terr">${on('mapa') ? `<div class="rx-box"><p class="abnt-cap">{{FIG}} – Mapa do território</p>${rxMapa(D, A)}<p class="rx-leg">${A.tipo === 'estado' ? 'Cores: Diretorias Regionais · pontos: escolas' : `Pontos: escolas por tipo${A.dre ? ' · estrela: sede da DRE' : ''}`}</p></div>` : ''}${on('territorio') ? `<div class="rx-box"><p class="abnt-cap">{{QUA}} – ${A.tipo === 'mun' ? 'Localização' : A.tipo === 'dre' ? 'Municípios atendidos' : 'Diretorias Regionais de Educação'}</p>${local}</div>` : ''}</div>` : '';
   const invT = ob.reduce((t, o) => t + obValor(o), 0), st = Object.keys(OB_ST).map(s => [s, ob.filter(o => obStatus(o) === s).length, OB_ST[s]]).filter(x => x[1]);
   const tob = {}; ob.forEach(o => { const k = obObj(o); tob[k] = (tob[k] || 0) + obValor(o); });
-  const topOb = [...ob].sort((a, b) => obValor(b) - obValor(a)).slice(0, 7);
+  const topOb = [...ob].sort((a, b) => obValor(b) - obValor(a)).slice(0, [7, 5, 3][cmp]);
   const cX = cv.map(cvK), cc = cX.reduce((t, x) => t + x.conc, 0), cr = cX.reduce((t, x) => t + x.rep, 0), ce = cX.reduce((t, x) => t + x.exe, 0);
   const temObras = on('obras') && ob.length, temConv = on('convenios') && cv.length;
   const obrasH = temObras ? `<p class="abnt-cap">{{GRA}} – Investimento, situação e tipo das obras</p><div class="rx-g3"><div class="rx-big" style="--c:#ea580c"><small>Investimento total</small><b>${fmtRc(invT)}</b><span>${ob.length} obra${ob.length === 1 ? '' : 's'} · ${ob.filter(o => obEtapa(o) === 'Inaugurada').length} inaugurada(s)</span></div><div>${rxBarras(st)}</div><div>${`<div class="rl-tps rx-tps">${Object.entries(tob).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([k, v]) => `<div><span class="ic">${OB_ANIM[k] || OB_ANIM.Outro}</span><b>${ob.filter(o => obObj(o) === k).length}</b><small>${esc(k)}<br>${fmtRc(v)}</small></div>`).join('')}</div>`}</div></div>
@@ -8147,12 +8149,12 @@ function rxPaginas(uma){
       <div class="rx-fun">${rxBarras([['Pactuado', cc, '#1d4ed8'], ['Repassado', cr, '#0d9488'], ['Executado', ce, '#f59e0b']], fmtRc)}</div>
       <div class="rx-mini">${[['Em execução', cv.filter(c => c.situacao === 'Em execução').length], ['Concluídos', cv.filter(c => c.situacao === 'Concluído').length], ['Vencem em 90 dias', cv.filter((c, i) => cvAberto(c) && cX[i].dias !== null && cX[i].dias >= 0 && cX[i].dias <= 90).length]].map(([t, n]) => `<span><b>${n}</b>${t}</span>`).join('')}</div></div><p class="abnt-fonte">Fonte: SEDUC-MT, monitoramento de convênios (${new Date().getFullYear()}).</p>` : '';
   const manual = store.get('gaborg_rx_manual', true) !== false;
-  const acoesH = on('textos') ? (manual ? rlPauta(on('conclusao') ? 6 : 8) : `<div class="abnt-sub"><b>{{SEC}}.1 Destaques</b></div>${abntAlineas(P.destaques)}<div class="abnt-sub"><b>{{SEC}}.2 Próximos passos</b></div>${abntAlineas(P.proximos)}`) : '';
+  const acoesH = on('textos') ? (manual ? rlPauta([7, 6, 5][cmp]) : `<div class="abnt-sub"><b>{{SEC}}.1 Destaques</b></div>${abntAlineas(P.destaques)}<div class="abnt-sub"><b>{{SEC}}.2 Próximos passos</b></div>${abntAlineas(P.proximos)}`) : '';
   const concH = on('conclusao') && String(P.agradecimento || '').trim() ? `<div class="rx-agr"><i class="fa-solid fa-handshake-angle"></i><div>${abntPars(P.agradecimento)}<p class="rx-agr-a">Secretaria de Estado de Educação de Mato Grosso</p></div></div>` : '';
   const X = { intro:['fa-book-open', 'Introdução', abntPars(P.sintese)], gerais:['fa-circle-info', 'Informações gerais', gerais], terr:['fa-map-location-dot', 'Território', terrH],
     obras:['fa-helmet-safety', 'Obras e investimentos', obrasH], conv:['fa-handshake', 'Convênios', convH], acoes:['fa-list-check', 'Considerações ou encaminhamentos', acoesH], conc:['fa-handshake-angle', 'Conclusão', concH] };
-  const tem2 = temObras || temConv, ordem = !tem2 || uma === true ? [['intro', 'gerais', 'terr', 'obras', 'conv', 'acoes']]
-    : uma === 'meio' ? [['intro', 'gerais', 'terr', 'conv'], ['obras', 'acoes']] : uma === 'meio2' ? [['intro', 'gerais', 'terr', 'obras'], ['conv', 'acoes']] : uma === 'tres' ? [['intro', 'gerais'], ['terr', 'obras'], ['conv', 'acoes']] : [['intro', 'gerais', 'terr'], ['obras', 'conv', 'acoes']];
+  /* sempre 2 páginas (frente e verso) */
+  const ordem = ({ a:[['intro', 'gerais', 'terr'], ['obras', 'conv', 'acoes']], b:[['intro', 'gerais', 'terr', 'conv'], ['obras', 'acoes']], c:[['intro', 'gerais', 'terr', 'obras'], ['conv', 'acoes']], d:[['intro', 'gerais'], ['terr', 'obras', 'conv', 'acoes']] })[uma] || [['intro', 'gerais', 'terr'], ['obras', 'conv', 'acoes']];
   ordem[ordem.length - 1].push('conc');
   const pags = rlNumerar(rlPags(ordem.map(p => p.map(k => X[k])), true)), t = pags.length, simbMun = g && g.cod ? `<div class="apx-simb rx-simb" data-cod="${esc(g.cod)}"></div>` : '';
   const capa = `<div class="rx-tit" style="--c:${A.cor || '#1d4ed8'}"><div><small>${A.tipo === 'mun' ? (A.dre ? 'DRE ' + esc(nomeDRE(A.dre)) : 'Município') : A.tipo === 'dre' ? `${A.ms.length} municípios` : `${D.dres.length} Diretorias Regionais · ${D.muns.filter(m => m.es.length).length} municípios`}</small><h1>${esc(titulo)}</h1><p>${hoje}</p></div><div class="rx-tit-d"><div class="rx-tit-w">${simbMun}<div class="rl-tit-3d">${rl3D(D, A)}</div></div></div></div>`;
@@ -8161,18 +8163,25 @@ function rxPaginas(uma){
 function rxPrevia(){
   const box = $('#rx-pgs'); if (!box) return; rlCSS();
   const z = Math.min(1, (box.parentElement.clientWidth - 30) / 794); box.style.setProperty('--z', z.toFixed(3));
+  const MIN = .8;
   const encaixa = () => { let pior = 1; box.querySelectorAll('.rx-a4').forEach(a => { const inn = a.querySelector('.rx-c'); let f = 1; a.style.setProperty('--f', 1); const lim = () => a.querySelector('.rx-pe').offsetTop - 8;
-    while (inn.offsetTop + inn.scrollHeight > lim() && f > .68) { f -= .02; a.style.setProperty('--f', f.toFixed(3)); } const ap = inn.offsetTop + inn.scrollHeight > lim(); a.classList.toggle('apertado', ap); pior = Math.min(pior, ap ? 0 : f); }); return pior; };
-  /* tudo numa página quando cabe sem apertar a letra; senão, duas páginas */
+    while (inn.offsetTop + inn.scrollHeight > lim() && f > MIN) { f -= .02; a.style.setProperty('--f', f.toFixed(3)); } const ap = inn.offsetTop + inn.scrollHeight > lim(); a.classList.toggle('apertado', ap); pior = Math.min(pior, ap ? 0 : f); }); return pior; };
+  /* sempre 2 páginas: escolhe o arranjo com a maior letra; se nenhum couber, enxuga tabelas e listas */
   const pinta = pp => { box.innerHTML = pp.map(p => `<div class="rx-pg">${p}</div>`).join(''); return encaixa(); };
-  if (pinta(rxPaginas(true)) < .94 && rxPaginas(false).length > 1) { if (!(pinta(rxPaginas('meio')) >= .94) && !(pinta(rxPaginas('meio2')) >= .94) && !(pinta(rxPaginas(false)) > 0)) pinta(rxPaginas('tres')); }
+  let melhor = null;
+  for (const cmp of [0, 1, 2]) {
+    for (const k of ['a', 'b', 'c', 'd']) { const f = pinta(rxPaginas(k, cmp)); if (!melhor || f > melhor.f) melhor = { k, cmp, f }; if (f >= .98) break; }
+    if (melhor.f >= .84) break;
+  }
+  if (melhor.f <= 0) { const f = pinta(rxPaginas('a', 2)); if (f <= 0) { box.querySelectorAll('.rx-a4').forEach(a => a.style.setProperty('--f', MIN)); } }
+  else pinta(rxPaginas(melhor.k, melhor.cmp));
   apPreencherSimb(box);
 }
 function rxImprimir(){
   const box = $('#rx-pgs'); if (!box) return; if (box.querySelector('.apertado')) toast('Uma das páginas passou do limite: desligue alguma seção ou encurte os textos.', 'erro');
   const f = document.createElement('iframe'); f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0'; document.body.appendChild(f);
   const d = f.contentWindow.document, A = rxAlvo(apDados());
-  d.open(); d.write(`<!doctype html><html><head><meta charset="utf-8"><title>Relatório executivo · ${esc(A ? A.nome : '')}</title><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"><style>@page{size:A4;margin:0}html,body{margin:0;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}${RX_CSS}${RL_CSS}.rx-a4{transform:none!important;box-shadow:none!important;margin:0!important;page-break-after:always;break-after:page}.rx-a4:last-child{page-break-after:auto;break-after:auto}</style></head><body>${[...box.querySelectorAll('.rx-a4')].map(a => a.outerHTML).join('')}</body></html>`); d.close();
+  d.open(); d.write(`<!doctype html><html><head><meta charset="utf-8"><title>Relatório executivo · ${esc(A ? A.nome : '')}</title><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"><style>@page{size:A4;margin:0}html,body{margin:0;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}${RX_CSS}${RL_CSS}.rx-a4{transform:none!important;box-shadow:none!important;margin:0!important;width:210mm!important;height:296.8mm!important;page-break-after:always;break-after:page}.rx-a4:last-child{page-break-after:auto;break-after:auto}</style></head><body>${[...box.querySelectorAll('.rx-a4')].map(a => a.outerHTML).join('')}</body></html>`); d.close();
   let n = 0; const tenta = () => { const ok = [...d.images].every(i => i.complete) && (!d.fonts || d.fonts.status === 'loaded'); if (ok || n++ > 30) { try { f.contentWindow.focus(); f.contentWindow.print(); } catch (e) {} setTimeout(() => f.remove(), 3000); } else setTimeout(tenta, 120); };
   setTimeout(tenta, 300);
 }
@@ -8297,8 +8306,7 @@ function rlPags(paginas, abnt){
 }
 const rlNumerar = pags => { const c = { TAB:0, GRA:0, FIG:0, QUA:0 }, nome = { TAB:'Tabela', GRA:'Gráfico', FIG:'Figura', QUA:'Quadro' }; return pags.map(h => h.replace(/\{\{(TAB|GRA|FIG|QUA)\}\}/g, (_, k) => nome[k] + ' ' + (++c[k]))); };
 /* campo aberto (pautado) para escrever à mão depois de impresso */
-const rlPauta = n => `<div class="rl-pauta">${'<i></i>'.repeat(n)}</div>`
-  + `<div class="rl-camp"><span>Responsável: <i></i></span><span>Cargo: <i></i></span><span>Data: ____/____/________</span></div>`;
+const rlPauta = n => `<div class="rl-pauta">${'<i></i>'.repeat(n)}</div>`;
 /* ícone ilustrado do tipo de obra (construção, reforma, quadra...) para relatórios */
 const rlTipoIc = (k, t) => `<span class="rl-ti" style="--s:${t || 18}px">${OB_ANIM[k] || OB_ANIM.Outro}</span>`;
 const rlAssin = ass => ass && (ass.nome || ass.cargo) ? `<div class="rl-ass"><i></i><b>${esc(ass.nome || '')}</b><small>${esc(ass.cargo || '')}</small></div>` : '';
@@ -8573,7 +8581,12 @@ const RL_CSS = `.rl-a4 .rx-in{z-index:1}.rl-marca{position:absolute;inset:150px 
 .rl-sec .ic{background:rgba(255,255,255,.14);color:#fff}
 .rl-sec b,.rl-s.abnt .rl-sec b{color:#fff}
 .rl-sec .ln{height:2px;background:linear-gradient(90deg,#f7c600,#16a34a 50%,transparent);opacity:.8}
-.rl-gab{gap:6px;opacity:1;font-size:12px;padding:3px 11px 3px 4px;border-radius:99px;background:linear-gradient(90deg,#eff6ff,#ecfeff);border:1px solid #bfdbfe;color:#1e3a8a;box-shadow:0 1px 3px rgba(30,58,138,.12)}.rl-gab svg{width:20px;height:20px}.rl-gab b{color:#0e7490}`;
+.rl-gab{gap:6px;opacity:1;font-size:12px;padding:3px 11px 3px 4px;border-radius:99px;background:linear-gradient(90deg,#eff6ff,#ecfeff);border:1px solid #bfdbfe;color:#1e3a8a;box-shadow:0 1px 3px rgba(30,58,138,.12)}.rl-gab svg{width:20px;height:20px}.rl-gab b{color:#0e7490}
+.rx-a4 .abnt-p,.rx-a4 .abnt-al,.rx-a4 .abnt-sub b{font-size:max(10.5pt,calc(12pt * var(--f)))}
+.rx-a4 .abnt-cap{font-size:max(9.5pt,calc(10.5pt * var(--f)))}.rx-a4 .abnt-fonte{font-size:max(8pt,calc(9pt * var(--f)))}
+.rl-sec .n,.rl-s.abnt .rl-sec .n{display:inline-flex;align-items:center;justify-content:center;height:auto;min-height:calc(22px * var(--f));min-width:calc(26px * var(--f));padding:1px 7px;line-height:1;font-size:max(10.5pt,calc(12pt * var(--f)))}
+.rl-sec b,.rl-s.abnt .rl-sec b{font-size:max(10.5pt,calc(12pt * var(--f)));line-height:1.2}
+.rx-a4 .rx-tab td{font-size:max(8.5px,calc(10.5px * var(--f)))}`;
 /* ---------- painel de Obras: tipos com ícones animados, rosca da situação, entregas por trimestre ---------- */
 function obHero(L){
   const st = Object.keys(OB_ST).map(s => [s, L.filter(o => obStatus(o) === s).length, OB_ST[s]]).filter(f => f[1]);
