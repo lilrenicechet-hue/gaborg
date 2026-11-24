@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.56.0';
+const VERSAO = '1.56.1';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -7149,13 +7149,13 @@ function obPainel(L){
       ${kpiG('#0f766e', 'fa-sack-dollar', 'Investimento', fmtRc(tot), 'valor total dos contratos e convênios')}
       ${kpiG('#16a34a', 'fa-circle-check', 'Concluídas', fmtN(cont(o => obStatus(o) === 'Concluída')), `${fmtP(cont(o => obStatus(o) === 'Concluída') / Math.max(1, L.length) * 100)} das obras`, obIrLista({ status:'Concluída' }))}
       ${kpiG('#2563eb', 'fa-person-digging', 'Em execução', fmtN(cont(o => obStatus(o) === 'Em execução')), `${proximas.length} terminam em até 6 meses`, obIrLista({ status:'Em execução' }))}
-      ${kpiG('#dc2626', 'fa-triangle-exclamation', 'Paralisadas ou em rescisão', fmtN(atencao.length), 'precisam de atenção', obIrLista({ status:'Paralisada' }))}
+      ${kpiG('#dc2626', 'fa-triangle-exclamation', 'Com problema', fmtN(atencao.length), `${cont(o => obStatus(o) === 'Paralisada')} paralisadas · ${cont(o => obStatus(o) === 'Rescisão')} em rescisão`, obIrLista({ status:'Paralisada' }))}
       ${kpiG('#7c3aed', 'fa-ribbon', 'Inaugurações', fmtN(cont(o => obEtapa(o) === 'Inaugurada')), `${prontas.length} prontas ou agendadas`, "abaOb('inauguracoes')")}</div>
     ${obHero(L)}
     <div class="obp-g">
       <div class="cartao obp-dre"><div class="obp-h"><h3><i class="fa-solid fa-route"></i>Investimento por DRE</h3><small>obras · concluídas · valor</small></div>
         ${DR.map(([d, x]) => `<button class="obp-dr" ${d ? `onclick="${obIrLista({ dre:d })}"` : ''} style="--c:${d ? corDRE(dl, d) : '#94a3b8'}"><span class="n"><i></i>${d ? esc(nomeDRE(d)) : 'Sem DRE'}</span><span class="bar"><i style="width:${(x.v / mxv * 100).toFixed(1)}%"></i></span><span class="q">${x.n}</span><span class="pc" title="${x.c} concluída(s)"><i style="--p:${(x.c / x.n * 100).toFixed(0)}"></i>${Math.round(x.c / x.n * 100)}%</span><b>${fmtRc(x.v)}</b></button>`).join('')}</div>
-      <div class="cartao obp-at"><div class="obp-h"><h3><i class="fa-solid fa-triangle-exclamation"></i>Precisam de atenção</h3>${atencao.length ? `<button class="lk" onclick="${obIrLista({ status:'Paralisada' })}">ver todas (${atencao.length})</button>` : ''}</div>
+      <div class="cartao obp-at"><div class="obp-h"><h3><i class="fa-solid fa-triangle-exclamation"></i>Precisam de atenção</h3>${atencao.length ? `<span class="obp-lks"><button class="lk" onclick="${obIrLista({ status:'Paralisada' })}">paralisadas (${atencao.filter(o => obStatus(o) === 'Paralisada').length})</button><button class="lk" onclick="${obIrLista({ status:'Rescisão' })}">rescisão (${atencao.filter(o => obStatus(o) === 'Rescisão').length})</button></span>` : ''}</div>
         ${atencao.slice(0, 7).map(o => lin(o, `<span class="dir">${obChip(o)}<small>${fmtRc(obValor(o))} · ${Math.round(obExec(o))}% feita</small></span>`)).join('') || vazio('fa-circle-check', 'Nenhuma obra paralisada ou em rescisão.')}</div>
       <div class="cartao obp-pr"><div class="obp-h"><h3><i class="fa-solid fa-flag-checkered"></i>Prontas para inaugurar</h3><button class="lk" onclick="abaOb('inauguracoes')">abrir Inaugurações</button></div>
         ${prontas.slice(0, 6).map(o => lin(o, `<span class="dir"><span class="ob-et" style="--c:${(OB_ETAPAS.find(e => e[0] === obEtapa(o)) || OB_ETAPAS[2])[1]}">${obEtapa(o) === 'Agendada' ? fmtDia(o.dataInauguracao) : 'pronta'}</span><small>${fmtRc(obValor(o))}</small></span>`)).join('') || vazio('fa-flag', 'Nenhuma obra marcada como pronta para inaugurar.')}</div>
@@ -7197,7 +7197,7 @@ function obMapaTela(L){
     <aside class="obm-lado">
       <div class="obm-q"><i class="fa-solid fa-magnifying-glass"></i><input id="obm-q" autocomplete="off" placeholder="Escola, município, empresa ou contrato" value="${esc(obM.q)}" oninput="obM.q=this.value;clearTimeout(obM.t);obM.t=setTimeout(obMAtualizar,200)"></div>
       <div class="obm-res" id="obm-res"></div>
-      <div class="obm-sec"><span>Cor dos pontos</span><div class="obm-seg">${Object.entries(OB_MCORES).map(([k, [t]]) => `<button class="${obM.cor === k ? 'on' : ''}" onclick="obM.cor='${k}';obM.st.clear();store.set('gaborg_obm_cor','${k}');obMLegenda();obMAtualizar();this.parentNode.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b===this))">${t}</button>`).join('')}</div></div>
+      <div class="obm-sec"><span>Cor dos ícones</span><div class="obm-seg">${Object.entries(OB_MCORES).map(([k, [t]]) => `<button class="${obM.cor === k ? 'on' : ''}" onclick="obM.cor='${k}';obM.st.clear();store.set('gaborg_obm_cor','${k}');obMLegenda();obMAtualizar();this.parentNode.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b===this))">${t}</button>`).join('')}</div></div>
       <div class="obm-sec"><span>Tipo de obra</span><div class="obm-tps">${tipos.map(k => `<button class="${obM.tp.has(k) ? 'on' : ''}" data-tp="${esc(k)}" onclick="obM.tp.has(this.dataset.tp)?obM.tp.delete(this.dataset.tp):obM.tp.add(this.dataset.tp);this.classList.toggle('on');obMAtualizar()" title="${esc(k)}"><i class="fa-solid ${(OB_OBJ.find(x => x[1] === k) || [0, 0, 'fa-helmet-safety'])[2]}"></i><span>${esc(k)}</span><b>${L.filter(o => obObj(o) === k).length}</b></button>`).join('')}</div></div>
       <div class="obm-sec"><span>Diretoria Regional</span><select class="campo" onchange="obM.dre=this.value;obMAtualizar(true)"><option value="">Todas as DREs</option>${dl.map(d => `<option value="${esc(d)}" ${obM.dre === d ? 'selected' : ''}>DRE ${esc(nomeDRE(d))}</option>`).join('')}</select></div>
       <div class="obm-lh"><b>Maiores obras</b><small>passe o mouse para achar no mapa</small></div>
@@ -7207,7 +7207,7 @@ function obMapaTela(L){
       <div class="obm-leg" id="obm-leg"></div>
       <div class="obm-fundo">${[['claro', 'fa-sun', 'Claro'], ['satelite', 'fa-satellite', 'Satélite'], ['escuro', 'fa-moon', 'Escuro']].map(([k, ic, t]) => `<button class="${obM.base === k ? 'on' : ''}" onclick="obMBase('${k}',this)" title="${t}"><i class="fa-solid ${ic}"></i></button>`).join('')}</div>
     </div></div>
-    <p class="s" style="margin-top:6px"><i class="fa-solid fa-circle-info"></i> O tamanho do ponto acompanha o valor. Ponto com borda tracejada: obra sem escola vinculada, mostrada no centro do município.</p>`;
+    <p class="s" style="margin-top:6px"><i class="fa-solid fa-circle-info"></i> Cada ícone mostra o tipo da obra, e o tamanho acompanha o valor. Ícone com borda tracejada: obra sem escola vinculada, no centro do município. Os círculos numerados agrupam obras próximas; clique para aproximar.</p>`;
 }
 function obMBase(k, btn){
   obM.base = k; store.set('gaborg_obm_base', k); if (btn) btn.parentNode.querySelectorAll('button').forEach(b => b.classList.toggle('on', b === btn));
@@ -7228,7 +7228,7 @@ async function obDesenharMapa(){
   const buracos = D.muns.flatMap(x => apAneis(x.geo).map(p => p[0]));
   L.polygon([[[-60, -120], [-60, 0], [30, 0], [30, -120]], ...buracos], { renderer:cv, stroke:false, fillColor:'#0f172a', fillOpacity:.32, interactive:false, smoothFactor:2 }).addTo(m);
   const mun = L.layerGroup().addTo(m); D.muns.forEach(x => L.polygon(apAneis(x.geo), { renderer:cv, color:'#475569', weight:.5, opacity:.45, fill:false, interactive:false, smoothFactor:2 }).addTo(mun));
-  obM.camada = L.layerGroup().addTo(m); obM.cv = cvM;
+  obM.camada = L.layerGroup().addTo(m); obM.cv = cvM; obM.grupo = null;
   m.fitBounds(L.latLngBounds(buracos.flat()).pad(.02)); obM.inicio = true;
   obMLegenda(); obMAtualizar(true);
 }
@@ -7237,19 +7237,33 @@ function obMLegenda(){
   const itens = it().map(([k, c]) => [k, c, L0.filter(o => obMChave(o) === k).length]).filter(x => x[2]);
   el.innerHTML = `<b>${t}</b>${itens.map(([k, c, n]) => `<button class="${obM.st.has(k) ? 'on' : ''} ${obM.st.size && !obM.st.has(k) ? 'off' : ''}" data-k="${esc(k)}" onclick="obM.st.has(this.dataset.k)?obM.st.delete(this.dataset.k):obM.st.add(this.dataset.k);obMLegenda();obMAtualizar()"><i style="background:${c}"></i>${esc(k)}<span>${n}</span></button>`).join('')}${obM.st.size ? '<button class="lp" onclick="obM.st.clear();obMLegenda();obMAtualizar()">mostrar todas</button>' : ''}`;
 }
-function obMAtualizar(enquadrar){
+/* ícone de cada obra: alfinete com o desenho do tipo (escola, quadra, reforma...) na cor escolhida; agrupado quando o mapa está longe */
+function obMIcone(o, cor, mx){
+  const t = Math.round(30 + Math.sqrt(obValor(o) / mx) * 14), mun = obPos(o, 0) && obPos(o, 0)[2] === 'municipio';
+  return L.divIcon({ className:'obm-mk', iconSize:[t, t + 8], iconAnchor:[t / 2, t + 6], popupAnchor:[0, -t - 2], tooltipAnchor:[0, -t - 2],
+    html:`<span class="obm-pin ${mun ? 'mun' : ''}" style="--c:${cor};--t:${t}px"><i class="fa-solid ${obObjIc(o)}"></i></span>` });
+}
+async function obMAtualizar(enquadrar){
   if (!obMapa || !obM.camada) return; const F = obMFiltrar(obLista()), mx = Math.max(1, ...obLista().map(obValor)), cor = OB_MCORES[obM.cor][1];
-  obM.camada.clearLayers(); obM.marc.clear(); const porMun = new Map(), b = L.latLngBounds([]);
+  if (!obM.grupo) {
+    const temCl = await carregarCluster().catch(() => false);
+    obM.grupo = temCl && L.markerClusterGroup ? L.markerClusterGroup({ maxClusterRadius:46, disableClusteringAtZoom:10, spiderfyOnMaxZoom:true, showCoverageOnHover:false, chunkedLoading:true, animate:!mapaLeve(),
+      iconCreateFunction:cl => { const ms = cl.getAllChildMarkers(), n = ms.length, c = {}; ms.forEach(m => { c[m.options.cor] = (c[m.options.cor] || 0) + 1; }); let a = 0; const g = Object.entries(c).sort((x, y) => y[1] - x[1]).map(([k, v]) => { const d = `${k} ${a}% ${a + v / n * 100}%`; a += v / n * 100; return d; }).join(',');
+        const t = n < 10 ? 38 : n < 40 ? 46 : 54; return L.divIcon({ className:'obm-cl', iconSize:[t, t], html:`<span style="background:conic-gradient(${g})"><b>${n}</b></span>` }); } }) : L.layerGroup();
+    obM.grupo.addTo(obMapa);
+  }
+  obM.grupo.clearLayers(); obM.marc.clear(); const porMun = new Map(), b = L.latLngBounds([]), ms = [];
   [...F].sort((a, c) => obValor(c) - obValor(a)).forEach(o => { const k = chaveMun(o.municipio), i = porMun.get(k) || 0; porMun.set(k, i + 1); const p = obPos(o, i); if (!p) return;
-    const mun = p[2] === 'municipio', c = L.circleMarker([p[0], p[1]], { renderer:obM.cv, radius:4 + Math.sqrt(obValor(o) / mx) * 11, color:mun ? '#1e293b' : '#ffffff', weight:mun ? 1.4 : 1.2, dashArray:mun ? '3 3' : null, fillColor:cor(o), fillOpacity:.88 }).addTo(obM.camada);
-    c.bindTooltip(`<b>${esc(obNome(o))}</b><br>${esc(apNomeCurto(o.municipio))} · ${fmtRc(obValor(o))}`, { direction:'top', offset:[0, -6], className:'obm-tip' });
-    c.on('click', () => obMPopup(o, c)); obM.marc.set(o.id, c); b.extend([p[0], p[1]]); });
+    const c = L.marker([p[0], p[1]], { icon:obMIcone(o, cor(o), mx), cor:cor(o), riseOnHover:true, keyboard:false });
+    c.bindTooltip(`<b>${esc(obNome(o))}</b><br>${esc(apNomeCurto(o.municipio))} · ${esc(obObj(o))} · ${fmtRc(obValor(o))}`, { direction:'top', className:'obm-tip' });
+    c.on('click', () => obMPopup(o, c)); obM.marc.set(o.id, c); ms.push(c); b.extend([p[0], p[1]]); });
+  if (obM.grupo.addLayers) obM.grupo.addLayers(ms); else ms.forEach(m => m.addTo(obM.grupo));
   if (enquadrar && b.isValid() && (obM.dre || obM.q || obM.tp.size)) obMapa.flyToBounds(b.pad(.12), { duration:.6, maxZoom:10 });
   else if (enquadrar && !obM.dre && !obM.inicio) obMapa.flyToBounds(L.latLngBounds(apGeo().muns.flatMap(x => apAneis(x.geo).map(p => p[0])).flat()).pad(.02), { duration:.6 });
   obM.inicio = false;
   const tot = F.reduce((t, o) => t + obValor(o), 0), r = $('#obm-res');
   if (r) r.innerHTML = `<div><b>${fmtN(F.length)}</b><small>obras</small></div><div><b>${fmtRc(tot)}</b><small>investimento</small></div><div><b>${fmtN(F.filter(o => obStatus(o) === 'Concluída').length)}</b><small>concluídas</small></div>`;
-  const li = $('#obm-lista'); if (li) li.innerHTML = [...F].sort((a, c) => obValor(c) - obValor(a)).slice(0, 80).map(o => `<button class="obm-it ${obM.sel === o.id ? 'on' : ''}" onmouseenter="obMPulsar(${arg(o.id)})" onclick="obMIr(${arg(o.id)})"><span class="ic" style="--c:${cor(o)}"><i class="fa-solid ${obObjIc(o)}"></i></span><span class="tx"><b>${esc(obNome(o))}</b><small>${esc(apNomeCurto(o.municipio))} · ${esc(obMChave(o))}</small></span><span class="v">${fmtRc(obValor(o))}</span></button>`).join('') + (F.length > 80 ? `<p class="s" style="text-align:center;margin:6px 0">e mais ${fmtN(F.length - 80)} · use a busca ou os filtros</p>` : '') || '<div class="obp-vazio"><i class="fa-solid fa-filter-circle-xmark"></i>Nenhuma obra com esses filtros.</div>';
+  const li = $('#obm-lista'); if (li) li.innerHTML = [...F].sort((a, c) => obValor(c) - obValor(a)).slice(0, 80).map(o => `<button class="obm-it ${obM.sel === o.id ? 'on' : ''}" data-id="${esc(o.id)}" onmouseenter="obMPulsar(${arg(o.id)})" onclick="obMIr(${arg(o.id)})"><span class="ic" style="--c:${cor(o)}"><i class="fa-solid ${obObjIc(o)}"></i></span><span class="tx"><b>${esc(obNome(o))}</b><small>${esc(apNomeCurto(o.municipio))} · ${esc(obMChave(o))}</small></span><span class="v">${fmtRc(obValor(o))}</span></button>`).join('') + (F.length > 80 ? `<p class="s" style="text-align:center;margin:6px 0">e mais ${fmtN(F.length - 80)} · use a busca ou os filtros</p>` : '') || '<div class="obp-vazio"><i class="fa-solid fa-filter-circle-xmark"></i>Nenhuma obra com esses filtros.</div>';
 }
 function obMPopup(o, c){
   obM.sel = o.id; const s = obStatus(o), et = OB_ETAPAS.find(e => e[0] === obEtapa(o)) || OB_ETAPAS[5];
@@ -7258,10 +7272,12 @@ function obMPopup(o, c){
     <div class="obm-pop-b"><i style="width:${obExec(o).toFixed(0)}%;background:${OB_ST[s]}"></i></div>
     <div class="obm-pop-st">${obChip(o)}<span class="ob-et" style="--c:${et[1]}"><i class="fa-solid ${et[2]}"></i>${et[0]}</span></div>
     ${o.empresa ? `<div class="l"><i class="fa-solid fa-building"></i>${esc(o.empresa)}</div>` : ''}<button class="btn btn-p btn-sm" style="margin-top:8px;width:100%" onclick="obFicha(${arg(o.id)})"><i class="fa-solid fa-folder-open"></i>Abrir ficha da obra</button></div>`, { className:'mt-popup', maxWidth:320 }).openPopup();
-  document.querySelectorAll('#obm-lista .obm-it').forEach(b => b.classList.toggle('on', b.getAttribute('onclick').includes(JSON.stringify(o.id).slice(1, -1))));
+  document.querySelectorAll('#obm-lista .obm-it').forEach(b => b.classList.toggle('on', b.dataset.id === o.id));
 }
-function obMPulsar(id){ const c = obM.marc.get(id); if (!c || !obMapa) return; const r = c.getRadius(); c.setStyle({ weight:3.2, color:'#0f172a' }); c.setRadius(r + 4); c.bringToFront(); clearTimeout(obM.pt); obM.pt = setTimeout(() => { c.setStyle({ weight:1.2, color:'#ffffff' }); c.setRadius(r); }, 900); }
-function obMIr(id){ const c = obM.marc.get(id), o = obLista().find(x => x.id === id); if (!c || !o) return; obMapa.flyTo(c.getLatLng(), Math.max(obMapa.getZoom(), 11), { duration:.6 }); setTimeout(() => obMPopup(o, c), 650); }
+function obMPulsar(id){ const c = obM.marc.get(id); if (!c || !obMapa) return; const el = c.getElement && c.getElement(); document.querySelectorAll('.obm-pin.pulsa').forEach(x => x.classList.remove('pulsa')); if (el) { const p = el.querySelector('.obm-pin'); p.classList.add('pulsa'); c.setZIndexOffset(1000); clearTimeout(obM.pt); obM.pt = setTimeout(() => { p.classList.remove('pulsa'); c.setZIndexOffset(0); }, 1600); } }
+function obMIr(id){ const c = obM.marc.get(id), o = obLista().find(x => x.id === id); if (!c || !o) return;
+  const abrir = () => { obMapa.flyTo(c.getLatLng(), Math.max(obMapa.getZoom(), 11), { duration:.6 }); setTimeout(() => obMPopup(o, c), 650); };
+  if (obM.grupo && obM.grupo.zoomToShowLayer && !c.getElement()) obM.grupo.zoomToShowLayer(c, abrir); else abrir(); }
 
 /* ---------- inaugurações: o caminho, a agenda, as prontas, o que falta e as já inauguradas ---------- */
 let obIn = { q:'', dre:'', tp:'', lim:24 };
@@ -8733,7 +8749,7 @@ function obHero(L){
   for (let i = 0; i < 8; i++) { const q = q0 + i; B.push([`${q % 4 + 1}º tri/${String(Math.floor(q / 4)).slice(2)}`, 0, i < 1 ? '#f59e0b' : i < 3 ? '#0ea5e9' : '#6366f1']); }
   L.forEach(o => { if (obStatus(o) !== 'Em execução') return; const t = /^\d{4}-\d{2}/.test(o.previsao || '') ? Date.parse(o.previsao) : NaN; if (!isFinite(t)) return; const d = new Date(t), q = d.getFullYear() * 4 + Math.floor(d.getMonth() / 3); const i = t < Date.now() - 31 * 864e5 ? 0 : q - q0 + 1; if (i >= 0 && i <= 8) B[i][1]++; });
   const mx = Math.max(1, ...B.map(b => b[1]));
-  return `<div class="cv-hero"><div class="cartao cv-h1"><h3><i class="fa-solid fa-shapes"></i>O que está sendo construído · <span data-cv-n>${fmtRc(inv)}</span></h3>
+  return `<div class="cv-hero"><div class="cartao cv-h1"><h3><i class="fa-solid fa-shapes"></i>O que está sendo construído<span class="ob-h-v" data-cv-n>${fmtRc(inv)}</span></h3>
       <div class="cv-tipos ob-tipos">${T.map(([k, [n, v]], i) => `<button class="cv-tp" style="--i:${i}" onclick="${obIrLista({ objeto:k })}"><span class="ic">${OB_ANIM[k] || OB_ANIM.Outro}</span><b data-cv-n>${n}</b><small>${esc(k)}<br>${fmtRc(v)}</small></button>`).join('')}</div>
       <div class="ob-trilha">${et.map(([k, t, c, ic, n], i) => `<button style="--c:${c};--i:${i}" onclick="${obIrLista({ inaug:k === 'Em obra' ? 'Em obra' : k })}"><span><i class="fa-solid ${ic}"></i></span><b>${n}</b><small>${t}</small></button>`).join('')}</div></div>
     <div class="cartao cv-h2"><h3><i class="fa-solid fa-chart-pie"></i>Situação</h3>${cvRosca(st, String(L.length), 'obras', n => obIrLista({ status:n }))}</div>
