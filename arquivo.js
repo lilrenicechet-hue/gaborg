@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.54.1';
+const VERSAO = '1.55.0';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -569,7 +569,8 @@ function somaSub(id){
 
 /* ===================== PERSISTÊNCIA LOCAL ===================== */
 let tLocal;
-function salvarLocal(){ clearTimeout(tLocal); tLocal = setTimeout(() => store.set('gaborg_db', Object.assign({}, DB, { setores:setoresOficiais() })), 400); }
+let DB_REV = 0; // muda a cada alteração local, para refazer as listas guardadas em memória
+function salvarLocal(){ DB_REV++; clearTimeout(tLocal); tLocal = setTimeout(() => store.set('gaborg_db', Object.assign({}, DB, { setores:setoresOficiais() })), 400); }
 const salvarAbertos = () => { store.set('gaborg_abertos', [...abertos]); };
 
 /* ===================== NUVEM (APPS SCRIPT) ===================== */
@@ -3285,12 +3286,19 @@ function munOficial(cod){
   if (!munOficial.m) munOficial.m = new Map(ESCOLAS_BASE.map(r => [String(r[0]), r[3]]));
   return munOficial.m.get(String(cod));
 }
+/* a lista é montada uma vez e reaproveitada até a base mudar (o mapa chamava isto centenas de vezes por segundo) */
 function escolasLista(){
+  if (DB.escolas && DB.escolas.length) { const c = escolasLista.c; if (c && c.ref === DB.escolas && c.n === DB.escolas.length && c.rev === DB_REV) return c.v;
+    const v = escolasListaMontar(); escolasLista.c = { ref:DB.escolas, n:DB.escolas.length, rev:DB_REV, v }; return v; }
+  return escolasListaMontar();
+}
+function escolasListaMontar(){
   if (DB.escolas && DB.escolas.length) return DB.escolas.map(e => { const mo = munOficial(e.codigo); return Object.assign({}, e, { latitude:numBR(e.latitude), longitude:numBR(e.longitude) }, mo && e.municipio !== mo ? { municipio:mo } : {}); }).filter(e => e.latitude && e.longitude);
   if (!escolasLista.seed) escolasLista.seed = ESCOLAS_BASE.map(r => ({ codigo:r[0], nome:r[1], dre:ESCOLAS_DRES[r[2]], municipio:r[3], tipo:r[4], localidade:r[5] === 'R' ? 'RURAL' : 'URBANA', endereco:r[6], numero:r[7], cep:r[8], bairro:r[9], telefone:r[10], email:r[11], latitude:r[12], longitude:r[13], alunos:String(r[14] ?? '') }));
   return escolasLista.seed;
 }
-function dresDe(lista){ return [...new Set(lista.map(e => e.dre))].sort((a, b) => a.localeCompare(b, 'pt-BR')); }
+const DRES_C = new WeakMap();
+function dresDe(lista){ let r = DRES_C.get(lista); if (!r) { r = [...new Set(lista.map(e => e.dre))].sort((a, b) => a.localeCompare(b, 'pt-BR')); DRES_C.set(lista, r); } return r; }
 const corDRE = (dres, d) => CORES_DRE[Math.max(0, dres.indexOf(d)) % CORES_DRE.length];
 const nomeDRE = d => String(d || '').replace(/^DRE\s+/i, '').toLowerCase().replace(/(^|\s|-)(\S)/g, (m, a, b) => a + b.toUpperCase()).replace(/\b(De|Da|Do|Das|Dos|E)\b/g, x => x.toLowerCase());
 const grupoTipo = t => (GRUPOS_TIPO.find(([, re]) => re.test(String(t).toUpperCase())) || ['Outro'])[0];
@@ -3383,14 +3391,17 @@ function trocarBaseMT(k){
   const b = BASES_MT[k];
   $('#esc-map').classList.toggle('sem-fundo', !b[1]);
   if (b[1]) {
-    mt.camadas.base = L.tileLayer(b[1], { attribution:b[2], maxZoom:18, maxNativeZoom:k === 'ruas' ? 19 : 16 }).addTo(mt.mapa);
+    mt.camadas.base = L.tileLayer(b[1], { attribution:b[2], maxZoom:18, maxNativeZoom:k === 'ruas' ? 19 : 16, updateWhenZooming:false, keepBuffer:mapaLeve() ? 1 : 2 }).addTo(mt.mapa);
     mt.camadas.base.on('tileerror', () => { mt.erroTiles++; if (mt.erroTiles > 12 && !mt.okTiles && mt.base === k) { trocarBaseMT('nenhum'); toast(`O fundo "${b[0]}" não respondeu. Mostrando sem fundo; escolha outro no botão de mapa.`, 'aviso'); } });
     mt.camadas.base.on('tileload', () => { mt.okTiles++; });
-    if (b[3]) mt.camadas.rotulosBase = L.tileLayer(b[3], { pane:'rotulosBase', maxZoom:18, maxNativeZoom:16 }).addTo(mt.mapa);
+    if (b[3]) mt.camadas.rotulosBase = L.tileLayer(b[3], { pane:'rotulosBase', maxZoom:18, maxNativeZoom:16, updateWhenZooming:false, keepBuffer:1 }).addTo(mt.mapa);
   }
   if ($('#mt-menu') && $('#mt-menu').dataset.t === 'fundo') menuMT('fundo', null, true);
   estilizarMalhaMT();
 }
+/* modo leve: liga sozinho em máquinas fracas (até 4 núcleos ou 4 GB) e pode ser trocado em "Linhas e nomes" */
+function mapaLeve(){ const v = store.get('gaborg_mt_leve', null); if (v !== null) return !!v; const n = navigator.hardwareConcurrency || 8, m = navigator.deviceMemory || 8; return n <= 4 || m <= 4; }
+function alternarLeveMT(){ store.set('gaborg_mt_leve', !mapaLeve()); const el = $('#esc-map'); if (el) el.classList.toggle('mt-leve', mapaLeve()); if (mt.mapa) { mt.mapa.options.fadeAnimation = !mapaLeve(); mt.mapa.options.markerZoomAnimation = !mapaLeve(); } menuMT('camadas', null, true); mt.camadas.mun = null; desenharEscolasMT(); }
 async function renderEscolas(){
   const el = $('#esc-map'); if (!el) return;
   if (!mt.mapa) {
@@ -3399,12 +3410,16 @@ async function renderEscolas(){
     try { await (mt.carregando = mt.carregando || carregarLeaflet()); }
     catch (e) { $('#esc-status').innerHTML = `<span style="color:var(--perigo)">${esc(e.message)}. Verifique a internet e recarregue.</span>`; return; }
     $('#esc-status').textContent = '';
-    mt.mapa = L.map(el, { zoomControl:false, preferCanvas:false, minZoom:4, maxZoom:18, zoomSnap:.25, zoomDelta:.5, wheelPxPerZoomLevel:110, attributionControl:true }).setView([-12.9, -55.6], 6);
+    mt.mapa = L.map(el, { zoomControl:false, preferCanvas:false, minZoom:4, maxZoom:18, zoomSnap:.25, zoomDelta:.5, wheelPxPerZoomLevel:110, attributionControl:true, fadeAnimation:!mapaLeve(), markerZoomAnimation:!mapaLeve() }).setView([-12.9, -55.6], 6);
+    /* enquanto arrasta ou dá zoom, tira sombras e efeitos caros; voltam quando o mapa para */
+    mt.mapa.on('movestart zoomstart', () => el.classList.add('mt-movendo')); mt.mapa.on('moveend zoomend', () => { clearTimeout(mt.paraT); mt.paraT = setTimeout(() => el.classList.remove('mt-movendo'), 120); });
+    el.classList.toggle('mt-leve', mapaLeve());
     [['rotulosBase', 250, 1], ['mascara', 300, 1], ['malha', 350, 0], ['divisas', 380, 1], ['destaque', 390, 1]].forEach(([n, z, sem]) => { mt.mapa.createPane(n); mt.mapa.getPane(n).style.zIndex = z; if (sem) mt.mapa.getPane(n).style.pointerEvents = 'none'; });
     L.control.zoom({ position:'bottomright', zoomInTitle:'Aproximar', zoomOutTitle:'Afastar' }).addTo(mt.mapa);
     L.control.scale({ imperial:false, position:'bottomright' }).addTo(mt.mapa);
-    mt.render = L.svg({ padding:.4 }); // SVG: deixa o mouse chegar aos municípios entre as escolas
-    mt.svg = { malha:L.svg({ pane:'malha', padding:.5 }), mascara:L.svg({ pane:'mascara', padding:1 }), destaque:L.svg({ pane:'destaque', padding:.5 }) };
+    mt.render = L.svg({ padding:.25 }); // SVG: deixa o mouse chegar aos municípios entre as escolas
+    mt.cv = L.canvas({ pane:'malha', padding:.3, tolerance:3 }); // modo leve: municípios e escolas num só desenho, sem milhares de elementos na página
+    mt.svg = { malha:L.svg({ pane:'malha', padding:.3 }), mascara:L.svg({ pane:'mascara', padding:.6 }), destaque:L.svg({ pane:'destaque', padding:.3 }) };
     ['malha', 'divisas', 'destaque', 'nomes', 'ligacoes', 'escolas', 'dres'].forEach(c => { mt.camadas[c] = L.layerGroup().addTo(mt.mapa); });
     trocarBaseMT(store.get('gaborg_mt_base3', 'ruas'));
     mt.mapa.on('click', () => { fecharMenuMT(); voltarMT(mt.mun ? 1 : 0); });
@@ -3438,7 +3453,7 @@ function menuMT(t, btn, manter){
   const sw = (k, n, d) => `<button class="mt-mi" onclick="alternarCamadaMT('${k}')"><span class="mt-sw ${mt[k] ? 'on' : ''}"></span><div><b>${n}</b><small>${d}</small></div></button>`;
   if (t === 'modo') m.innerHTML = `<div class="mt-mh">Mostrar as escolas</div>` + Object.entries(MODOS_MT).map(([k, [ic, n, d]]) => `<button class="mt-mi ${mt.modo === k ? 'on' : ''}" onclick="modoMT('${k}')"><i class="fa-solid ${ic}"></i><div><b>${esc(n)}</b><small>${esc(d)}</small></div>${mt.modo === k ? '<i class="fa-solid fa-check ck"></i>' : ''}</button>`).join('');
   else if (t === 'fundo') m.innerHTML = `<div class="mt-mh">Fundo do mapa</div>` + Object.entries(BASES_MT).map(([k, [n]]) => `<button class="mt-mi ${mt.base === k ? 'on' : ''}" onclick="trocarBaseMT('${k}')"><span class="mt-th mt-th-${k}"></span><div><b>${esc(n)}</b>${k === 'ruas' ? '<small>Mapa padrão do Leaflet, com cidades, rodovias e rios</small>' : k === 'nenhum' ? '<small>Só o território do estado</small>' : ''}</div>${mt.base === k ? '<i class="fa-solid fa-check ck"></i>' : ''}</button>`).join('');
-  else m.innerHTML = `<div class="mt-mh">Linhas e nomes</div>` + sw('divisas', 'Divisas', 'Limites dos municípios e das regiões das DREs') + sw('rotulos', 'Nomes', 'Nome das regiões e dos municípios ao aproximar') + sw('ligacoes', 'Ligações', 'Linha de cada escola até a sua DRE');
+  else m.innerHTML = `<div class="mt-mh">Linhas e nomes</div>` + sw('divisas', 'Divisas', 'Limites dos municípios e das regiões das DREs') + sw('rotulos', 'Nomes', 'Nome das regiões e dos municípios ao aproximar') + sw('ligacoes', 'Ligações', 'Linha de cada escola até a sua DRE') + `<button class="mt-mi" onclick="alternarLeveMT()"><span class="mt-sw ${mapaLeve() ? 'on' : ''}"></span><div><b>Modo leve</b><small>Menos efeitos e escolas desenhadas mais rápido; bom para computador mais simples</small></div></button>`;
   m.classList.remove('hidden');
 }
 document.addEventListener('pointerdown', e => { if (!e.target.closest || e.target.closest('.mt-ctrl')) return; fecharMenuMT(); });
@@ -3506,9 +3521,10 @@ function desenharEscolasMT(){
   const todas = escolasLista(), dres = dresDe(todas), lista = filtrarEscolasMT(todas), foco = mt.foco >= 0 ? dres[mt.foco] : null, modo = mt.modo, mun = mt.mun;
   if (mt.camadas.cluster) { mt.mapa.removeLayer(mt.camadas.cluster); mt.camadas.cluster = null; }
   mt.camadas.escolas.clearLayers(); mt.camadas.dres.clearLayers(); mt.camadas.ligacoes.clearLayers(); mt.marcadores.clear();
+  if (mt.malha && (mt.malhaSig !== assinaturaMT() || !mt.camadas.mun)) construirMalhaMT(); // municípios antes das escolas (no modo leve dividem o mesmo desenho)
   const sedes = new Map(dres.map(d => [d, sedeDRE(d, todas)]));
   const centroMun = munCentroMT() && modo !== 'distancia';
-  if (!centroMun && ((mt.ligacoes && modo !== 'divisao') || modo === 'distancia' || (foco && modo !== 'sodre'))) lista.filter(e => (!foco || e.dre === foco) && (!mun || chaveMun(e.municipio) === mun)).forEach(e => L.polyline([sedes.get(e.dre), [e.latitude, e.longitude]], { color:modo === 'distancia' ? faixaDist(distEscola(e))[2] : corDRE(dres, e.dre), weight:foco ? 1.6 : 1.1, opacity:foco ? .7 : .45, renderer:mt.render, interactive:false }).addTo(mt.camadas.ligacoes));
+  if (!centroMun && ((mt.ligacoes && modo !== 'divisao') || modo === 'distancia' || (foco && modo !== 'sodre'))) lista.filter(e => (!foco || e.dre === foco) && (!mun || chaveMun(e.municipio) === mun)).forEach(e => L.polyline([sedes.get(e.dre), [e.latitude, e.longitude]], { color:modo === 'distancia' ? faixaDist(distEscola(e))[2] : corDRE(dres, e.dre), weight:foco ? 1.6 : 1.1, opacity:foco ? .7 : .45, renderer:mapaLeve() ? mt.cv : mt.render, interactive:false }).addTo(mt.camadas.ligacoes));
   const pequeno = ['regioes', 'municipio', 'divisao'].includes(modo);
   let destino = mt.camadas.escolas;
   if (modo === 'cluster' && L.markerClusterGroup) {
@@ -3522,7 +3538,7 @@ function desenharEscolasMT(){
   if (modo !== 'sodre') lista.forEach(e => {
     const cor = corEscolaMT(e, dres), apagada = (foco && e.dre !== foco) || (mun && chaveMun(e.municipio) !== mun);
     const opts = { radius:modo === 'alunos' ? Math.max(4.6, Math.min(13, 4 + Math.sqrt(num(e.alunos)) / 4)) : pequeno ? 4.6 : (foco && !apagada ? 8.5 : 7), color:'#fff', weight:pequeno ? .8 : 1.3, fillColor:cor, fillOpacity:apagada ? .12 : (modo === 'municipio' ? .55 : .92), opacity:apagada ? .2 : 1 };
-    if (destino === mt.camadas.escolas) opts.renderer = mt.render;
+    if (destino === mt.camadas.escolas) opts.renderer = mapaLeve() ? mt.cv : mt.render;
     prepararMarcadorEscola(); opts.forma = formaTipo(e.tipo); const m = L.escolaMarker([e.latitude, e.longitude], opts);
     if (!apagada) { m.on('mouseover', () => m.setRadius(opts.radius + 3)); m.on('mouseout', () => m.setRadius(opts.radius)); }
     m.bindTooltip(() => munCentroMT() && modo !== 'distancia' ? `<b>${esc(e.nome)}</b><br>${esc(e.municipio)} · ${esc(grupoTipo(e.tipo))}${num(e.alunos) ? ' · ' + fmtN(e.alunos) + ' alunos' : ''}` : `<b>${esc(e.nome)}</b><br>${esc(e.municipio)} · ${esc(nomeDRE(e.dre))} · ${fmtKm(distEscola(e))} da DRE${num(e.alunos) ? ' · ' + fmtN(e.alunos) + ' alunos' : ''}`, { direction:'top', offset:[0, -4], className:'mt-tip' });
@@ -3633,7 +3649,7 @@ function construirMalhaMT(){
   if (temTopo) {
     const estado = topojson.merge(topo, obj.geometries);
     mt.estadoB = L.geoJSON(estado).getBounds();
-    mt.camadas.estado = L.geoJSON(estado, { renderer:mt.svg.malha, interactive:false, style:{ stroke:false, fillOpacity:1, className:'mt-estado' } }).addTo(mt.camadas.malha);
+    mt.camadas.estado = L.geoJSON(estado, { renderer:mt.svg.mascara, interactive:false, style:{ stroke:false, fillOpacity:1, className:'mt-estado' } }).addTo(mt.camadas.malha);
     const furos = estado.coordinates.map(pol => pol[0].map(([x, y]) => [y, x]));
     mt.camadas.mascara = L.polygon([[[-89, -400], [-89, 400], [89, 400], [89, -400]], ...furos], { renderer:mt.svg.mascara, interactive:false, stroke:false, fillOpacity:1, className:'mt-mascara' }).addTo(mt.mapa);
     dres.forEach(d => {
@@ -3649,11 +3665,12 @@ function construirMalhaMT(){
     dres.forEach(d => { const fs = fc.features.filter(f => f.properties.dre === d); if (!fs.length) return; const b = L.geoJSON({ type:'FeatureCollection', features:fs }).getBounds(); mt.regB.set(d, b); mt.regC.set(d, [b.getCenter().lat, b.getCenter().lng]); });
   }
   mt.mapa.setMaxBounds(L.latLngBounds([-36, -76], [7, -32])); mt.mapa.options.maxBoundsViscosity = .6; // Brasil inteiro, para ver MT no contexto do país
-  mt.camadas.mun = L.geoJSON(fc, { renderer:mt.svg.malha, style:f => estiloMunMT(f),
+  mt.mapa.getPane('malha').style.zIndex = mapaLeve() ? 385 : 350;
+  mt.camadas.mun = L.geoJSON(fc, { renderer:mapaLeve() ? mt.cv : mt.svg.malha, smoothFactor:mapaLeve() ? 2 : 1.4, style:f => estiloMunMT(f),
     onEachFeature:(f, l) => {
       const k = f.properties.chave; (mt.munL.get(k) || mt.munL.set(k, []).get(k)).push(l);
       l.bindTooltip(() => dicaMunMT(f), { sticky:true, className:'mt-tip mt-tip-mun', direction:'top', offset:[0, -10] });
-      l.on('mouseover', () => { mt.hover = k; (mt.munL.get(k) || []).forEach(x => { x.setStyle(estiloMunMT(x.feature, true)); if (munCentroMT()) x.bringToFront(); }); if (!munCentroMT()) realcarDREmt(dresDe(escolasLista()).indexOf(f.properties.dre), true); });
+      l.on('mouseover', () => { mt.hover = k; (mt.munL.get(k) || []).forEach(x => { x.setStyle(estiloMunMT(x.feature, true)); if (munCentroMT() && !mapaLeve()) x.bringToFront(); }); if (!munCentroMT()) realcarDREmt(dresDe(escolasLista()).indexOf(f.properties.dre), true); });
       l.on('mouseout', () => { if (mt.hover === k) mt.hover = ''; (mt.munL.get(k) || []).forEach(x => x.setStyle(estiloMunMT(x.feature))); if (!munCentroMT()) realcarDREmt(-1); });
       l.on('click', ev => { L.DomEvent.stopPropagation(ev); fecharMenuMT(); selecionarMunMT(k); });
     } }).addTo(mt.camadas.malha);
@@ -3695,9 +3712,14 @@ function realcarMunMT(k, on){
   (mt.munL && mt.munL.get(k) || []).forEach(l => { l.setStyle(estiloMunMT(l.feature, on)); if (on) l.bringToFront(); });
 }
 function realcarDREmt(i, doMapa){
-  if (!mt.camadas.destaque) return; mt.camadas.destaque.clearLayers();
-  const dres = dresDe(escolasLista()), d = dres[i]; if (!d || !mt.regGeo || !mt.regGeo.get(d)) return;
-  if (doMapa && mt.foco >= 0) return; // dentro de uma DRE, o realce fica só no município
+  if (!mt.camadas.destaque) return;
+  /* passar o mouse de um município a outro da mesma DRE não redesenha o contorno (era o que mais pesava ao mover o mouse) */
+  const dres = dresDe(escolasLista()), d = dres[i], chave = d && !(doMapa && mt.foco >= 0) ? d + '|' + !!doMapa : '';
+  clearTimeout(mt.realceT);
+  if (!chave) { if (mt.realceK) mt.realceT = setTimeout(() => { mt.realceK = ''; mt.camadas.destaque.clearLayers(); }, 90); return; }
+  if (chave === mt.realceK) return;
+  mt.realceK = chave; mt.camadas.destaque.clearLayers();
+  if (!mt.regGeo || !mt.regGeo.get(d)) return;
   const c = corDRE(dres, d);
   L.geoJSON(mt.regGeo.get(d), { renderer:mt.svg.destaque, interactive:false, style:{ color:'#fff', weight:7, opacity:.85, fill:false, lineJoin:'round' } }).addTo(mt.camadas.destaque);
   L.geoJSON(mt.regGeo.get(d), { renderer:mt.svg.destaque, interactive:false, style:{ color:c, weight:3.5, opacity:1, fill:!doMapa, fillColor:c, fillOpacity:.12, lineJoin:'round', className:'mt-reg-hl' } }).addTo(mt.camadas.destaque);
@@ -3716,14 +3738,14 @@ function estilizarMalhaMT(){
   const linha = escuro ? '#e2e8f0' : '#0f172a', fina = escuro ? 'rgba(226,232,240,.45)' : (semFundo ? 'rgba(15,23,42,.18)' : 'rgba(15,23,42,.4)');
   if (mt.mesh) {
     const pintado = ['regioes', 'sodre', 'municipio', 'divisao'].includes(mt.modo), div = mt.modo === 'divisao';
-    if (div) { L.geoJSON(mt.mesh.mun, { pane:'divisas', interactive:false, style:{ color:escuro ? '#0b1220' : '#ffffff', weight:2.6, opacity:.9, lineJoin:'round' } }).addTo(mt.camadas.divisas); L.geoJSON(mt.mesh.dre, { pane:'divisas', interactive:false, style:{ color:escuro ? '#0b1220' : '#ffffff', weight:2.6, opacity:.9, lineJoin:'round' } }).addTo(mt.camadas.divisas); }
-    if (mt.divisas || pintado || foco) L.geoJSON(mt.mesh.mun, { pane:'divisas', interactive:false, style:{ color:div ? (escuro ? 'rgba(226,232,240,.7)' : 'rgba(15,23,42,.55)') : fina, weight:div ? 1 : foco ? 1 : .7 } }).addTo(mt.camadas.divisas);
-    if (div && !mt.divisas) L.geoJSON(mt.mesh.dre, { pane:'divisas', interactive:false, style:{ color:escuro ? 'rgba(226,232,240,.7)' : 'rgba(15,23,42,.55)', weight:1 } }).addTo(mt.camadas.divisas);
+    if (div) { L.geoJSON(mt.mesh.mun, { pane:'divisas', interactive:false, smoothFactor:1.6, style:{ color:escuro ? '#0b1220' : '#ffffff', weight:2.6, opacity:.9, lineJoin:'round' } }).addTo(mt.camadas.divisas); L.geoJSON(mt.mesh.dre, { pane:'divisas', interactive:false, smoothFactor:1.6, style:{ color:escuro ? '#0b1220' : '#ffffff', weight:2.6, opacity:.9, lineJoin:'round' } }).addTo(mt.camadas.divisas); }
+    if (mt.divisas || pintado || foco) L.geoJSON(mt.mesh.mun, { pane:'divisas', interactive:false, smoothFactor:1.6, style:{ color:div ? (escuro ? 'rgba(226,232,240,.7)' : 'rgba(15,23,42,.55)') : fina, weight:div ? 1 : foco ? 1 : .7 } }).addTo(mt.camadas.divisas);
+    if (div && !mt.divisas) L.geoJSON(mt.mesh.dre, { pane:'divisas', interactive:false, smoothFactor:1.6, style:{ color:escuro ? 'rgba(226,232,240,.7)' : 'rgba(15,23,42,.55)', weight:1 } }).addTo(mt.camadas.divisas);
     if (mt.divisas || mt.modo === 'regioes' || mt.modo === 'sodre') {
-      L.geoJSON(mt.mesh.dre, { pane:'divisas', interactive:false, style:{ color:escuro ? '#0b1220' : '#ffffff', weight:5, opacity:.9, lineCap:'round', lineJoin:'round' } }).addTo(mt.camadas.divisas);
-      L.geoJSON(mt.mesh.dre, { pane:'divisas', interactive:false, style:{ color:linha, weight:1.8, opacity:.8, lineCap:'round', lineJoin:'round' } }).addTo(mt.camadas.divisas);
+      L.geoJSON(mt.mesh.dre, { pane:'divisas', interactive:false, smoothFactor:1.6, style:{ color:escuro ? '#0b1220' : '#ffffff', weight:5, opacity:.9, lineCap:'round', lineJoin:'round' } }).addTo(mt.camadas.divisas);
+      L.geoJSON(mt.mesh.dre, { pane:'divisas', interactive:false, smoothFactor:1.6, style:{ color:linha, weight:1.8, opacity:.8, lineCap:'round', lineJoin:'round' } }).addTo(mt.camadas.divisas);
     }
-    L.geoJSON(mt.mesh.estado, { pane:'divisas', interactive:false, style:{ color:semFundo ? linha : '#7c3aed', weight:semFundo ? 2.4 : 2, opacity:semFundo ? .9 : .55, dashArray:semFundo ? null : '6 5', lineJoin:'round' } }).addTo(mt.camadas.divisas);
+    L.geoJSON(mt.mesh.estado, { pane:'divisas', interactive:false, smoothFactor:1.6, style:{ color:semFundo ? linha : '#7c3aed', weight:semFundo ? 2.4 : 2, opacity:semFundo ? .9 : .55, dashArray:semFundo ? null : '6 5', lineJoin:'round' } }).addTo(mt.camadas.divisas);
   }
   if (foco && mt.regGeo && mt.regGeo.get(foco)) {
     L.geoJSON(mt.regGeo.get(foco), { renderer:mt.svg.destaque, interactive:false, style:{ color:'#fff', weight:8, opacity:.9, fill:false, lineJoin:'round' } }).addTo(mt.camadas.divisas);
