@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.55.0';
+const VERSAO = '1.56.0';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -3400,8 +3400,19 @@ function trocarBaseMT(k){
   estilizarMalhaMT();
 }
 /* modo leve: liga sozinho em máquinas fracas (até 4 núcleos ou 4 GB) e pode ser trocado em "Linhas e nomes" */
-function mapaLeve(){ const v = store.get('gaborg_mt_leve', null); if (v !== null) return !!v; const n = navigator.hardwareConcurrency || 8, m = navigator.deviceMemory || 8; return n <= 4 || m <= 4; }
-function alternarLeveMT(){ store.set('gaborg_mt_leve', !mapaLeve()); const el = $('#esc-map'); if (el) el.classList.toggle('mt-leve', mapaLeve()); if (mt.mapa) { mt.mapa.options.fadeAnimation = !mapaLeve(); mt.mapa.options.markerZoomAnimation = !mapaLeve(); } menuMT('camadas', null, true); mt.camadas.mun = null; desenharEscolasMT(); }
+/* Desempenho (padrão): limites municipais embutidos, municípios e escolas num só desenho, sem sombras nem animações.
+ * Qualidade: limites detalhados do IBGE, escolas em vetor com realce ao passar o mouse, sombras e animações. */
+function mapaLeve(){ const v = store.get('gaborg_mt_leve', null); return v === null ? true : !!v; }
+function modoMapaMT(m){
+  if ((m === 'desempenho') === mapaLeve()) return; store.set('gaborg_mt_leve', m === 'desempenho');
+  fecharMenuMT(); const c = mt.mapa ? mt.mapa.getCenter() : null, z = mt.mapa ? mt.mapa.getZoom() : null;
+  if (mt.mapa) { try { mt.mapa.remove(); } catch (e) {} }
+  mt.mapa = null; mt.camadas = {}; mt.malha = null; mt.malhaSig = ''; mt.marcadores.clear(); mt.realceK = ''; mt.carregando = null;
+  const el = $('#esc-map'); if (el) { el.className = el.className.replace(/\bmt-[a-z-]+/g, '').trim(); el.innerHTML = ''; }
+  renderEscolas().then(() => { if (c && mt.mapa) mt.mapa.setView(c, z, { animate:false }); });
+  toast(m === 'desempenho' ? 'Mapa no modo Desempenho: mais leve.' : 'Mapa no modo Qualidade: mais detalhes e efeitos.');
+}
+function alternarLeveMT(){ modoMapaMT(mapaLeve() ? 'qualidade' : 'desempenho'); }
 async function renderEscolas(){
   const el = $('#esc-map'); if (!el) return;
   if (!mt.mapa) {
@@ -3437,6 +3448,8 @@ function montarControlesMT(){
   const c = $('#mt-ctrl'); if (!c) return;
   const [ic, nome] = MODOS_MT[mt.modo];
   c.innerHTML = `<div class="mt-barra">
+      <div class="mt-desemp" role="group" aria-label="Desempenho do mapa"><button class="${mapaLeve() ? 'on' : ''}" onclick="modoMapaMT('desempenho')" title="Mais leve: para qualquer computador"><i class="fa-solid fa-gauge-high"></i><span>Desempenho</span></button><button class="${mapaLeve() ? '' : 'on'}" onclick="modoMapaMT('qualidade')" title="Mais detalhes e efeitos: para computadores mais fortes"><i class="fa-solid fa-gem"></i><span>Qualidade</span></button></div>
+      <span class="mt-sep"></span>
       <button class="mt-b-modo" onclick="menuMT('modo',this)" title="Como as escolas aparecem no mapa"><i class="fa-solid ${ic}"></i><span>${esc(nome)}</span><i class="fa-solid fa-chevron-down"></i></button>
       <span class="mt-sep"></span>
       <button class="mt-bi" onclick="menuMT('fundo',this)" title="Fundo do mapa"><i class="fa-solid fa-map"></i></button>
@@ -3453,7 +3466,7 @@ function menuMT(t, btn, manter){
   const sw = (k, n, d) => `<button class="mt-mi" onclick="alternarCamadaMT('${k}')"><span class="mt-sw ${mt[k] ? 'on' : ''}"></span><div><b>${n}</b><small>${d}</small></div></button>`;
   if (t === 'modo') m.innerHTML = `<div class="mt-mh">Mostrar as escolas</div>` + Object.entries(MODOS_MT).map(([k, [ic, n, d]]) => `<button class="mt-mi ${mt.modo === k ? 'on' : ''}" onclick="modoMT('${k}')"><i class="fa-solid ${ic}"></i><div><b>${esc(n)}</b><small>${esc(d)}</small></div>${mt.modo === k ? '<i class="fa-solid fa-check ck"></i>' : ''}</button>`).join('');
   else if (t === 'fundo') m.innerHTML = `<div class="mt-mh">Fundo do mapa</div>` + Object.entries(BASES_MT).map(([k, [n]]) => `<button class="mt-mi ${mt.base === k ? 'on' : ''}" onclick="trocarBaseMT('${k}')"><span class="mt-th mt-th-${k}"></span><div><b>${esc(n)}</b>${k === 'ruas' ? '<small>Mapa padrão do Leaflet, com cidades, rodovias e rios</small>' : k === 'nenhum' ? '<small>Só o território do estado</small>' : ''}</div>${mt.base === k ? '<i class="fa-solid fa-check ck"></i>' : ''}</button>`).join('');
-  else m.innerHTML = `<div class="mt-mh">Linhas e nomes</div>` + sw('divisas', 'Divisas', 'Limites dos municípios e das regiões das DREs') + sw('rotulos', 'Nomes', 'Nome das regiões e dos municípios ao aproximar') + sw('ligacoes', 'Ligações', 'Linha de cada escola até a sua DRE') + `<button class="mt-mi" onclick="alternarLeveMT()"><span class="mt-sw ${mapaLeve() ? 'on' : ''}"></span><div><b>Modo leve</b><small>Menos efeitos e escolas desenhadas mais rápido; bom para computador mais simples</small></div></button>`;
+  else m.innerHTML = `<div class="mt-mh">Linhas e nomes</div>` + sw('divisas', 'Divisas', 'Limites dos municípios e das regiões das DREs') + sw('rotulos', 'Nomes', 'Nome das regiões e dos municípios ao aproximar') + sw('ligacoes', 'Ligações', 'Linha de cada escola até a sua DRE') ;
   m.classList.remove('hidden');
 }
 document.addEventListener('pointerdown', e => { if (!e.target.closest || e.target.closest('.mt-ctrl')) return; fecharMenuMT(); });
@@ -3604,6 +3617,7 @@ async function carregarMalhaMT(){
   };
   let cache = null;
   try { cache = JSON.parse(localStorage.getItem('gaborg_ibge_mt3') || 'null'); } catch (e) {}
+  if (mapaLeve()) return usar(JSON.parse(JSON.stringify(MALHA_MT)), null); // Desempenho: só a malha embutida (já do IBGE, simplificada), sem baixar a detalhada
   if (cache && cache.topo && cache.nomes && Date.now() - (cache.em || 0) < 90 * 864e5) return usar(cache.topo, cache.nomes);
   usar(JSON.parse(JSON.stringify(MALHA_MT)), null);
   try {
@@ -7070,7 +7084,8 @@ const obObj = o => { const s = String(o.objeto || '').toUpperCase(), r = OB_OBJ.
 const obObjIc = o => { const s = String(o.objeto || '').toUpperCase(), r = OB_OBJ.find(([re]) => re.test(s)); return r ? r[2] : 'fa-helmet-safety'; };
 const obLista = () => (DB.obras || []);
 const obNome = o => apNomeCurto(String(o.unidade || '—').replace(/^\s*COL[EÉ]GIO ESTADUAL INTEGRADO\s*-?\s*/i, 'CEI ').replace(/^CEI\s*-?\s*CEI\s*/i, 'CEI ').replace(/\s+-\s+/g, ' – ')).replace(/\bCei\b/g, 'CEI').replace(/^E\.?\s?E\.?\s?I\.?\s+/i, 'EEI ').replace(/^E\.\s?E\.?\s*/i, 'EE ').replace(/^E\.\s?M\.?\s*/i, 'EM ').replace(/^Emi\s/, 'EMI ');
-const obEscola = o => o.escolaCodigo ? escolasLista().find(e => e.codigo === o.escolaCodigo) || null : null;
+const ESC_COD = new WeakMap();
+const obEscola = o => { if (!o.escolaCodigo) return null; const l = escolasLista(); let m = ESC_COD.get(l); if (!m) { m = new Map(l.map(e => [e.codigo, e])); ESC_COD.set(l, m); } return m.get(o.escolaCodigo) || null; };
 const obDre = o => { const e = obEscola(o); if (e) return e.dre; if (o.dre) { const d = distanciasMT().dres.find(x => norm(x) === norm(o.dre) || norm(nomeDRE(x)) === norm(String(o.dre).replace(/^DRE\s+/i, ''))); if (d) return d; } const q = dreDosMunicipios().get(chaveMun(o.municipio)); return q ? Object.entries(q).sort((a, b) => b[1] - a[1])[0][0] : ''; };
 const obValor = o => num(o.valor), obExec = o => Math.max(0, Math.min(100, num(o.execFisica)));
 function obMunCentro(k){
@@ -7120,28 +7135,35 @@ const obPrev = o => { const t = /^\d{4}-\d{2}/.test(o.previsao || '') ? Date.par
 function obBarras(it, fmt){ const mx = Math.max(1, ...it.map(x => x[1])); return it.map(([n, v, c, on, ex]) => `<div class="barra-l ob-b" ${on ? `style="cursor:pointer" onclick="${on}"` : ''}><span class="n" title="${esc(n)}">${esc(n)}</span><span class="t"><span style="width:${(v / mx * 100).toFixed(2)}%;background:${c || '#2563eb'}"></span></span><b>${fmt ? fmt(v) : fmtN(v)}${ex ? `<small>${ex}</small>` : ''}</b></div>`).join(''); }
 const obBarrasR = it => `<div class="ob-br">${obBarras(it, fmtRc)}</div>`;
 const obIrLista = o => `obFil=Object.assign({q:'',dre:'',status:'',objeto:'',origem:'',inaug:''},${esc(JSON.stringify(o))});obLim=100;abaOb('lista')`;
+/* ---------- painel: sem gráficos repetidos; DRE, atenção, prontas e próximas entregas ---------- */
 function obPainel(L){
-  const tot = L.reduce((t, o) => t + obValor(o), 0), cont = f => L.filter(f).length, st = Object.keys(OB_ST).map(s => [s, cont(o => obStatus(o) === s), OB_ST[s], obIrLista({ status:s })]).filter(x => x[1]);
-  const obj = {}; L.forEach(o => { const k = obObj(o); obj[k] = obj[k] || [0, 0]; obj[k][0]++; obj[k][1] += obValor(o); });
-  const dres = {}; L.forEach(o => { const d = obDre(o) || 'Sem DRE'; dres[d] = dres[d] || [0, 0]; dres[d][0]++; dres[d][1] += obValor(o); });
-  const et = OB_ETAPAS.map(([k, c]) => [k, cont(o => obEtapa(o) === k), c, obIrLista({ inaug:k })]).filter(x => x[1]);
+  const tot = L.reduce((t, o) => t + obValor(o), 0), cont = f => L.filter(f).length;
   const prontas = L.filter(o => ['Pronta para inaugurar', 'Agendada'].includes(obEtapa(o))).sort((a, b) => obValor(b) - obValor(a));
   const hoje = Date.now(), em6 = hoje + 183 * 864e5, proximas = L.filter(o => obStatus(o) === 'Em execução' && (t => isFinite(t) && t >= hoje - 31 * 864e5 && t <= em6)(Date.parse(o.previsao))).sort((a, b) => Date.parse(a.previsao) - Date.parse(b.previsao));
-  const lin = o => `<div class="ob-li" onclick="obFicha(${arg(o.id)})"><i class="fa-solid ${obObjIc(o)}"></i><span><b>${esc(obNome(o))}</b><small>${esc(apNomeCurto(o.municipio))} · ${esc(obObj(o))} · ${fmtRc(obValor(o))}</small></span>${obChip(o)}</div>`;
+  const atencao = L.filter(o => ['Paralisada', 'Rescisão'].includes(obStatus(o))).sort((a, b) => obValor(b) - obValor(a));
+  const dres = {}; L.forEach(o => { const d = obDre(o) || ''; const x = dres[d] = dres[d] || { n:0, v:0, c:0, e:0 }; x.n++; x.v += obValor(o); if (obStatus(o) === 'Concluída') x.c++; if (obStatus(o) === 'Em execução') x.e++; });
+  const DR = Object.entries(dres).sort((a, b) => b[1].v - a[1].v), mxv = Math.max(1, ...DR.map(([, x]) => x.v)), dl = distanciasMT().dres;
+  const lin = (o, dir) => `<button class="obp-li" onclick="obFicha(${arg(o.id)})"><span class="ic" style="--c:${OB_ST[obStatus(o)]}"><i class="fa-solid ${obObjIc(o)}"></i></span><span class="tx"><b>${esc(obNome(o))}</b><small>${esc(apNomeCurto(o.municipio))} · ${esc(obObj(o))}</small></span>${dir}</button>`;
+  const vazio = (ic, t) => `<div class="obp-vazio"><i class="fa-solid ${ic}"></i>${t}</div>`;
   return `<div class="kpis">${kpiG('#1e3a8a', 'fa-helmet-safety', 'Obras', fmtN(L.length), `${cont(o => o.origem === 'Contrato')} contratos · ${cont(o => o.origem === 'Convênio')} convênios`, "abaOb('lista')")}
       ${kpiG('#0f766e', 'fa-sack-dollar', 'Investimento', fmtRc(tot), 'valor total dos contratos e convênios')}
       ${kpiG('#16a34a', 'fa-circle-check', 'Concluídas', fmtN(cont(o => obStatus(o) === 'Concluída')), `${fmtP(cont(o => obStatus(o) === 'Concluída') / Math.max(1, L.length) * 100)} das obras`, obIrLista({ status:'Concluída' }))}
-      ${kpiG('#2563eb', 'fa-person-digging', 'Em execução', fmtN(cont(o => obStatus(o) === 'Em execução')), `${proximas.length} com término previsto em até 6 meses`, obIrLista({ status:'Em execução' }))}
-      ${kpiG('#dc2626', 'fa-triangle-exclamation', 'Paralisadas ou em rescisão', fmtN(cont(o => ['Paralisada', 'Rescisão'].includes(obStatus(o)))), 'precisam de atenção', obIrLista({ status:'Paralisada' }))}
+      ${kpiG('#2563eb', 'fa-person-digging', 'Em execução', fmtN(cont(o => obStatus(o) === 'Em execução')), `${proximas.length} terminam em até 6 meses`, obIrLista({ status:'Em execução' }))}
+      ${kpiG('#dc2626', 'fa-triangle-exclamation', 'Paralisadas ou em rescisão', fmtN(atencao.length), 'precisam de atenção', obIrLista({ status:'Paralisada' }))}
       ${kpiG('#7c3aed', 'fa-ribbon', 'Inaugurações', fmtN(cont(o => obEtapa(o) === 'Inaugurada')), `${prontas.length} prontas ou agendadas`, "abaOb('inauguracoes')")}</div>
     ${obHero(L)}
-    <div class="ob-g2"><div class="cartao"><h3><i class="fa-solid fa-signal"></i>Situação das obras</h3>${obBarras(st)}</div>
-      <div class="cartao"><h3><i class="fa-solid fa-ribbon"></i>Caminho até a inauguração</h3>${obBarras(et)}</div>
-      <div class="cartao"><h3><i class="fa-solid fa-shapes"></i>Tipo de obra · investimento</h3>${obBarrasR(Object.entries(obj).sort((a, b) => b[1][1] - a[1][1]).map(([k, [n, v]]) => [k, v, '#0f766e', obIrLista({ objeto:k }), n + ' obra(s)']))}</div>
-      <div class="cartao"><h3><i class="fa-solid fa-route"></i>Por DRE · investimento</h3>${obBarrasR(Object.entries(dres).sort((a, b) => b[1][1] - a[1][1]).map(([k, [n, v]]) => [k === 'Sem DRE' ? k : nomeDRE(k), v, k === 'Sem DRE' ? '#94a3b8' : corDRE(distanciasMT().dres, k), k === 'Sem DRE' ? '' : obIrLista({ dre:k }), n + ' obra(s)']))}</div>
-      <div class="cartao"><h3><i class="fa-solid fa-flag-checkered"></i>Prontas para inaugurar</h3>${prontas.slice(0, 8).map(lin).join('') || '<p class="s">Nenhuma obra marcada como pronta para inaugurar.</p>'}${prontas.length > 8 ? `<button class="btn btn-s btn-sm" onclick="abaOb('inauguracoes')">Ver todas (${prontas.length})</button>` : ''}</div>
-      <div class="cartao"><h3><i class="fa-solid fa-hourglass-half"></i>Término previsto nos próximos 6 meses</h3>${proximas.slice(0, 8).map(o => lin(o).replace('</span>' + obChip(o), `</span><span class="ob-qd">${obPrev(o)}</span>`)).join('') || '<p class="s">Nenhuma obra em execução com término nos próximos 6 meses.</p>'}</div></div>`;
+    <div class="obp-g">
+      <div class="cartao obp-dre"><div class="obp-h"><h3><i class="fa-solid fa-route"></i>Investimento por DRE</h3><small>obras · concluídas · valor</small></div>
+        ${DR.map(([d, x]) => `<button class="obp-dr" ${d ? `onclick="${obIrLista({ dre:d })}"` : ''} style="--c:${d ? corDRE(dl, d) : '#94a3b8'}"><span class="n"><i></i>${d ? esc(nomeDRE(d)) : 'Sem DRE'}</span><span class="bar"><i style="width:${(x.v / mxv * 100).toFixed(1)}%"></i></span><span class="q">${x.n}</span><span class="pc" title="${x.c} concluída(s)"><i style="--p:${(x.c / x.n * 100).toFixed(0)}"></i>${Math.round(x.c / x.n * 100)}%</span><b>${fmtRc(x.v)}</b></button>`).join('')}</div>
+      <div class="cartao obp-at"><div class="obp-h"><h3><i class="fa-solid fa-triangle-exclamation"></i>Precisam de atenção</h3>${atencao.length ? `<button class="lk" onclick="${obIrLista({ status:'Paralisada' })}">ver todas (${atencao.length})</button>` : ''}</div>
+        ${atencao.slice(0, 7).map(o => lin(o, `<span class="dir">${obChip(o)}<small>${fmtRc(obValor(o))} · ${Math.round(obExec(o))}% feita</small></span>`)).join('') || vazio('fa-circle-check', 'Nenhuma obra paralisada ou em rescisão.')}</div>
+      <div class="cartao obp-pr"><div class="obp-h"><h3><i class="fa-solid fa-flag-checkered"></i>Prontas para inaugurar</h3><button class="lk" onclick="abaOb('inauguracoes')">abrir Inaugurações</button></div>
+        ${prontas.slice(0, 6).map(o => lin(o, `<span class="dir"><span class="ob-et" style="--c:${(OB_ETAPAS.find(e => e[0] === obEtapa(o)) || OB_ETAPAS[2])[1]}">${obEtapa(o) === 'Agendada' ? fmtDia(o.dataInauguracao) : 'pronta'}</span><small>${fmtRc(obValor(o))}</small></span>`)).join('') || vazio('fa-flag', 'Nenhuma obra marcada como pronta para inaugurar.')}</div>
+      <div class="cartao obp-px"><div class="obp-h"><h3><i class="fa-solid fa-hourglass-half"></i>Terminam nos próximos 6 meses</h3></div>
+        ${proximas.slice(0, 7).map(o => lin(o, `<span class="dir"><span class="obp-qd">${esc(obPrev(o))}</span><small>${Math.round(obExec(o))}% feita</small></span>`)).join('') || vazio('fa-calendar', 'Nenhuma obra em execução com término nos próximos 6 meses.')}</div>
+    </div>`;
 }
+
 function obListaTela(L){
   const F = obFiltrar(L), ord = { valor:(a, b) => obValor(b) - obValor(a), exec:(a, b) => obExec(b) - obExec(a), prev:(a, b) => (Date.parse(a.previsao) || 9e15) - (Date.parse(b.previsao) || 9e15), mun:(a, b) => String(a.municipio).localeCompare(b.municipio, 'pt-BR') }[obOrd];
   const sel = (k, rot, ops) => `<select class="campo" onchange="obFil.${k}=this.value;obLim=100;renderObras()"><option value="">${rot}</option>${ops.map(([v, t]) => `<option value="${esc(v)}" ${obFil[k] === v ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>`;
@@ -7163,31 +7185,123 @@ function obCSV(){
   const L = obFiltrar(obLista()), cab = ['Origem', 'Instrumento', 'Código', 'DRE', 'Município', 'Unidade escolar', 'Código da escola', 'Rede', 'Objeto', 'Salas', 'Alunos', 'Empresa', 'Status', 'Situação (grupo)', 'Valor', '% execução física', 'Previsão', 'Etapa da inauguração', 'Inaugurar (SUOB)', 'Data da inauguração'];
   baixarArquivo('obras.csv', '﻿' + [cab.join(';'), ...L.map(o => [o.origem, o.instrumento, o.codigo, nomeDRE(obDre(o)), o.municipio, o.unidade, o.escolaCodigo, o.rede, o.objeto, o.salas, o.alunos, o.empresa, o.status, obStatus(o), String(obValor(o)).replace('.', ','), String(obExec(o)).replace('.', ','), obPrev(o), obEtapa(o), o.inaugurar, o.dataInauguracao].map(q).join(';'))].join('\n'), 'text/csv;charset=utf-8');
 }
+/* ---------- mapa das obras: painel com filtros e lista + mapa leve (canvas), atualizado sem refazer a tela ---------- */
+let obM = { cor:store.get('gaborg_obm_cor', 'status'), base:store.get('gaborg_obm_base', 'claro'), st:new Set(), tp:new Set(), dre:'', q:'', camada:null, marc:new Map(), sel:'' };
+const OB_MCORES = { status:['Situação', o => OB_ST[obStatus(o)], () => Object.entries(OB_ST)], etapa:['Etapa', o => (OB_ETAPAS.find(e => e[0] === obEtapa(o)) || OB_ETAPAS[5])[1], () => OB_ETAPAS.map(e => [e[0], e[1]])], tipo:['Tipo', o => OB_TIPO_COR[obObj(o)] || '#64748b', () => Object.entries(OB_TIPO_COR)] };
+const OB_TIPO_COR = { 'Construção nova':'#2563eb', 'Reforma e/ou ampliação':'#ea580c', 'Quadra poliesportiva':'#16a34a', 'Posto transformador':'#eab308', 'Pórtico':'#7c3aed', 'Manutenção':'#0891b2' };
+const obMChave = o => obM.cor === 'status' ? obStatus(o) : obM.cor === 'etapa' ? obEtapa(o) : obObj(o);
+function obMFiltrar(L){ const q = norm(obM.q); return L.filter(o => (!obM.st.size || obM.st.has(obMChave(o))) && (!obM.tp.size || obM.tp.has(obObj(o))) && (!obM.dre || obDre(o) === obM.dre) && (!q || norm([o.unidade, o.municipio, o.empresa, o.codigo].join(' ')).includes(q))); }
 function obMapaTela(L){
-  const F = obFiltrar(L);
-  return `<div class="filtros">${['', ...Object.keys(OB_ST)].map(s => `<button class="btn btn-sm ${obFil.status === s ? 'btn-p' : 'btn-s'}" onclick="obFil.status='${s}';renderObras()">${s ? `<i class="ob-dot" style="background:${OB_ST[s]}"></i>${s}` : 'Todas'} <b>${s ? L.filter(o => obStatus(o) === s).length : L.length}</b></button>`).join('')}</div>
-    <div class="ob-mapa" id="ob-mapa"></div><p class="s" style="margin-top:6px">${fmtN(F.length)} obra(s) no mapa · o tamanho do ponto acompanha o valor · obras sem escola vinculada aparecem no centro do município (borda tracejada).</p>`;
+  const dl = distanciasMT().dres, tipos = [...new Set(L.map(obObj))].sort((a, b) => L.filter(o => obObj(o) === b).length - L.filter(o => obObj(o) === a).length);
+  return `<div class="obm">
+    <aside class="obm-lado">
+      <div class="obm-q"><i class="fa-solid fa-magnifying-glass"></i><input id="obm-q" autocomplete="off" placeholder="Escola, município, empresa ou contrato" value="${esc(obM.q)}" oninput="obM.q=this.value;clearTimeout(obM.t);obM.t=setTimeout(obMAtualizar,200)"></div>
+      <div class="obm-res" id="obm-res"></div>
+      <div class="obm-sec"><span>Cor dos pontos</span><div class="obm-seg">${Object.entries(OB_MCORES).map(([k, [t]]) => `<button class="${obM.cor === k ? 'on' : ''}" onclick="obM.cor='${k}';obM.st.clear();store.set('gaborg_obm_cor','${k}');obMLegenda();obMAtualizar();this.parentNode.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b===this))">${t}</button>`).join('')}</div></div>
+      <div class="obm-sec"><span>Tipo de obra</span><div class="obm-tps">${tipos.map(k => `<button class="${obM.tp.has(k) ? 'on' : ''}" data-tp="${esc(k)}" onclick="obM.tp.has(this.dataset.tp)?obM.tp.delete(this.dataset.tp):obM.tp.add(this.dataset.tp);this.classList.toggle('on');obMAtualizar()" title="${esc(k)}"><i class="fa-solid ${(OB_OBJ.find(x => x[1] === k) || [0, 0, 'fa-helmet-safety'])[2]}"></i><span>${esc(k)}</span><b>${L.filter(o => obObj(o) === k).length}</b></button>`).join('')}</div></div>
+      <div class="obm-sec"><span>Diretoria Regional</span><select class="campo" onchange="obM.dre=this.value;obMAtualizar(true)"><option value="">Todas as DREs</option>${dl.map(d => `<option value="${esc(d)}" ${obM.dre === d ? 'selected' : ''}>DRE ${esc(nomeDRE(d))}</option>`).join('')}</select></div>
+      <div class="obm-lh"><b>Maiores obras</b><small>passe o mouse para achar no mapa</small></div>
+      <div class="obm-lista" id="obm-lista"></div>
+    </aside>
+    <div class="obm-area"><div class="ob-mapa obm-mapa" id="ob-mapa"></div>
+      <div class="obm-leg" id="obm-leg"></div>
+      <div class="obm-fundo">${[['claro', 'fa-sun', 'Claro'], ['satelite', 'fa-satellite', 'Satélite'], ['escuro', 'fa-moon', 'Escuro']].map(([k, ic, t]) => `<button class="${obM.base === k ? 'on' : ''}" onclick="obMBase('${k}',this)" title="${t}"><i class="fa-solid ${ic}"></i></button>`).join('')}</div>
+    </div></div>
+    <p class="s" style="margin-top:6px"><i class="fa-solid fa-circle-info"></i> O tamanho do ponto acompanha o valor. Ponto com borda tracejada: obra sem escola vinculada, mostrada no centro do município.</p>`;
+}
+function obMBase(k, btn){
+  obM.base = k; store.set('gaborg_obm_base', k); if (btn) btn.parentNode.querySelectorAll('button').forEach(b => b.classList.toggle('on', b === btn));
+  if (!obMapa) return; if (obM.tiles) obM.tiles.forEach(t => obMapa.removeLayer(t)); const b = BASES_MT[k] || BASES_MT.claro;
+  obM.tiles = [L.tileLayer(b[1], { maxZoom:18, maxNativeZoom:16, attribution:b[2], updateWhenZooming:false, keepBuffer:1 }).addTo(obMapa)];
+  if (b[3]) obM.tiles.push(L.tileLayer(b[3], { pane:'obRot', maxZoom:18, maxNativeZoom:16, updateWhenZooming:false, keepBuffer:1 }).addTo(obMapa));
+  const el = $('#ob-mapa'); if (el) el.classList.toggle('obm-escuro', k !== 'claro');
 }
 async function obDesenharMapa(){
   const el = $('#ob-mapa'); if (!el) return;
   try { await carregarLeaflet(); } catch (e) { el.innerHTML = '<p class="s" style="padding:20px">Mapa indisponível sem internet.</p>'; return; }
-  if (obMapa) { try { obMapa.remove(); } catch (e) {} }
-  const m = obMapa = L.map(el, { zoomSnap:.25, preferCanvas:true }); L.tileLayer(BASES_MT.claro[1], { maxZoom:18, attribution:BASES_MT.claro[2] }).addTo(m);
-  const F = obFiltrar(obLista()), porMun = new Map(), b = L.latLngBounds([]), mx = Math.max(1, ...F.map(obValor));
-  F.forEach(o => { const k = chaveMun(o.municipio), i = porMun.get(k) || 0; porMun.set(k, i + 1); const p = obPos(o, i); if (!p) return; const s = obStatus(o);
-    const c = L.circleMarker([p[0], p[1]], { radius:5 + Math.sqrt(obValor(o) / mx) * 14, color:p[2] === 'municipio' ? '#334155' : '#fff', weight:p[2] === 'municipio' ? 1.5 : 1.2, dashArray:p[2] === 'municipio' ? '3 3' : null, fillColor:OB_ST[s], fillOpacity:.82 }).addTo(m);
-    c.bindPopup(`<div class="mt-pop"><div class="t" style="--c:${OB_ST[s]}"><i class="fa-solid ${obObjIc(o)}"></i> ${esc(obObj(o))} · ${s}</div><b>${esc(obNome(o))}</b><small>${esc(apNomeCurto(o.municipio))} · ${esc(o.origem)} ${esc(o.codigo || '')}</small>
-      <div class="l"><i class="fa-solid fa-sack-dollar"></i><span><b>${fmtM0(obValor(o))}</b> · execução ${Math.round(obExec(o))}%</span></div><div class="l"><i class="fa-solid fa-calendar"></i><span>Previsão: ${esc(obPrev(o))} · ${esc(obEtapa(o))}</span></div>
-      ${o.empresa ? `<div class="l"><i class="fa-solid fa-building"></i>${esc(o.empresa)}</div>` : ''}<div class="l"><a href="#" onclick="event.preventDefault();obFicha(${arg(o.id)})">Abrir ficha da obra</a></div></div>`, { className:'mt-popup', maxWidth:330 });
-    b.extend([p[0], p[1]]); });
-  if (b.isValid()) m.fitBounds(b.pad(.08)); else m.setView([-13, -56], 6);
+  if (obMapa) { try { obMapa.remove(); } catch (e) {} obMapa = null; }
+  const m = obMapa = L.map(el, { zoomSnap:.25, zoomDelta:.5, preferCanvas:true, zoomControl:false, fadeAnimation:false, markerZoomAnimation:false, minZoom:4.5 });
+  L.control.zoom({ position:'bottomright', zoomInTitle:'Aproximar', zoomOutTitle:'Afastar' }).addTo(m); m.attributionControl.setPrefix(false);
+  m.createPane('obRot'); m.getPane('obRot').style.zIndex = 450; m.getPane('obRot').style.pointerEvents = 'none';
+  obMBase(obM.base);
+  const D = apGeo(), cv = L.canvas({ padding:.2 }), cvM = L.canvas({ padding:.2, tolerance:4 });
+  const buracos = D.muns.flatMap(x => apAneis(x.geo).map(p => p[0]));
+  L.polygon([[[-60, -120], [-60, 0], [30, 0], [30, -120]], ...buracos], { renderer:cv, stroke:false, fillColor:'#0f172a', fillOpacity:.32, interactive:false, smoothFactor:2 }).addTo(m);
+  const mun = L.layerGroup().addTo(m); D.muns.forEach(x => L.polygon(apAneis(x.geo), { renderer:cv, color:'#475569', weight:.5, opacity:.45, fill:false, interactive:false, smoothFactor:2 }).addTo(mun));
+  obM.camada = L.layerGroup().addTo(m); obM.cv = cvM;
+  m.fitBounds(L.latLngBounds(buracos.flat()).pad(.02)); obM.inicio = true;
+  obMLegenda(); obMAtualizar(true);
 }
-function obInaugTela(L){
-  const pode = podeEditarSec('obras'), col = OB_ETAPAS.filter(e => e[0] !== 'Em obra' && e[0] !== 'Interrompida');
-  return `<p class="s" style="margin:0 0 10px">Obras concluídas no caminho até a inauguração. Abra a ficha para marcar <b>apta (SPAT/SAGR)</b>, o <b>ato do Gabinete</b> e a <b>data da inauguração</b>.</p>
-    <div class="ob-kan">${col.map(([k, c, ic]) => { const l = L.filter(o => obEtapa(o) === k).sort((a, b) => (Date.parse(a.dataInauguracao) || 9e15) - (Date.parse(b.dataInauguracao) || 9e15) || obValor(b) - obValor(a)); return `<div class="ob-col" style="--c:${c}"><h4><i class="fa-solid ${ic}"></i>${k}<b>${l.length}</b></h4>
-      ${l.slice(0, 60).map(o => `<div class="ob-card" onclick="obFicha(${arg(o.id)})"><b>${esc(obNome(o))}</b><small>${esc(apNomeCurto(o.municipio))} · ${esc(obObj(o))}</small><div class="r"><span>${fmtRc(obValor(o))}</span>${o.dataInauguracao ? `<span class="d"><i class="fa-solid fa-calendar-day"></i>${fmtDia(o.dataInauguracao)}</span>` : ''}${obSim(o.aptaSpat) ? '<span class="ok">SPAT</span>' : ''}${obSim(o.aptaSagr) ? '<span class="ok">SAGR</span>' : ''}</div></div>`).join('') || '<p class="s">—</p>'}${l.length > 60 ? `<p class="s">e mais ${l.length - 60}</p>` : ''}</div>`; }).join('')}</div>`;
+function obMLegenda(){
+  const el = $('#obm-leg'); if (!el) return; const L0 = obLista(), [t, , it] = OB_MCORES[obM.cor];
+  const itens = it().map(([k, c]) => [k, c, L0.filter(o => obMChave(o) === k).length]).filter(x => x[2]);
+  el.innerHTML = `<b>${t}</b>${itens.map(([k, c, n]) => `<button class="${obM.st.has(k) ? 'on' : ''} ${obM.st.size && !obM.st.has(k) ? 'off' : ''}" data-k="${esc(k)}" onclick="obM.st.has(this.dataset.k)?obM.st.delete(this.dataset.k):obM.st.add(this.dataset.k);obMLegenda();obMAtualizar()"><i style="background:${c}"></i>${esc(k)}<span>${n}</span></button>`).join('')}${obM.st.size ? '<button class="lp" onclick="obM.st.clear();obMLegenda();obMAtualizar()">mostrar todas</button>' : ''}`;
 }
+function obMAtualizar(enquadrar){
+  if (!obMapa || !obM.camada) return; const F = obMFiltrar(obLista()), mx = Math.max(1, ...obLista().map(obValor)), cor = OB_MCORES[obM.cor][1];
+  obM.camada.clearLayers(); obM.marc.clear(); const porMun = new Map(), b = L.latLngBounds([]);
+  [...F].sort((a, c) => obValor(c) - obValor(a)).forEach(o => { const k = chaveMun(o.municipio), i = porMun.get(k) || 0; porMun.set(k, i + 1); const p = obPos(o, i); if (!p) return;
+    const mun = p[2] === 'municipio', c = L.circleMarker([p[0], p[1]], { renderer:obM.cv, radius:4 + Math.sqrt(obValor(o) / mx) * 11, color:mun ? '#1e293b' : '#ffffff', weight:mun ? 1.4 : 1.2, dashArray:mun ? '3 3' : null, fillColor:cor(o), fillOpacity:.88 }).addTo(obM.camada);
+    c.bindTooltip(`<b>${esc(obNome(o))}</b><br>${esc(apNomeCurto(o.municipio))} · ${fmtRc(obValor(o))}`, { direction:'top', offset:[0, -6], className:'obm-tip' });
+    c.on('click', () => obMPopup(o, c)); obM.marc.set(o.id, c); b.extend([p[0], p[1]]); });
+  if (enquadrar && b.isValid() && (obM.dre || obM.q || obM.tp.size)) obMapa.flyToBounds(b.pad(.12), { duration:.6, maxZoom:10 });
+  else if (enquadrar && !obM.dre && !obM.inicio) obMapa.flyToBounds(L.latLngBounds(apGeo().muns.flatMap(x => apAneis(x.geo).map(p => p[0])).flat()).pad(.02), { duration:.6 });
+  obM.inicio = false;
+  const tot = F.reduce((t, o) => t + obValor(o), 0), r = $('#obm-res');
+  if (r) r.innerHTML = `<div><b>${fmtN(F.length)}</b><small>obras</small></div><div><b>${fmtRc(tot)}</b><small>investimento</small></div><div><b>${fmtN(F.filter(o => obStatus(o) === 'Concluída').length)}</b><small>concluídas</small></div>`;
+  const li = $('#obm-lista'); if (li) li.innerHTML = [...F].sort((a, c) => obValor(c) - obValor(a)).slice(0, 80).map(o => `<button class="obm-it ${obM.sel === o.id ? 'on' : ''}" onmouseenter="obMPulsar(${arg(o.id)})" onclick="obMIr(${arg(o.id)})"><span class="ic" style="--c:${cor(o)}"><i class="fa-solid ${obObjIc(o)}"></i></span><span class="tx"><b>${esc(obNome(o))}</b><small>${esc(apNomeCurto(o.municipio))} · ${esc(obMChave(o))}</small></span><span class="v">${fmtRc(obValor(o))}</span></button>`).join('') + (F.length > 80 ? `<p class="s" style="text-align:center;margin:6px 0">e mais ${fmtN(F.length - 80)} · use a busca ou os filtros</p>` : '') || '<div class="obp-vazio"><i class="fa-solid fa-filter-circle-xmark"></i>Nenhuma obra com esses filtros.</div>';
+}
+function obMPopup(o, c){
+  obM.sel = o.id; const s = obStatus(o), et = OB_ETAPAS.find(e => e[0] === obEtapa(o)) || OB_ETAPAS[5];
+  c.bindPopup(`<div class="mt-pop obm-pop"><div class="t" style="--c:${OB_ST[s]}"><i class="fa-solid ${obObjIc(o)}"></i> ${esc(obObj(o))}</div><b>${esc(obNome(o))}</b><small>${esc(apNomeCurto(o.municipio))} · ${esc(o.origem)} ${esc(o.codigo || '')}</small>
+    <div class="obm-pop-k"><div><b>${fmtRc(obValor(o))}</b><small>valor</small></div><div><b>${Math.round(obExec(o))}%</b><small>execução</small></div><div><b>${esc(obPrev(o))}</b><small>previsão</small></div></div>
+    <div class="obm-pop-b"><i style="width:${obExec(o).toFixed(0)}%;background:${OB_ST[s]}"></i></div>
+    <div class="obm-pop-st">${obChip(o)}<span class="ob-et" style="--c:${et[1]}"><i class="fa-solid ${et[2]}"></i>${et[0]}</span></div>
+    ${o.empresa ? `<div class="l"><i class="fa-solid fa-building"></i>${esc(o.empresa)}</div>` : ''}<button class="btn btn-p btn-sm" style="margin-top:8px;width:100%" onclick="obFicha(${arg(o.id)})"><i class="fa-solid fa-folder-open"></i>Abrir ficha da obra</button></div>`, { className:'mt-popup', maxWidth:320 }).openPopup();
+  document.querySelectorAll('#obm-lista .obm-it').forEach(b => b.classList.toggle('on', b.getAttribute('onclick').includes(JSON.stringify(o.id).slice(1, -1))));
+}
+function obMPulsar(id){ const c = obM.marc.get(id); if (!c || !obMapa) return; const r = c.getRadius(); c.setStyle({ weight:3.2, color:'#0f172a' }); c.setRadius(r + 4); c.bringToFront(); clearTimeout(obM.pt); obM.pt = setTimeout(() => { c.setStyle({ weight:1.2, color:'#ffffff' }); c.setRadius(r); }, 900); }
+function obMIr(id){ const c = obM.marc.get(id), o = obLista().find(x => x.id === id); if (!c || !o) return; obMapa.flyTo(c.getLatLng(), Math.max(obMapa.getZoom(), 11), { duration:.6 }); setTimeout(() => obMPopup(o, c), 650); }
+
+/* ---------- inaugurações: o caminho, a agenda, as prontas, o que falta e as já inauguradas ---------- */
+let obIn = { q:'', dre:'', tp:'', lim:24 };
+const obFalta = o => { const f = []; if (!obSim(o.aptaSpat)) f.push('SPAT'); if (!obSim(o.aptaSagr)) f.push('SAGR'); if (!obSim(o.atoGs) && !/INAUGURAD/i.test(o.atoGs || '')) f.push('Ato GS'); if (!o.dataInauguracao) f.push('Data'); return f; };
+const obMes = t => new Date(t).toLocaleDateString('pt-BR', { month:'long', year:'numeric' });
+function obInaugTela(L0){
+  const q = norm(obIn.q), L = L0.filter(o => (!q || norm([o.unidade, o.municipio, o.codigo].join(' ')).includes(q)) && (!obIn.dre || obDre(o) === obIn.dre) && (!obIn.tp || obObj(o) === obIn.tp));
+  const de = k => L.filter(o => obEtapa(o) === k), dl = distanciasMT().dres, tipos = [...new Set(L0.map(obObj))].sort();
+  const inaug = de('Inaugurada'), agend = de('Agendada').sort((a, b) => Date.parse(a.dataInauguracao) - Date.parse(b.dataInauguracao)), prontas = de('Pronta para inaugurar').sort((a, b) => obValor(b) - obValor(a));
+  const concl = de('Concluída').sort((a, b) => obFalta(a).length - obFalta(b).length || obValor(b) - obValor(a)), entregues = de('Entregue sem inauguração'), emObra = de('Em obra');
+  const vInaug = inaug.reduce((t, o) => t + obValor(o), 0);
+  const passos = [['Em obra', emObra.length, '#2563eb', 'fa-helmet-safety', 'em construção'], ['Concluída', concl.length, '#65a30d', 'fa-circle-check', 'aguardando aptidão'], ['Pronta para inaugurar', prontas.length, '#7c3aed', 'fa-flag-checkered', 'aptas, sem data'], ['Agendada', agend.length, '#0891b2', 'fa-calendar-check', 'com data marcada'], ['Inaugurada', inaug.length, '#16a34a', 'fa-ribbon', fmtRc(vInaug) + ' entregues']];
+  const ilu = o => `<span class="obi-ilu">${OB_ANIM[obObj(o)] || OB_ANIM.Outro}</span>`;
+  const sec = (id, ic, c, t, n, sub, corpo) => `<section class="obi-sec" id="obi-${id}" style="--c:${c}"><div class="obi-sh"><span class="ic"><i class="fa-solid ${ic}"></i></span><div><h3>${t} <em>${n}</em></h3><small>${sub}</small></div></div>${corpo}</section>`;
+  const vazio = t => `<div class="obp-vazio">${t}</div>`;
+  const porMes = new Map(); inaug.forEach(o => { const t = Date.parse(o.dataInauguracao), k = isFinite(t) ? new Date(t).toISOString().slice(0, 7) : 'sem'; if (!porMes.has(k)) porMes.set(k, []); porMes.get(k).push(o); });
+  const meses = [...porMes.entries()].sort((a, b) => a[0] === 'sem' ? 1 : b[0] === 'sem' ? -1 : b[0].localeCompare(a[0]));
+  let mostrados = 0;
+  return `<div class="obi">
+    <div class="obi-trilha">${passos.map(([k, n, c, ic, sub], i) => `<button style="--c:${c}" onclick="${i ? `document.getElementById('obi-${['', 'concl', 'prontas', 'agenda', 'feitas'][i]}')?.scrollIntoView({behavior:'smooth',block:'start'})` : obIrLista({ inaug:'Em obra' })}"><span class="b"><i class="fa-solid ${ic}"></i></span><b>${fmtN(n)}</b><span class="t">${k}</span><small>${sub}</small></button>`).join('<span class="obi-seta"><i class="fa-solid fa-chevron-right"></i></span>')}</div>
+    <div class="obi-fil"><div class="obm-q"><i class="fa-solid fa-magnifying-glass"></i><input id="obi-q" autocomplete="off" placeholder="Buscar escola, município ou contrato" value="${esc(obIn.q)}" oninput="obIn.q=this.value;clearTimeout(window.tObi);window.tObi=setTimeout(()=>{renderObras();const i=$('#obi-q');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length)}},250)"></div>
+      <select class="campo" onchange="obIn.dre=this.value;renderObras()"><option value="">Todas as DREs</option>${dl.map(d => `<option value="${esc(d)}" ${obIn.dre === d ? 'selected' : ''}>DRE ${esc(nomeDRE(d))}</option>`).join('')}</select>
+      <select class="campo" onchange="obIn.tp=this.value;renderObras()"><option value="">Todos os tipos</option>${tipos.map(t => `<option ${obIn.tp === t ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>
+      ${obIn.q || obIn.dre || obIn.tp ? `<button class="btn btn-g btn-sm" onclick="obIn={q:'',dre:'',tp:'',lim:24};renderObras()"><i class="fa-solid fa-xmark"></i>Limpar</button>` : ''}</div>
+
+    ${sec('agenda', 'fa-calendar-check', '#0891b2', 'Agenda de inaugurações', agend.length, 'Obras com data marcada, da mais próxima para a mais distante.',
+      agend.length ? `<div class="obi-agenda">${agend.map(o => { const d = new Date(Date.parse(o.dataInauguracao)), dias = Math.ceil((d - Date.now()) / 864e5); return `<button class="obi-ag" onclick="obFicha(${arg(o.id)})"><span class="cal"><small>${d.toLocaleDateString('pt-BR', { month:'short' }).replace('.', '')}</small><b>${d.getDate()}</b><small>${d.toLocaleDateString('pt-BR', { weekday:'short' }).replace('.', '')}</small></span><span class="tx"><b>${esc(obNome(o))}</b><small>${esc(apNomeCurto(o.municipio))} · ${esc(obObj(o))}</small><em>${dias <= 0 ? 'hoje' : dias === 1 ? 'amanhã' : 'em ' + dias + ' dias'} · ${fmtRc(obValor(o))}</em></span>${ilu(o)}</button>`; }).join('')}</div>` : vazio('<i class="fa-solid fa-calendar-plus"></i>Nenhuma inauguração agendada. Abra uma obra pronta e preencha a <b>data da inauguração</b>.'))}
+
+    ${sec('prontas', 'fa-flag-checkered', '#7c3aed', 'Prontas para inaugurar', prontas.length, 'Concluídas e aptas: falta só marcar a data.',
+      prontas.length ? `<div class="obi-cards">${prontas.map(o => `<button class="obi-card" onclick="obFicha(${arg(o.id)})">${ilu(o)}<span class="tx"><b>${esc(obNome(o))}</b><small>${esc(apNomeCurto(o.municipio))}${obDre(o) ? ' · DRE ' + esc(nomeDRE(obDre(o))) : ''}</small><span class="tg"><span>${esc(obObj(o))}</span><span>${fmtRc(obValor(o))}</span>${obSim(o.aptaSpat) ? '<span class="ok"><i class="fa-solid fa-check"></i>SPAT</span>' : ''}${obSim(o.aptaSagr) ? '<span class="ok"><i class="fa-solid fa-check"></i>SAGR</span>' : ''}</span></span><span class="cta"><i class="fa-solid fa-calendar-plus"></i>Marcar data</span></button>`).join('')}</div>` : vazio('<i class="fa-solid fa-flag"></i>Nenhuma obra pronta para inaugurar.'))}
+
+    ${sec('concl', 'fa-list-check', '#65a30d', 'Concluídas · o que falta para inaugurar', concl.length, 'Ordenadas pelas que estão mais perto de ficar prontas.',
+      concl.length ? `<div class="obi-tab"><div class="obi-tr h"><span>Obra</span><span>Município</span><span class="dir">Valor</span><span>Aptidões e ato</span></div>${concl.slice(0, obIn.lim).map(o => { const f = obFalta(o); return `<button class="obi-tr" onclick="obFicha(${arg(o.id)})"><span><i class="fa-solid ${obObjIc(o)}"></i><b>${esc(obNome(o))}</b></span><span>${esc(apNomeCurto(o.municipio))}</span><span class="dir">${fmtRc(obValor(o))}</span><span class="obi-ck">${['SPAT', 'SAGR', 'Ato GS'].map(x => `<em class="${f.includes(x) ? 'obi-n' : 'obi-s'}"><i class="fa-solid fa-${f.includes(x) ? 'xmark' : 'check'}"></i>${x}</em>`).join('')}</span></button>`; }).join('')}</div>${concl.length > obIn.lim ? `<button class="btn btn-s btn-sm obi-mais" onclick="obIn.lim+=48;renderObras()">Mostrar mais (${concl.length - obIn.lim})</button>` : ''}` : vazio('Nenhuma obra concluída aguardando aptidão.'))}
+
+    ${sec('feitas', 'fa-ribbon', '#16a34a', 'Inauguradas', inaug.length, `${fmtRc(vInaug)} em obras entregues à comunidade.`,
+      inaug.length ? `<div class="obi-linha">${meses.map(([k, l]) => { if (mostrados >= 60) return ''; const vis = l.slice(0, 60 - mostrados); mostrados += vis.length; return `<div class="obi-mes"><div class="obi-mh"><b>${k === 'sem' ? 'Sem data registrada' : obMes(k + '-15')}</b><span>${l.length} obra${l.length === 1 ? '' : 's'} · ${fmtRc(l.reduce((t, o) => t + obValor(o), 0))}</span></div><div class="obi-feitas">${vis.map(o => `<button class="obi-ft" onclick="obFicha(${arg(o.id)})">${ilu(o)}<span><b>${esc(obNome(o))}</b><small>${esc(apNomeCurto(o.municipio))} · ${fmtRc(obValor(o))}${o.dataInauguracao ? ' · ' + fmtDia(o.dataInauguracao) : ''}</small></span></button>`).join('')}</div></div>`; }).join('')}${inaug.length > 60 ? `<p class="s" style="text-align:center">e mais ${inaug.length - 60} inauguradas · use a busca para encontrar</p>` : ''}</div>` : vazio('Nenhuma obra inaugurada ainda.'))}
+
+    ${entregues.length ? `<details class="obi-ent"><summary><i class="fa-solid fa-box-open"></i>Entregues sem inauguração <em>${entregues.length}</em></summary><div class="obi-feitas">${entregues.map(o => `<button class="obi-ft" onclick="obFicha(${arg(o.id)})">${ilu(o)}<span><b>${esc(obNome(o))}</b><small>${esc(apNomeCurto(o.municipio))} · ${fmtRc(obValor(o))}</small></span></button>`).join('')}</div></details>` : ''}</div>`;
+}
+
 function obFicha(id){
   const o0 = id ? obLista().find(x => x.id === id) : null; if (id && !o0) return; const pode = podeEditarSec('obras'), o = o0 || novoReg('obras', { origem:'Contrato', rede:'ESTADUAL' });
   const ro = pode ? '' : 'disabled', c = (k, rot, t) => `<label><span class="rot">${rot}</span><input class="campo" name="${k}" ${t || ''} value="${esc(o[k] ?? '')}" ${ro}></label>`, ta = (k, rot) => `<label><span class="rot">${rot}</span><textarea class="campo" name="${k}" rows="2" ${ro}>${esc(o[k] ?? '')}</textarea></label>`;

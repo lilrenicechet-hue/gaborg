@@ -2150,19 +2150,141 @@ html.telas-v .apx-show .apx-tela,html.telas-v .apx-show>.apx-palco{max-height:va
 html.telas-v .cv-rel-g{grid-template-columns:1fr;grid-template-rows:1fr var(--seg-a)}
 html.telas-v .cv-rel-g>form{grid-row:2;overflow:auto}html.telas-v .cv-rel-g>.cv-rel-v{grid-row:1}
 
+
+.mt-desemp{display:inline-flex;padding:2px;border-radius:10px;background:var(--sup2);border:1px solid var(--linha);gap:2px}
+.mt-desemp button{display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 9px;border-radius:8px;font:inherit;font-size:11.5px;font-weight:700;color:var(--mut)}
+.mt-desemp button.on{background:var(--sup);color:var(--marca);box-shadow:0 1px 3px rgba(15,23,42,.15)}
+.mt-desemp button:not(.on):hover{color:var(--txt)}
+@media (max-width:1180px){.mt-desemp button span{display:none}.mt-desemp button{padding:0 8px}}
 /* mapa mais leve · 1.55 */
 .mt-barra,.mt-trilha,.mt-leg-c{backdrop-filter:none!important;background:var(--sup)!important}
 #esc-map.mt-movendo .mt-estado,#esc-map.mt-leve .mt-estado{filter:none}
 #esc-map.mt-movendo .mt-reg,#esc-map.mt-movendo .mt-mun-n{transition:none}
 #esc-map.mt-leve .mt-reg-hl,#esc-map.mt-leve .mt-reg-on,#esc-map.mt-leve .mt-pulso{animation:none}
 #esc-map.mt-leve .leaflet-tile{image-rendering:auto}
+/* ===================== OBRAS · 1.56 ===================== */
+.cv-hero .cartao h3{display:flex;align-items:center;gap:8px;font-size:14.5px;font-weight:800;margin:0 0 12px}
+.cv-hero .cartao h3>i{color:var(--marca)}
+/* painel */
+.obp-g{display:grid;grid-template-columns:1.25fr 1fr;gap:14px;margin-top:14px}
+.obp-g>.cartao{display:flex;flex-direction:column;gap:4px;min-width:0}
+.obp-h{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.obp-h h3{flex:1;margin:0;font-size:14.5px;font-weight:800;display:flex;align-items:center;gap:8px}
+.obp-h h3 i{color:var(--marca)}.obp-at .obp-h h3 i{color:#dc2626}.obp-pr .obp-h h3 i{color:#7c3aed}.obp-px .obp-h h3 i{color:#2563eb}
+.obp-h small{font-size:11px;color:var(--mut)}.obp-h .lk{font-size:12px;font-weight:700;color:var(--marca)}
+.obp-dr{display:grid;grid-template-columns:minmax(110px,1.1fr) 2fr 34px 58px 76px;align-items:center;gap:10px;padding:7px 8px;border-radius:9px;text-align:left;font-size:12.5px;color:var(--txt)}
+.obp-dr:hover{background:var(--sup2)}
+.obp-dr .n{display:flex;align-items:center;gap:7px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.obp-dr .n i{flex:none;width:9px;height:9px;border-radius:3px;background:var(--c)}
+.obp-dr .bar{height:9px;border-radius:9px;background:var(--sup2);overflow:hidden}.obp-dr .bar i{display:block;height:100%;border-radius:9px;background:var(--c)}
+.obp-dr .q{text-align:right;color:var(--mut);font-variant-numeric:tabular-nums}
+.obp-dr .pc{display:flex;align-items:center;gap:5px;font-size:11px;color:#15803d;font-weight:700}
+.obp-dr .pc i{width:14px;height:14px;border-radius:50%;background:conic-gradient(#16a34a calc(var(--p) * 1%),var(--linha) 0)}
+.obp-dr b{text-align:right;font-variant-numeric:tabular-nums}
+.obp-li{display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:10px;text-align:left;color:var(--txt);min-width:0}
+.obp-li:hover{background:var(--sup2)}
+.obp-li .ic{flex:none;width:32px;height:32px;border-radius:10px;display:grid;place-items:center;color:var(--c);background:color-mix(in srgb,var(--c) 13%,var(--sup));font-size:13px}
+.obp-li .tx{flex:1;min-width:0;display:flex;flex-direction:column}.obp-li .tx b{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.obp-li .tx small{font-size:11px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.obp-li .dir{flex:none;display:flex;flex-direction:column;align-items:flex-end;gap:2px}.obp-li .dir small{font-size:10.5px;color:var(--mut)}
+.obp-qd{font-size:11.5px;font-weight:800;color:#2563eb;padding:2px 8px;border-radius:99px;background:color-mix(in srgb,#2563eb 12%,var(--sup))}
+.obp-vazio{display:flex;align-items:center;gap:8px;justify-content:center;padding:18px 10px;color:var(--mut);font-size:12.5px;border:1px dashed var(--linha);border-radius:12px;text-align:center}
+@media (max-width:1100px){.obp-g{grid-template-columns:1fr}}
+/* mapa */
+.obm{display:grid;grid-template-columns:330px minmax(0,1fr);gap:12px;height:calc(100dvh - 240px);min-height:520px}
+.obm-lado{display:flex;flex-direction:column;gap:10px;min-height:0;min-width:0;background:var(--sup);border:1px solid var(--linha);border-radius:14px;padding:12px}
+.obm-q{position:relative;display:flex;align-items:center}.obm-q>i{position:absolute;left:12px;color:var(--mut2);font-size:13px}
+.obm-q input{width:100%;height:38px;padding:0 12px 0 34px;border:1.5px solid var(--linha);border-radius:11px;background:var(--sup);color:var(--txt);font:inherit;font-size:13px;outline:0}
+.obm-q input:focus{border-color:var(--marca)}
+.obm-res{display:grid;grid-template-columns:.8fr 1.3fr .9fr;gap:6px}
+.obm-res div{padding:7px 8px;border-radius:10px;background:var(--sup2);display:flex;flex-direction:column;line-height:1.15}.obm-res b{font-size:14px;white-space:nowrap;font-variant-numeric:tabular-nums}.obm-res small{font-size:10.5px;color:var(--mut)}
+.obm-sec{display:flex;flex-direction:column;gap:5px}.obm-sec>span{font-size:10.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--mut)}
+.obm-sec .campo{height:34px;font-size:12.5px}
+.obm-seg{display:grid;grid-template-columns:repeat(3,1fr);padding:3px;border-radius:10px;background:var(--sup2);border:1px solid var(--linha);gap:3px}
+.obm-seg button{height:28px;border-radius:8px;font:inherit;font-size:12px;font-weight:700;color:var(--mut)}.obm-seg button.on{background:var(--sup);color:var(--marca);box-shadow:0 1px 3px rgba(15,23,42,.14)}
+.obm-tps{display:flex;flex-wrap:wrap;gap:5px}
+.obm-tps button{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 9px;border-radius:99px;border:1px solid var(--linha);background:var(--sup);font:inherit;font-size:11.5px;font-weight:600;color:var(--txt2,var(--txt))}
+.obm-tps button i{color:var(--marca)}.obm-tps button b{font-size:10.5px;color:var(--mut)}.obm-tps button span{max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.obm-tps button.on{border-color:var(--marca);background:color-mix(in srgb,var(--marca) 12%,var(--sup))}
+.obm-lh{display:flex;align-items:baseline;justify-content:space-between;gap:6px;border-top:1px solid var(--linha);padding-top:8px}.obm-lh b{font-size:12.5px}.obm-lh small{font-size:10.5px;color:var(--mut)}
+.obm-lista{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:2px;margin:0 -4px;padding:0 4px}
+.obm-it{display:flex;align-items:center;gap:9px;padding:6px;border-radius:10px;text-align:left;color:var(--txt);min-width:0}
+.obm-it:hover,.obm-it.on{background:var(--sup2)}.obm-it.on{box-shadow:inset 3px 0 0 var(--marca)}
+.obm-it .ic{flex:none;width:28px;height:28px;border-radius:9px;display:grid;place-items:center;font-size:12px;color:#fff;background:var(--c)}
+.obm-it .tx{flex:1;min-width:0;display:flex;flex-direction:column}.obm-it .tx b{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.obm-it .tx small{font-size:10.5px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.obm-it .v{flex:none;font-size:11.5px;font-weight:800;font-variant-numeric:tabular-nums}
+.obm-area{position:relative;min-width:0;min-height:0}
+.obm-mapa{height:100%!important;min-height:0!important;background:#e5e9f0}
+.obm-leg{position:absolute;left:12px;bottom:12px;z-index:500;display:flex;flex-direction:column;gap:2px;padding:9px 10px;border-radius:12px;background:var(--sup);border:1px solid var(--linha);box-shadow:0 6px 18px -8px rgba(15,23,42,.35);max-width:240px}
+.obm-leg>b{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);margin-bottom:3px}
+.obm-leg button{display:flex;align-items:center;gap:7px;padding:3px 5px;border-radius:7px;font:inherit;font-size:12px;color:var(--txt);text-align:left}
+.obm-leg button:hover{background:var(--sup2)}.obm-leg button i{width:11px;height:11px;border-radius:50%;flex:none;box-shadow:0 0 0 2px #fff,0 0 0 3px rgba(15,23,42,.15)}
+.obm-leg button span{margin-left:auto;font-size:11px;color:var(--mut);font-variant-numeric:tabular-nums}
+.obm-leg button.on{font-weight:800;background:var(--sup2)}.obm-leg button.off{opacity:.45}
+.obm-leg button.lp{color:var(--marca);font-weight:700;font-size:11.5px}
+.obm-fundo{position:absolute;top:12px;right:12px;z-index:500;display:flex;padding:3px;gap:3px;border-radius:11px;background:var(--sup);border:1px solid var(--linha);box-shadow:0 6px 18px -8px rgba(15,23,42,.35)}
+.obm-fundo button{width:32px;height:30px;border-radius:8px;color:var(--mut)}.obm-fundo button.on{background:var(--marca);color:#fff}
+.obm-tip{font-size:12px;border-radius:8px;padding:5px 9px}
+.obm-pop .obm-pop-k{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:8px 0 6px}
+.obm-pop .obm-pop-k div{display:flex;flex-direction:column;padding:6px;border-radius:8px;background:var(--sup2)}.obm-pop .obm-pop-k b{font-size:13px}.obm-pop .obm-pop-k small{font-size:10px;color:var(--mut)}
+.obm-pop-b{height:6px;border-radius:9px;background:var(--sup2);overflow:hidden;margin-bottom:8px}.obm-pop-b i{display:block;height:100%}
+.obm-pop-st{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:4px}
+@media (max-width:900px){.obm{grid-template-columns:minmax(0,1fr);height:auto}.obm-area{height:62dvh}.obm-lado{max-height:none}.obm-lista{max-height:300px}}
+/* inaugurações */
+.obi{display:flex;flex-direction:column;gap:16px}
+.obi-trilha{display:flex;align-items:stretch;gap:6px;padding:14px;border-radius:18px;background:linear-gradient(135deg,color-mix(in srgb,#16a34a 8%,var(--sup)),color-mix(in srgb,#7c3aed 8%,var(--sup)));border:1px solid var(--linha)}
+.obi-trilha>button{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:3px;padding:10px 6px;border-radius:14px;background:var(--sup);border:1px solid var(--linha);text-align:center;transition:transform .15s,box-shadow .15s}
+.obi-trilha>button:hover{transform:translateY(-2px);box-shadow:0 8px 18px -10px var(--c)}
+.obi-trilha .b{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;color:#fff;background:var(--c);font-size:16px;box-shadow:0 0 0 4px color-mix(in srgb,var(--c) 18%,transparent)}
+.obi-trilha>button>b{font-size:24px;font-weight:900;color:var(--c);line-height:1.1;font-variant-numeric:tabular-nums}
+.obi-trilha .t{font-size:12.5px;font-weight:800;color:var(--txt)}.obi-trilha small{font-size:11px;color:var(--mut)}
+.obi-seta{display:grid;place-items:center;color:var(--mut2);font-size:13px}
+.obi-fil{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.obi-fil .obm-q{flex:1;min-width:220px}.obi-fil .campo{width:auto;height:38px}
+.obi-sec{display:flex;flex-direction:column;gap:10px;scroll-margin-top:12px}
+.obi-sh{display:flex;align-items:center;gap:11px}
+.obi-sh .ic{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;color:#fff;background:var(--c);font-size:15px}
+.obi-sh h3{margin:0;font-size:16px;font-weight:800;display:flex;align-items:center;gap:8px}.obi-sh h3 em{font-style:normal;font-size:12px;padding:1px 9px;border-radius:99px;background:color-mix(in srgb,var(--c) 14%,var(--sup));color:var(--c)}
+.obi-sh small{font-size:12px;color:var(--mut)}
+.obi-ilu{flex:none;width:52px;height:52px;border-radius:13px;background:#0b1222;padding:2px;box-sizing:border-box;overflow:hidden}.obi-ilu svg{display:block;width:100%;height:100%}
+.obi-agenda{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px}
+.obi-ag{display:flex;align-items:center;gap:12px;padding:10px;border-radius:14px;background:var(--sup);border:1px solid var(--linha);text-align:left;color:var(--txt)}
+.obi-ag:hover{border-color:#0891b2}
+.obi-ag .cal{flex:none;width:58px;border-radius:12px;overflow:hidden;text-align:center;border:1px solid color-mix(in srgb,#0891b2 40%,var(--linha));display:flex;flex-direction:column}
+.obi-ag .cal small:first-child{background:#0891b2;color:#fff;font-size:10.5px;font-weight:800;text-transform:uppercase;padding:2px 0}
+.obi-ag .cal b{font-size:24px;font-weight:900;line-height:1.1;padding-top:2px}.obi-ag .cal small:last-child{font-size:10px;color:var(--mut);padding-bottom:3px}
+.obi-ag .tx{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}.obi-ag .tx b{font-size:13px}.obi-ag .tx small{font-size:11.5px;color:var(--mut)}.obi-ag .tx em{font-style:normal;font-size:11.5px;font-weight:700;color:#0891b2}
+.obi-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:10px}
+.obi-card{position:relative;display:flex;align-items:center;gap:12px;padding:12px;border-radius:16px;background:linear-gradient(135deg,color-mix(in srgb,#7c3aed 7%,var(--sup)),var(--sup) 60%);border:1px solid color-mix(in srgb,#7c3aed 25%,var(--linha));text-align:left;color:var(--txt);overflow:hidden}
+.obi-card:hover{box-shadow:0 10px 22px -14px #7c3aed}
+.obi-card .tx{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}.obi-card .tx b{font-size:13.5px}.obi-card .tx small{font-size:11.5px;color:var(--mut)}
+.obi-card .tg{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}.obi-card .tg span{font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:99px;background:var(--sup2);color:var(--txt2,var(--txt))}
+.obi-card .tg span.ok{background:color-mix(in srgb,#16a34a 14%,var(--sup));color:#15803d}.obi-card .tg span.ok i{margin-right:3px}
+.obi-card .cta{position:absolute;right:10px;top:10px;font-size:10.5px;font-weight:800;color:#7c3aed;display:flex;gap:4px;align-items:center;opacity:0;transition:opacity .15s}.obi-card:hover .cta{opacity:1}
+.obi-tab{display:flex;flex-direction:column;border:1px solid var(--linha);border-radius:14px;overflow:hidden;background:var(--sup)}
+.obi-tr{display:grid;grid-template-columns:minmax(0,2.2fr) minmax(0,1fr) 90px 230px;gap:10px;align-items:center;padding:8px 12px;border-top:1px solid var(--linha);text-align:left;font-size:12.5px;color:var(--txt)}
+.obi-tr:first-child{border-top:0}.obi-tr.h{background:var(--sup2);font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--mut)}
+.obi-tr:not(.h):hover{background:var(--sup2)}
+.obi-tr>span:first-child{display:flex;align-items:center;gap:8px;min-width:0}.obi-tr>span:first-child i{color:#65a30d}.obi-tr>span:first-child b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.obi-tr .dir{text-align:right;font-variant-numeric:tabular-nums}
+.obi-tr .obi-ck{display:flex;gap:4px}.obi-tr .obi-ck em{font-style:normal;font-size:10.5px;font-weight:800;padding:2px 7px;border-radius:99px;display:inline-flex;gap:4px;align-items:center}
+.obi-tr .obi-ck em.obi-s{background:color-mix(in srgb,#16a34a 14%,var(--sup));color:#15803d}.obi-tr .obi-ck em.obi-n{background:color-mix(in srgb,#dc2626 10%,var(--sup));color:#b91c1c}
+.obi-mais{align-self:center}
+.obi-linha{display:flex;flex-direction:column;gap:14px;border-left:3px solid color-mix(in srgb,#16a34a 35%,var(--linha));margin-left:17px;padding-left:20px}
+.obi-mes{position:relative}.obi-mes::before{content:'';position:absolute;left:-28px;top:3px;width:13px;height:13px;border-radius:50%;background:#16a34a;box-shadow:0 0 0 4px var(--fundo,var(--sup))}
+.obi-mh{display:flex;align-items:baseline;gap:10px;margin-bottom:8px}.obi-mh b{font-size:14px}.obi-mh b::first-letter{text-transform:uppercase}.obi-mh span{font-size:11.5px;color:var(--mut)}
+.obi-feitas{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px}
+.obi-ft{display:flex;align-items:center;gap:10px;padding:8px;border-radius:12px;background:var(--sup);border:1px solid var(--linha);text-align:left;color:var(--txt);min-width:0}
+.obi-ft:hover{border-color:#16a34a}.obi-ft .obi-ilu{width:40px;height:40px;border-radius:10px}
+.obi-ft>span:last-child{min-width:0;display:flex;flex-direction:column}.obi-ft b{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.obi-ft small{font-size:11px;color:var(--mut)}
+.obi-ent{border:1px solid var(--linha);border-radius:14px;padding:10px 12px;background:var(--sup)}
+.obi-ent summary{cursor:pointer;font-weight:800;font-size:13.5px;display:flex;gap:8px;align-items:center;color:var(--txt)}.obi-ent summary i{color:#64748b}.obi-ent summary em{font-style:normal;font-size:11.5px;color:var(--mut)}
+.obi-ent .obi-feitas{margin-top:10px}
+@media (max-width:820px){.obi-trilha{flex-wrap:wrap}.obi-trilha>button{flex:1 1 40%}.obi-seta{display:none}.obi-tr{grid-template-columns:1fr auto;}.obi-tr>span:nth-child(2){display:none}.obi-tr .obi-ck{grid-column:1/-1}.obi-tr.h{display:none}}
 </style>
 </head>
 <body>
 <!-- Vigia de inicialização: se o arquivo.js não carregar ou falhar, mostra o motivo em vez de uma tela vazia -->
 <script>
-window.GABORG_VERSAO_HTML = '1.55.0'; window.GABORG_ERROS = [];
-window.GABORG_NOVIDADES = "1.55.0 — Mapa de MT mais leve: listas calculadas uma vez só, contorno da DRE sem redesenhar a cada município, sombras desligadas ao arrastar e novo Modo leve (liga sozinho em computadores simples).\n1.55.0 — Relatório executivo sempre em 2 páginas (frente e verso), com letra mínima legível; números das seções e tabelas corrigidos no PDF; considerações só com as linhas, sem Responsável, Cargo e Data.\n1.55.0 — Aplicativo para celular: instalável (Android, Samsung e iPhone), abre sem internet com os últimos dados, barra inferior com Mapa, Escolas, Convênios, Apresentar e Mais (todas as seções), atalhos no ícone do app e telas adaptadas ao Galaxy Z Fold aberto e dobrado em duas metades.\n1.55.0 — Relatórios: títulos das seções em faixa azul com texto branco; GABOrg maior no rodapé; no relatório de convênios, um só gráfico, Caminho do recurso, com tanques de pactuado, repassado e executado como na apresentação.\n1.55.0 — Relatórios: logo e nome do GABOrg no rodapé de cada página.\n1.55.0 — Relatórios: cadeado no aviso de sigilo da lateral; marca d’água com GABOrg sobre o mapa de Mato Grosso e o brasão do Estado.\n1.55.0 — Relatórios: aviso de sigilo na lateral da página e no rodapé, fora do cabeçalho.\n1.55.0 — Relatórios executivo, de convênios e de obras: textos nas normas da ABNT em Times New Roman (seções, parágrafos, alíneas, legendas e fontes); relatório de obras numerado com Gráfico, Tabela e Quadro; aviso de documento sigiloso e de acesso restrito no cabeçalho e no rodapé de cada página.\n1.55.0 — Relatórios de convênios e de obras: capa intercalada (escuro e painel branco com nota, brasão, bandeira e território); execução dos recursos em destaque, com pactuado, repassado e executado, saldos e barra de composição.\n1.55.0 — Relatório executivo: capa intercalada, com nome e data no fundo escuro e brasão, bandeira e território num painel branco em diagonal.\n1.55.0 — Novo aviso de atualização: compacto, com as novidades por versão e animação ao atualizar.\n1.55.0 — Mapa de MT: painel lateral redesenhado, com ícones nos números, busca com limpar, filtros por tipo, localização, porte, distância até a DRE, município e DRE (com contagem em cada opção), lista com ícones e ordenação, filtros ativos no mapa, legenda que filtra e botão para ver todo o estado.\n1.55.0 — Apresentação do território: busca ao lado da lista (sem acento, com destaque do trecho encontrado), filtro por DRE, ordenação, recentes, setas e Enter para escolher, duplo clique para apresentar e mapa que apaga o que ficou fora da busca.\n1.55.0 — Apresentação: a nota dos convênios aparece automaticamente no slide de convênios.\n1.55.0 — Relatório executivo: marca d’água SEDUC-MT em todas as páginas e conclusão com agradecimento pela parceria com o Estado (texto editável).\n1.55.0 — Relatório executivo: capa em faixa grafite com destaque dourado, mapa do município, brasão e bandeira menores.\n1.55.0 — Relatório executivo: ícones ilustrados de construção, reforma e quadra nas obras; regionais grandes passam a usar 3 páginas quando não cabem em 2.\nRelatórios executivo e de convênios: Considerações ou encaminhamentos com linhas em branco para escrever à mão depois de impresso (opção, ligada por padrão). Relatório executivo no padrão ABNT: seções numeradas, texto em Arial 12 com espaço 1,5 e recuo, alíneas, e tabelas, gráficos, figura e quadro com título e fonte. Relatório de convênios: textos no padrão ABNT (Arial 12, espaço 1,5, recuo, alíneas, títulos numerados, tabela e gráficos com título e fonte), nota em destaque no topo e mapa só do município com ícone. Mapas: limites dos municípios de MT refeitos com a malha do IBGE, bem mais precisa (ex.: Santo Antônio de Leverger). Correção: Santo Antônio de Leverger (nome atual do IBGE) voltou a mostrar suas 10 escolas estaduais. Apresentação: personagens refeitos com volume, sombras e brilho (estilo animação 3D), olhos com íris e reflexo, cabelos com mechas, mãos e tênis detalhados. Antes: personagens em estilo de animação (olhos grandes, sorrisos, cabelos com volume, uniforme azul de MT), inclusive o estudante cadeirante e os professores. Relatórios: seções numeradas (I – Introdução, II – Informações gerais, III – Território...) com ícones, mapa de localização moderno no lugar da miniatura 3D e rodapé novo. Obras: painel com tipos animados, caminho até a inauguração e entregas por trimestre; novo relatório de obras por município, DRE ou estado. Convênios: pódio dos melhores desempenhos e relatório também por DRE e estado. Relatórios com marca d'água e miniatura 3D do território. Nova seção Relatório executivo: relatório da Secretaria de Estado de Educação por município, DRE ou estado, com brasão e bandeira de MT, rede em números, mapa, obras e convênios; textos editáveis, prévia e PDF. Convênios: painel animado (caminho do recurso, classificação em rosca, vigência por trimestre), mapa interativo dos municípios e relatório de 1 página para o prefeito, editável, com prévia e impressão/PDF. Nova seção Convênios: monitoramento dos convênios com municípios (repasse, execução, vigência, prestação de contas, nota e ranking), ligada às Obras pelo nº do convênio, com modelo de planilha para importar e exportar; novo slide de convênios na Apresentação (requer Codigo.gs 1.20.0). Apresentação: sempre os 142 municípios de MT (Boa Esperança do Norte incluída mesmo sem a malha do IBGE); municípios sem escola vinculada aparecem destacados para conferência. Apresentação: opção Repetir em loop (volta ao início ao terminar e recomeça; botão e tecla R). Apresentação: usa os limites municipais atuais do IBGE (142 municípios, com Boa Esperança do Norte). Escolas: cada escola usa o município oficial (base 2026), corrigindo a contagem para 142 municípios; Campos de Júlio com o nome completo. Apresentação: animações sempre ativas no modo apresentação; nova tela Pessoas (equipe ilustrada, pictogramas de estudantes por profissional, vínculos e cargos com ícones) também para municípios e DREs; nova tela Investimentos no mapa, com bolhas animadas por tipo de obra e passeio pelas maiores obras.";
+window.GABORG_VERSAO_HTML = '1.56.0'; window.GABORG_ERROS = [];
+window.GABORG_NOVIDADES = "1.56.0 — Mapa de MT: escolha entre Desempenho (padrão, mais leve) e Qualidade. Obras: painel reorganizado, sem gráficos repetidos; Inaugurações com caminho, agenda, prontas, o que falta e linha do tempo; mapa das obras com filtros, lista, cores por situação, etapa ou tipo e três fundos.\n1.56.0 — Mapa de MT mais leve: listas calculadas uma vez só, contorno da DRE sem redesenhar a cada município, sombras desligadas ao arrastar e novo Modo leve (liga sozinho em computadores simples).\n1.56.0 — Relatório executivo sempre em 2 páginas (frente e verso), com letra mínima legível; números das seções e tabelas corrigidos no PDF; considerações só com as linhas, sem Responsável, Cargo e Data.\n1.56.0 — Aplicativo para celular: instalável (Android, Samsung e iPhone), abre sem internet com os últimos dados, barra inferior com Mapa, Escolas, Convênios, Apresentar e Mais (todas as seções), atalhos no ícone do app e telas adaptadas ao Galaxy Z Fold aberto e dobrado em duas metades.\n1.56.0 — Relatórios: títulos das seções em faixa azul com texto branco; GABOrg maior no rodapé; no relatório de convênios, um só gráfico, Caminho do recurso, com tanques de pactuado, repassado e executado como na apresentação.\n1.56.0 — Relatórios: logo e nome do GABOrg no rodapé de cada página.\n1.56.0 — Relatórios: cadeado no aviso de sigilo da lateral; marca d’água com GABOrg sobre o mapa de Mato Grosso e o brasão do Estado.\n1.56.0 — Relatórios: aviso de sigilo na lateral da página e no rodapé, fora do cabeçalho.\n1.56.0 — Relatórios executivo, de convênios e de obras: textos nas normas da ABNT em Times New Roman (seções, parágrafos, alíneas, legendas e fontes); relatório de obras numerado com Gráfico, Tabela e Quadro; aviso de documento sigiloso e de acesso restrito no cabeçalho e no rodapé de cada página.\n1.56.0 — Relatórios de convênios e de obras: capa intercalada (escuro e painel branco com nota, brasão, bandeira e território); execução dos recursos em destaque, com pactuado, repassado e executado, saldos e barra de composição.\n1.56.0 — Relatório executivo: capa intercalada, com nome e data no fundo escuro e brasão, bandeira e território num painel branco em diagonal.\n1.56.0 — Novo aviso de atualização: compacto, com as novidades por versão e animação ao atualizar.\n1.56.0 — Mapa de MT: painel lateral redesenhado, com ícones nos números, busca com limpar, filtros por tipo, localização, porte, distância até a DRE, município e DRE (com contagem em cada opção), lista com ícones e ordenação, filtros ativos no mapa, legenda que filtra e botão para ver todo o estado.\n1.56.0 — Apresentação do território: busca ao lado da lista (sem acento, com destaque do trecho encontrado), filtro por DRE, ordenação, recentes, setas e Enter para escolher, duplo clique para apresentar e mapa que apaga o que ficou fora da busca.\n1.56.0 — Apresentação: a nota dos convênios aparece automaticamente no slide de convênios.\n1.56.0 — Relatório executivo: marca d’água SEDUC-MT em todas as páginas e conclusão com agradecimento pela parceria com o Estado (texto editável).\n1.56.0 — Relatório executivo: capa em faixa grafite com destaque dourado, mapa do município, brasão e bandeira menores.\n1.56.0 — Relatório executivo: ícones ilustrados de construção, reforma e quadra nas obras; regionais grandes passam a usar 3 páginas quando não cabem em 2.\nRelatórios executivo e de convênios: Considerações ou encaminhamentos com linhas em branco para escrever à mão depois de impresso (opção, ligada por padrão). Relatório executivo no padrão ABNT: seções numeradas, texto em Arial 12 com espaço 1,5 e recuo, alíneas, e tabelas, gráficos, figura e quadro com título e fonte. Relatório de convênios: textos no padrão ABNT (Arial 12, espaço 1,5, recuo, alíneas, títulos numerados, tabela e gráficos com título e fonte), nota em destaque no topo e mapa só do município com ícone. Mapas: limites dos municípios de MT refeitos com a malha do IBGE, bem mais precisa (ex.: Santo Antônio de Leverger). Correção: Santo Antônio de Leverger (nome atual do IBGE) voltou a mostrar suas 10 escolas estaduais. Apresentação: personagens refeitos com volume, sombras e brilho (estilo animação 3D), olhos com íris e reflexo, cabelos com mechas, mãos e tênis detalhados. Antes: personagens em estilo de animação (olhos grandes, sorrisos, cabelos com volume, uniforme azul de MT), inclusive o estudante cadeirante e os professores. Relatórios: seções numeradas (I – Introdução, II – Informações gerais, III – Território...) com ícones, mapa de localização moderno no lugar da miniatura 3D e rodapé novo. Obras: painel com tipos animados, caminho até a inauguração e entregas por trimestre; novo relatório de obras por município, DRE ou estado. Convênios: pódio dos melhores desempenhos e relatório também por DRE e estado. Relatórios com marca d'água e miniatura 3D do território. Nova seção Relatório executivo: relatório da Secretaria de Estado de Educação por município, DRE ou estado, com brasão e bandeira de MT, rede em números, mapa, obras e convênios; textos editáveis, prévia e PDF. Convênios: painel animado (caminho do recurso, classificação em rosca, vigência por trimestre), mapa interativo dos municípios e relatório de 1 página para o prefeito, editável, com prévia e impressão/PDF. Nova seção Convênios: monitoramento dos convênios com municípios (repasse, execução, vigência, prestação de contas, nota e ranking), ligada às Obras pelo nº do convênio, com modelo de planilha para importar e exportar; novo slide de convênios na Apresentação (requer Codigo.gs 1.20.0). Apresentação: sempre os 142 municípios de MT (Boa Esperança do Norte incluída mesmo sem a malha do IBGE); municípios sem escola vinculada aparecem destacados para conferência. Apresentação: opção Repetir em loop (volta ao início ao terminar e recomeça; botão e tecla R). Apresentação: usa os limites municipais atuais do IBGE (142 municípios, com Boa Esperança do Norte). Escolas: cada escola usa o município oficial (base 2026), corrigindo a contagem para 142 municípios; Campos de Júlio com o nome completo. Apresentação: animações sempre ativas no modo apresentação; nova tela Pessoas (equipe ilustrada, pictogramas de estudantes por profissional, vínculos e cargos com ícones) também para municípios e DREs; nova tela Investimentos no mapa, com bolhas animadas por tipo de obra e passeio pelas maiores obras.";
 window.addEventListener('error', function (e) {
   var alvo = e.target || {};
   if (alvo.tagName === 'SCRIPT') window.GABORG_ERROS.push('Não foi possível baixar o arquivo ' + (alvo.getAttribute('src') || '') + '.');
@@ -2514,6 +2636,6 @@ window.addEventListener('load', function () { setTimeout(function () { window.GA
 
 <div id="toast"><i class="fa-solid fa-check"></i><span></span></div>
 
-<script src="arquivo.js?v=1.55.0" onerror="window.GABORG_ERROS.push('O arquivo arquivo.js não foi encontrado no servidor (erro 404).');GABORG_DIAGNOSTICO()"></script>
+<script src="arquivo.js?v=1.56.0" onerror="window.GABORG_ERROS.push('O arquivo arquivo.js não foi encontrado no servidor (erro 404).');GABORG_DIAGNOSTICO()"></script>
 </body>
 </html>
