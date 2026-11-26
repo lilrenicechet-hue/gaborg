@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.62.0';
+const VERSAO = '1.64.0';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -408,9 +408,13 @@ const sessao = {
 cfg.token = sessao.get();
 const ehAdmin = () => !!acesso().administrar;
 /* a estrutura oficial (mapa e lista) é só para consulta; mudanças se fazem dentro de uma proposta, na seção Propostas */
-const estruturaConsulta = () => { const v = typeof vistaAtual !== 'undefined' ? vistaAtual : 'mapa'; return (v === 'mapa' || v === 'lista') && !(typeof cenMapa !== 'undefined' && cenMapa); };
+/* 1.64.0: a estrutura oficial é o modelo padrão das propostas; só Administrador e Chefe de Gabinete a editam, e só depois de ligar "Editar estrutura oficial" */
+const podeEditarOficial = () => { const a = acesso(); return !!(a.administrar || a.estruturaOficial || a.nome === 'Chefe de Gabinete'); };
+let edOficial = false;
+const estruturaConsulta = () => { const v = typeof vistaAtual !== 'undefined' ? vistaAtual : 'mapa'; return (v === 'mapa' || v === 'lista') && !(typeof cenMapa !== 'undefined' && cenMapa) && !(edOficial && podeEditarOficial()); };
 const somenteLeitura = () => { const v0 = typeof vistaAtual !== 'undefined' ? vistaAtual : 'mapa';
   if (estruturaConsulta()) return true;
+  if ((v0 === 'mapa' || v0 === 'lista') && edOficial && !(typeof cenMapa !== 'undefined' && cenMapa)) return !podeEditarOficial();
   if ((v0 === 'mapa' || v0 === 'lista') && typeof cenMapa !== 'undefined' && cenMapa) return !podeEditarSec('propostas');
   const k = VISTA_SECAO[v0]; if (k && SEM_EDICAO.has(k)) return k === 'relatorios' ? !podeExtra('documentos') : !editaAlgo(acesso()); return k ? !podeEditarSec(k) : !editaAlgo(acesso()); };
 /* ===================== PERFIS DE ACESSO =====================
@@ -437,6 +441,7 @@ const VISTA_SECAO = {}; SECOES_LISTA.forEach(([k, , , vs]) => vs.forEach(v => { 
 function perfilSistema(nome){
   const tudo = v => SECOES_LISTA.reduce((o, [k]) => (o[k] = v, o), {});
   if (nome === 'Administrador') return { id:'Administrador', nome, sistema:true, cor:'#dc2626', descricao:'Tudo, inclusive usuários, perfis e restauração da estrutura.', administrar:true, secoes:tudo('completo'), extras:{ nomesServidores:true, exportar:true, documentos:true } };
+  if (nome === 'Chefe de Gabinete') return { id:'Chefe de Gabinete', nome, sistema:true, cor:'#0f3d91', descricao:'Edita a estrutura oficial (modelo padrão das propostas) e todas as seções; não gerencia usuários.', administrar:false, estruturaOficial:true, secoes:tudo('completo'), extras:{ nomesServidores:true, exportar:true, documentos:true } };
   if (nome === 'Editor') return { id:'Editor', nome, sistema:true, cor:'#2563eb', descricao:'Acesso completo a todas as seções; não gerencia usuários.', administrar:false, secoes:tudo('completo'), extras:{ nomesServidores:true, exportar:true, documentos:true } };
   return { id:'Leitor', nome:'Leitor', sistema:true, cor:'#64748b', descricao:'Consulta todas as seções, sem alterar nada; não vê nomes de servidores.', administrar:false, secoes:tudo('ver'), extras:{ nomesServidores:false, exportar:true, documentos:true } };
 }
@@ -474,7 +479,7 @@ function sairSimulacao(){ delete cfg.simulado; aplicarAcessoUI(); trocarVista('u
 /* ---------- tela de perfis ---------- */
 async function carregarPerfis(){
   try { const r = await chamar({ action:'profiles_list' }, 30000); if (r.status !== 'success') throw new Error(r.message); perfisLista = r.perfis || []; }
-  catch (e) { if (!perfisLista.length) perfisLista = ['Administrador', 'Editor', 'Leitor'].map(perfilSistema); }
+  catch (e) { if (!perfisLista.length) perfisLista = ['Administrador', 'Chefe de Gabinete', 'Editor', 'Leitor'].map(perfilSistema); }
   return perfisLista;
 }
 const backendSemPerfis = () => online() && backendVersao && svVerMaior('1.13.0', backendVersao);
@@ -1768,7 +1773,7 @@ function addVinculo(id){
 function rmVinculo(vid){ const v = DB.vinculos.find(x => x.id === vid); if (!v) return; DB.vinculos = DB.vinculos.filter(x => x.id !== vid); enfileirar('vinculos', v, true); renderPainel(); if (vistaAtual === 'mapa') desenharArestas(); }
 
 /* ===================== VISTAS ===================== */
-document.querySelectorAll('.nav-b').forEach(b => { b.title = b.querySelector('span').textContent; b.addEventListener('click', () => { if (typeof cenMapa !== 'undefined' && cenMapa) { sairCenario(true); } trocarVista(b.dataset.vista); }); });
+document.querySelectorAll('.nav-b').forEach(b => { b.title = b.querySelector('span').textContent; b.addEventListener('click', () => { if (typeof cenMapa !== 'undefined' && cenMapa) { sairCenario(true); } if (edOficial && !['mapa','lista'].includes(b.dataset.vista)) concluirEdOficial(true); trocarVista(b.dataset.vista); }); });
 function trocarVista(v){
   if (!podeVerVista(v)) { if (document.querySelector('#app:not(.hidden)')) toast('Seu perfil não tem acesso a esta seção.', 'aviso'); v = primeiraVista(); }
   vistaAtual = v; document.body.classList.toggle('ro', somenteLeitura());
@@ -1776,6 +1781,7 @@ function trocarVista(v){
   if (typeof atualizarBarraCen === 'function') atualizarBarraCen();
   document.querySelectorAll('.nav-b').forEach(b => b.classList.toggle('on', (cenMapa && (v === 'mapa' || v === 'lista')) ? b.dataset.vista === 'propostas' : b.dataset.vista === v));
   document.body.classList.toggle('est-consulta', estruturaConsulta());
+  if (typeof atualizarEdOficial === 'function') atualizarEdOficial();
   { const mb = $('.nav-mais'); if (mb) mb.classList.toggle('on', !NAV_FIXOS.includes(v)); }
   if (history.replaceState && /^https?:$/.test(location.protocol)) try { history.replaceState(null, '', '#' + v); } catch (e) {}
   document.querySelectorAll('.vista').forEach(s => s.classList.toggle('fora', s.id !== 'v-' + v));
@@ -2559,7 +2565,7 @@ function formUsuario(id){
     html:`<label><span class="rot">Nome completo</span><input id="fu-nome" class="campo" required value="${esc(u.nome)}" placeholder="Como aparecerá no histórico"></label>
       <div class="g2"><label><span class="rot">Login</span><input id="fu-login" class="campo" required autocapitalize="none" spellcheck="false" value="${esc(u.login)}" placeholder="maria.silva"></label>
       <label><span class="rot">E-mail <span style="font-weight:500;color:var(--mut)">(opcional, também serve para entrar)</span></span><input id="fu-email" class="campo" type="email" value="${esc(u.email)}"></label></div>
-      <div class="g2"><label><span class="rot">Perfil</span><select id="fu-perfil" class="campo" ${proprio ? 'disabled' : ''} onchange="document.getElementById('fu-pres').innerHTML=resumoPerfilHTML(this.value)">${(perfisLista.length ? perfisLista : ['Administrador','Editor','Leitor'].map(perfilSistema)).map(p => `<option ${p.nome === u.perfil ? 'selected' : ''}>${esc(p.nome)}</option>`).join('')}</select></label>
+      <div class="g2"><label><span class="rot">Perfil</span><select id="fu-perfil" class="campo" ${proprio ? 'disabled' : ''} onchange="document.getElementById('fu-pres').innerHTML=resumoPerfilHTML(this.value)">${(perfisLista.length ? perfisLista : ['Administrador','Chefe de Gabinete','Editor','Leitor'].map(perfilSistema)).map(p => `<option ${p.nome === u.perfil ? 'selected' : ''}>${esc(p.nome)}</option>`).join('')}</select></label>
       <label><span class="rot">Situação</span><select id="fu-ativo" class="campo" ${proprio ? 'disabled' : ''}><option value="Sim" ${u.ativo === 'Sim' ? 'selected' : ''}>Ativo</option><option value="Não" ${u.ativo !== 'Sim' ? 'selected' : ''}>Desativado</option></select></label></div>
       <div id="fu-pres" class="fu-pres">${resumoPerfilHTML(u.perfil)}</div>
       ${id ? '' : '<p style="font-size:12.5px">O sistema gera uma <b>senha provisória</b> e a mostra na próxima tela.</p>'}`,
@@ -3059,8 +3065,8 @@ function renderMapasPropostas(){
         <button class="btn btn-s btn-sm" onclick="cenMapa='${esc(p.id)}';aplicarCenario();trocarVista('lista')"><i class="fa-solid fa-list"></i>Lista</button>
         <button class="btn btn-s btn-sm" onclick="abrirComparativo('', ${arg(p.id)})"><i class="fa-solid fa-code-compare"></i>Comparar com a atual</button>
         <button class="btn btn-g btn-sm" onclick="propSel=${arg(p.id)};abaProp('propostas')"><i class="fa-solid fa-list-check"></i>Detalhes e custos</button>
-        ${ehAdmin() ? `<button class="btn btn-g btn-sm" onclick="aplicarProposta(${arg(p.id)})" title="Levar as alterações para a estrutura oficial"><i class="fa-solid fa-circle-check"></i>Aplicar à oficial</button>` : ''}</div></div>`; };
-  return `<div class="pm-intro"><div class="pm-passos">${[['fa-plus', 'Crie uma proposta', 'Ela começa igual à estrutura oficial.'], ['fa-pen-ruler', 'Edite no mapa', 'Crie, mova, renomeie, extinga e sinalize setores. A oficial não muda.'], ['fa-code-compare', 'Compare', 'Veja lado a lado o que mudou e o impacto nos custos.'], ['fa-circle-check', 'Aplique', 'O administrador leva a proposta aprovada para a estrutura oficial.']].map(([ic, t, d], i) => `<div><span>${i + 1}</span><i class="fa-solid ${ic}"></i><b>${t}</b><small>${d}</small></div>`).join('')}</div>
+        ${podeEditarOficial() ? `<button class="btn btn-g btn-sm" onclick="aplicarProposta(${arg(p.id)})" title="Levar as alterações para a estrutura oficial"><i class="fa-solid fa-circle-check"></i>Aplicar à oficial</button>` : ''}</div></div>`; };
+  return `<div class="pm-intro"><div class="pm-passos">${[['fa-plus', 'Crie uma proposta', 'Ela parte do modelo padrão: a estrutura oficial vigente.'], ['fa-pen-ruler', 'Edite no mapa', 'Crie, mova, renomeie, extinga e sinalize setores. A oficial não muda.'], ['fa-code-compare', 'Compare', 'Veja lado a lado o que mudou e o impacto nos custos.'], ['fa-circle-check', 'Aplique', 'O administrador leva a proposta aprovada para a estrutura oficial.']].map(([ic, t, d], i) => `<div><span>${i + 1}</span><i class="fa-solid ${ic}"></i><b>${t}</b><small>${d}</small></div>`).join('')}</div>
       ${pode ? '<button class="btn btn-p" onclick="novaProposta()"><i class="fa-solid fa-plus"></i>Nova proposta</button>' : ''}</div>
     <h4 class="adm-sub">Propostas em andamento <small>${abertas.length}</small></h4>
     <div class="pm-grade">${abertas.map(card).join('') || `<div class="cartao vazio"><i class="fa-solid fa-diagram-project"></i>Nenhuma proposta em andamento.${pode ? ' Crie uma para editar a estrutura no mapa.' : ''}</div>`}</div>
@@ -3115,7 +3121,7 @@ function detalheProposta(p, base){
           <textarea class="campo" ${ro ? 'disabled' : ''} rows="2" style="margin-top:6px" placeholder="Descrição / justificativa" onchange="editarProp(${arg(p.id)},'descricao',this.value)">${esc(p.descricao)}</textarea></div>
         <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
           <select class="campo" style="width:auto" ${ro ? 'disabled' : ''} onchange="editarProp(${arg(p.id)},'status',this.value)">${Object.keys(STATUS_PROP).map(s => `<option ${s === (p.status || 'Rascunho') ? 'selected' : ''}>${s}</option>`).join('')}</select>
-          <div class="u-acoes"><button class="btn btn-p btn-sm" onclick="verPropostaNoMapa(${arg(p.id)})" title="Ver a estrutura desta proposta no mapa"><i class="fa-solid fa-diagram-project"></i>Ver no mapa</button><button class="btn btn-s btn-sm" onclick="abrirComparativo('', ${arg(p.id)})" title="Comparar com a estrutura atual, lado a lado"><i class="fa-solid fa-code-compare"></i>Comparar</button><button class="btn btn-s btn-sm" onclick="exportarProposta(${arg(p.id)})" title="Exportar comparativo (CSV)"><i class="fa-solid fa-file-csv"></i>CSV</button><button class="btn btn-s btn-sm so-edit" onclick="novaProposta(${arg(p.id)})" title="Duplicar"><i class="fa-regular fa-copy"></i>Duplicar</button>${ehAdmin() && p.status !== 'Aplicada' ? `<button class="btn btn-s btn-sm" onclick="aplicarProposta(${arg(p.id)})" title="Aplicar à estrutura oficial"><i class="fa-solid fa-check-double"></i>Aplicar</button>` : ''}<button class="btn btn-perigo btn-sm btn-i so-edit" onclick="excluirProposta(${arg(p.id)})" title="Excluir"><i class="fa-solid fa-trash-can"></i></button></div>
+          <div class="u-acoes"><button class="btn btn-p btn-sm" onclick="verPropostaNoMapa(${arg(p.id)})" title="Ver a estrutura desta proposta no mapa"><i class="fa-solid fa-diagram-project"></i>Ver no mapa</button><button class="btn btn-s btn-sm" onclick="abrirComparativo('', ${arg(p.id)})" title="Comparar com a estrutura atual, lado a lado"><i class="fa-solid fa-code-compare"></i>Comparar</button><button class="btn btn-s btn-sm" onclick="exportarProposta(${arg(p.id)})" title="Exportar comparativo (CSV)"><i class="fa-solid fa-file-csv"></i>CSV</button><button class="btn btn-s btn-sm so-edit" onclick="novaProposta(${arg(p.id)})" title="Duplicar"><i class="fa-regular fa-copy"></i>Duplicar</button>${podeEditarOficial() && p.status !== 'Aplicada' ? `<button class="btn btn-s btn-sm" onclick="aplicarProposta(${arg(p.id)})" title="Aplicar à estrutura oficial"><i class="fa-solid fa-check-double"></i>Aplicar</button>` : ''}<button class="btn btn-perigo btn-sm btn-i so-edit" onclick="excluirProposta(${arg(p.id)})" title="Excluir"><i class="fa-solid fa-trash-can"></i></button></div>
         </div>
       </div></div>
     <div class="kpis">
@@ -3223,7 +3229,7 @@ function formAlteracao(pid, iid, tipo){
   }
 }
 async function aplicarProposta(id){
-  const p = DB.propostas.find(x => x.id === id); if (!p || !ehAdmin()) return;
+  const p = DB.propostas.find(x => x.id === id); if (!p || !podeEditarOficial()) return;
   if (cenMapa) sairCenario();
   const itens = itensProp(p), ovs = overridesDe(p.id); if (!itens.length && !ovs.length) return toast('A proposta não tem alterações.', 'aviso');
   if (!await confirmar('Aplicar proposta', `Aplicar as <b>${itens.length + ovs.length}</b> alteração(ões) de <b>${esc(p.nome)}</b> à <b>estrutura oficial</b>? Setores serão criados, extintos, movidos ou renomeados, e os lançamentos do cenário Atual serão ajustados. Recomendo exportar uma cópia antes (Configurações).`, 'Aplicar à estrutura', true)) return;
@@ -3374,7 +3380,7 @@ function preencherCenarios(){
   }
   atualizarBarraCen();
 }
-function escolherCenarioMapa(id){
+function escolherCenarioMapa(id){ edOficial = false;
   limparMulti(true); fecharPainel(); desaplicarCenario();
   cenMapa = id || ''; document.body.classList.toggle('ro', somenteLeitura());
   if (cenMapa) { ancestraisMarcados(listaCenario(cenMapa)).forEach(a => abertos.add(a)); aplicarCenario(); }
@@ -6534,17 +6540,29 @@ function cartaoAparencia(){
 }
 
 /* ===================== MENU LATERAL: RECOLHER E AJUSTAR LARGURA ===================== */
-let ladoCfg = Object.assign({ mini:false, w:236 }, store.get('gaborg_lado', {}));
+let ladoCfg = Object.assign({ mini:false, w:236, auto:true }, store.get('gaborg_lado', {}));
 /* tablet e celular dobrável aberto (Galaxy Z Fold): menu vira uma coluna de ícones, para sobrar tela ao conteúdo */
 const telaMedia = () => window.innerWidth > 820 && window.innerWidth <= 1180;
 function aplicarLado(){
   const larga = window.innerWidth > 820;
-  document.body.classList.toggle('lado-mini', larga && (telaMedia() ? !ladoCfg.abertoMedia : ladoCfg.mini));
+  document.body.classList.toggle('lado-auto', larga && ladoCfg.auto);
+  document.body.classList.toggle('lado-mini', larga && (ladoCfg.auto ? true : telaMedia() ? !ladoCfg.abertoMedia : ladoCfg.mini));
+  if (!ladoCfg.auto) document.body.classList.remove('lado-hover');
   document.documentElement.style.setProperty('--lado-w', Math.max(180, Math.min(340, ladoCfg.w)) + 'px');
-  const tg = document.querySelector('.lado-tg'); if (tg) tg.title = ladoCfg.mini ? 'Expandir o menu (tecla [ )' : 'Recolher o menu (tecla [ )';
+  const tg = document.querySelector('.lado-tg'); if (tg) tg.title = ladoCfg.auto ? 'Fixar o menu aberto (tecla [ )' : 'Soltar: o menu recolhe sozinho e abre ao passar o mouse (tecla [ )';
   setTimeout(() => { if (vistaAtual === 'mapa') desenharMini(); }, 260);
 }
-function alternarLado(forcar){ if (telaMedia()) ladoCfg.abertoMedia = forcar !== undefined ? !forcar : !ladoCfg.abertoMedia; else ladoCfg.mini = forcar !== undefined ? forcar : !ladoCfg.mini; store.set('gaborg_lado', ladoCfg); aplicarLado(); }
+function alternarLado(forcar){ ladoCfg.auto = !ladoCfg.auto; ladoCfg.mini = false; ladoCfg.abertoMedia = true; store.set('gaborg_lado', ladoCfg); document.body.classList.remove('lado-hover'); aplicarLado(); toast(ladoCfg.auto ? 'Menu automático: recolhe ao abrir uma página e abre ao passar o mouse.' : 'Menu fixado aberto.'); return;
+  if (telaMedia()) ladoCfg.abertoMedia = forcar !== undefined ? !forcar : !ladoCfg.abertoMedia; else ladoCfg.mini = forcar !== undefined ? forcar : !ladoCfg.mini; store.set('gaborg_lado', ladoCfg); aplicarLado(); }
+(function(){
+  const lado = document.querySelector('.lado'); if (!lado) return; let tA = 0, tF = 0;
+  const abrir = () => { clearTimeout(tF); if (!document.body.classList.contains('lado-auto') || window.innerWidth <= 820) return; clearTimeout(tA); tA = setTimeout(() => document.body.classList.add('lado-hover'), 120); };
+  const fechar = (j) => { clearTimeout(tA); clearTimeout(tF); tF = setTimeout(() => document.body.classList.remove('lado-hover'), j || 260); };
+  lado.addEventListener('mouseenter', abrir); lado.addEventListener('mouseleave', () => fechar());
+  lado.addEventListener('focusin', () => { if (document.body.classList.contains('lado-auto')) { clearTimeout(tF); document.body.classList.add('lado-hover'); } });
+  lado.addEventListener('focusout', e => { if (!lado.contains(e.relatedTarget)) fechar(); });
+  lado.addEventListener('click', e => { if (e.target.closest('.nav-b[data-vista]')) fechar(40); });
+})();
 window.addEventListener('resize', () => { clearTimeout(aplicarLado.t); aplicarLado.t = setTimeout(aplicarLado, 120); });
 (function(){
   const alca = document.querySelector('.lado-alca'), lado = document.querySelector('.lado'); if (!alca) return;
@@ -9414,3 +9432,27 @@ function sairApres(){
   desenharMapa(); setTimeout(() => ajustar(true), 40);
 }
 document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && apres) sairApres(); });
+
+/* ===================== EDIÇÃO DA ESTRUTURA OFICIAL (1.64.0) ===================== */
+function atualizarEdOficial(){
+  const pode = podeEditarOficial(), ed = edOficial && pode && !cenMapa;
+  document.body.classList.toggle('pode-oficial', pode);
+  document.body.classList.toggle('ed-oficial', ed);
+  document.body.classList.toggle('ro', somenteLeitura());
+  document.body.classList.toggle('est-consulta', estruturaConsulta());
+  const b = $('#of-barra'); if (!b) return;
+  b.classList.toggle('hidden', !ed || !['mapa', 'lista'].includes(vistaAtual));
+  if (ed) b.innerHTML = `<span class="of-ic"><i class="fa-solid fa-pen-ruler"></i></span><div class="of-t"><b>Editando a estrutura oficial</b><small>É o modelo padrão de todas as propostas: o que mudar aqui vale para todos e passa a ser a base das propostas.</small></div>
+    <span class="of-a"><button class="btn btn-s btn-sm" onclick="trocarVista(vistaAtual === 'lista' ? 'mapa' : 'lista')"><i class="fa-solid ${vistaAtual === 'lista' ? 'fa-sitemap' : 'fa-list'}"></i>${vistaAtual === 'lista' ? 'Mapa' : 'Lista'}</button><button class="btn btn-p btn-sm" onclick="concluirEdOficial()"><i class="fa-solid fa-check"></i>Concluir edição</button></span>`;
+}
+function editarOficial(){
+  if (!podeEditarOficial()) return toast('Somente os perfis Administrador e Chefe de Gabinete editam a estrutura oficial. Para sugerir mudanças, use uma proposta.');
+  if (cenMapa) sairCenario(true);
+  edOficial = true; atualizarEdOficial(); trocarVista(['mapa', 'lista'].includes(vistaAtual) ? vistaAtual : 'mapa');
+  toast('Modo de edição da estrutura oficial ligado.');
+}
+function concluirEdOficial(semRedesenho){
+  if (!edOficial) return; edOficial = false; limparMulti(true); fecharPainel(); atualizarEdOficial();
+  if (!semRedesenho && ['mapa', 'lista'].includes(vistaAtual)) trocarVista(vistaAtual);
+  if (!semRedesenho) toast('Edição concluída. A estrutura oficial voltou ao modo de consulta.');
+}
