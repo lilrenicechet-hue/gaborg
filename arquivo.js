@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.58.0';
+const VERSAO = '1.59.0';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -84,7 +84,7 @@ function sinaisCantoHTML(s){
   const xs = l.filter(k => sinalInfo(k).x), os = l.filter(k => !sinalInfo(k).x);
   return `<span class="no-sin" title="${esc(l.join(' · '))}">${os.map(k => `<i class="fa-solid ${sinalInfo(k).ic}" style="--c:${sinalInfo(k).cor}"></i>`).join('')}${xs.length ? `<b class="no-x" style="--c:${sinalInfo(xs[0]).cor}"><i class="fa-solid fa-xmark"></i></b>` : ''}</span>`;
 }
-function alternarSinal(id, k){ const s = porId.get(id); if (!s) return; const l = sinaisDe(s), i = l.indexOf(k); i < 0 ? l.push(k) : l.splice(i, 1); alterar(s, 'sinais', l.join('; ')); if (selId === id) renderPainel(); }
+function alternarSinal(id, k){ if (somenteLeitura()) return; const s = porId.get(id); if (!s) return; const l = sinaisDe(s), i = l.indexOf(k); i < 0 ? l.push(k) : l.splice(i, 1); alterar(s, 'sinais', l.join('; ')); if (selId === id) renderPainel(); }
 function addSinalLivre(id, inp){ const v = String(inp.value || '').trim().replace(/;/g, ','); if (!v) return; const s = porId.get(id); const l = sinaisDe(s); if (!l.includes(v)) { l.push(v); alterar(s, 'sinais', l.join('; ')); } inp.value = ''; renderPainel(); }
 async function sinalizarSel(){
   const ids = [...multi]; if (!ids.length) return;
@@ -407,7 +407,12 @@ const sessao = {
 };
 cfg.token = sessao.get();
 const ehAdmin = () => !!acesso().administrar;
-const somenteLeitura = () => { const k = VISTA_SECAO[typeof vistaAtual !== 'undefined' ? vistaAtual : 'mapa']; if (k && SEM_EDICAO.has(k)) return k === 'relatorios' ? !podeExtra('documentos') : !editaAlgo(acesso()); return k ? !podeEditarSec(k) : !editaAlgo(acesso()); };
+/* a estrutura oficial (mapa e lista) é só para consulta; mudanças se fazem dentro de uma proposta, na seção Propostas */
+const estruturaConsulta = () => { const v = typeof vistaAtual !== 'undefined' ? vistaAtual : 'mapa'; return (v === 'mapa' || v === 'lista') && !(typeof cenMapa !== 'undefined' && cenMapa); };
+const somenteLeitura = () => { const v0 = typeof vistaAtual !== 'undefined' ? vistaAtual : 'mapa';
+  if (estruturaConsulta()) return true;
+  if ((v0 === 'mapa' || v0 === 'lista') && typeof cenMapa !== 'undefined' && cenMapa) return !podeEditarSec('propostas');
+  const k = VISTA_SECAO[v0]; if (k && SEM_EDICAO.has(k)) return k === 'relatorios' ? !podeExtra('documentos') : !editaAlgo(acesso()); return k ? !podeEditarSec(k) : !editaAlgo(acesso()); };
 /* ===================== PERFIS DE ACESSO =====================
    Cada perfil define, seção por seção, se ela fica oculta, só para ver ou para editar, e quatro permissões extras.
    O Codigo.gs (1.13.0) aplica as mesmas regras no servidor: não envia dados de seções ocultas e recusa gravações indevidas. */
@@ -1672,7 +1677,8 @@ function trocarVista(v){
   vistaAtual = v; document.body.classList.toggle('ro', somenteLeitura());
   if (cenMapa) { if (VISTAS_CEN.includes(v)) { if (!cenSwap) aplicarCenario(); } else if (cenSwap) desaplicarCenario(); }
   if (typeof atualizarBarraCen === 'function') atualizarBarraCen();
-  document.querySelectorAll('.nav-b').forEach(b => b.classList.toggle('on', b.dataset.vista === v));
+  document.querySelectorAll('.nav-b').forEach(b => b.classList.toggle('on', b.dataset.vista === v || (cenMapa && (v === 'mapa' || v === 'lista') && b.dataset.vista === 'propostas')));
+  document.body.classList.toggle('est-consulta', estruturaConsulta());
   { const mb = $('.nav-mais'); if (mb) mb.classList.toggle('on', !NAV_FIXOS.includes(v)); }
   if (history.replaceState && /^https?:$/.test(location.protocol)) try { history.replaceState(null, '', '#' + v); } catch (e) {}
   document.querySelectorAll('.vista').forEach(s => s.classList.toggle('fora', s.id !== 'v-' + v));
@@ -2499,7 +2505,7 @@ function travarLeitura(raiz){
 }
 ['renderPainel','renderValidacoes'].forEach(n => {
   const f = window[n];
-  window[n] = function(){ const r = f.apply(this, arguments); travarLeitura(n === 'renderPainel' ? $('#pn-corpo') : $('#v-corpo')); if (n === 'renderPainel' && somenteLeitura() && $('#pn-corpo') && !$('#pn-corpo .ro-aviso')) $('#pn-corpo').insertAdjacentHTML('afterbegin', '<div class="ro-aviso"><i class="fa-solid fa-eye"></i>Perfil Leitor: você pode consultar, mas não alterar.</div>'); return r; };
+  window[n] = function(){ const r = f.apply(this, arguments); travarLeitura(n === 'renderPainel' ? $('#pn-corpo') : $('#v-corpo')); if (n === 'renderPainel' && somenteLeitura() && $('#pn-corpo') && !$('#pn-corpo .ro-aviso')) $('#pn-corpo').insertAdjacentHTML('afterbegin', (estruturaConsulta() ? '<div class="ro-aviso"><i class="fa-solid fa-lock"></i>Estrutura oficial: somente consulta. Para alterar este setor, <a href="#" onclick="escolherPropostaParaEditar();return false">edite numa proposta</a>.</div>' : '<div class="ro-aviso"><i class="fa-solid fa-eye"></i>Seu perfil permite consultar, mas não alterar.</div>')); return r; };
 });
 window.addEventListener('resize', () => { if (vistaAtual === 'mapa') desenharMini(); });
 
@@ -2857,7 +2863,7 @@ const TIPOS_ALT = {
   novo:['fa-square-plus', 'Criar setor', '#16a34a'], extinguir:['fa-square-minus', 'Extinguir setor', '#dc2626'], mover:['fa-arrows-up-down-left-right', 'Mudar subordinação', '#7c3aed'],
   renomear:['fa-pen', 'Renomear / mudar tipo', '#0891b2'], cargo:['fa-user-tie', 'Trocar cargo do titular', '#ea580c'], despesa:['fa-coins', 'Despesa ou bolsa', '#ca8a04']
 };
-let propSel = '', abaPropAtual = 'propostas';
+let propSel = '', abaPropAtual = 'mapas';
 const itensProp = p => { try { const a = JSON.parse(p.itens || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } };
 function salvarItensProp(p, itens, msgHist){
   p.itens = JSON.stringify(itens); p.atualizadoEm = agora(); p.atualizadoPor = cfg.usuario || '';
@@ -2926,6 +2932,7 @@ function renderPropostas(){
   const c = $('#pr-corpo'); if (!c) return;
   const aviso = backendSemPropostas() ? `<div class="cartao bl" style="border-color:#f59e0b;margin-bottom:14px"><h3 style="color:#b45309"><i class="fa-solid fa-triangle-exclamation"></i>Atualize o backend</h3><p class="s">A planilha está com o Codigo.gs v${esc(backendVersao)}. Para gravar as propostas na planilha, cole o Codigo.gs novo no Apps Script e publique uma nova versão.</p></div>` : '';
   if (abaPropAtual === 'bolsas') { c.innerHTML = aviso + renderBolsas(); return; }
+  if (abaPropAtual === 'mapas') { c.innerHTML = aviso + renderMapasPropostas(); return; }
   if (propSel && !DB.propostas.some(p => p.id === propSel)) propSel = '';
   const base = baseAtual();
   const lista = [...DB.propostas].sort((a, b) => (b.atualizadoEm || '').localeCompare(a.atualizadoEm || ''));
@@ -2940,8 +2947,38 @@ function renderPropostas(){
     <div class="prop-det">${propSel ? detalheProposta(DB.propostas.find(p => p.id === propSel), base) : `<div class="cartao bl"><h3><i class="fa-solid fa-lightbulb"></i>Propostas de estrutura e valores</h3><p class="s" style="line-height:1.7">Monte cenários sem mexer na estrutura oficial: <b>crie, extinga, mova ou renomeie setores</b>, <b>troque o cargo DGA</b> dos titulares e <b>inclua despesas e bolsas</b> com custos próprios. Cada proposta mostra o custo mensal e anual comparado ao atual, a diferença por item (DGA e bolsas) e a estrutura resultante. Quando uma proposta for aprovada, um administrador pode <b>aplicá-la</b> à estrutura oficial.</p><div class="acoes so-edit"><button class="btn btn-p" onclick="novaProposta()"><i class="fa-solid fa-plus"></i>Criar a primeira proposta</button></div></div>`}</div>
   </div>`;
 }
-function novaProposta(copiaDe){
-  if (somenteLeitura()) return toast('Seu perfil é somente leitura.', 'aviso');
+/* ---------- Propostas · mapas e edições: cada proposta abre o mapa da estrutura em modo de edição ---------- */
+function renderMapasPropostas(){
+  const base = baseAtual(), pode = podeEditarSec('propostas');
+  const abertas = DB.propostas.filter(p => p.status !== 'Aplicada').sort((a, b) => (b.atualizadoEm || '').localeCompare(a.atualizadoEm || ''));
+  const aplicadas = DB.propostas.filter(p => p.status === 'Aplicada');
+  const card = p => { const cp = custoProposta(p), dif = cp.m - base.m, E = cp.E, n = c => E.lista.filter(x => (x._marcas || []).includes(c)).length, tot = itensProp(p).length + overridesDe(p.id).length;
+    const ch = [['novo', 'fa-plus', '#16a34a', 'novos'], ['extinto', 'fa-xmark', '#dc2626', 'extintos'], ['movido', 'fa-right-left', '#7c3aed', 'movidos'], ['renomeado', 'fa-i-cursor', '#0891b2', 'renomeados'], ['editado', 'fa-pen', '#ca8a04', 'editados']].filter(x => n(x[0]));
+    return `<div class="pm-card ${cenMapa === p.id ? 'on' : ''}">
+      <div class="pm-top"><span class="pm-ic"><i class="fa-solid fa-diagram-project"></i></span><div><b>${esc(p.nome)}</b><small>${esc(p.status || 'Rascunho')} · ${tot} alteração(ões) · atualizada ${p.atualizadoEm ? fmtData(p.atualizadoEm) : '—'}${p.atualizadoPor ? ' por ' + esc(p.atualizadoPor) : ''}</small></div>${cenMapa === p.id ? '<span class="chip" style="--c:#d97706">aberta no mapa</span>' : ''}</div>
+      ${p.descricao ? `<p class="pm-d">${esc(p.descricao)}</p>` : ''}
+      <div class="pm-ch">${ch.map(([, ic, c, t], i) => `<span style="--c:${c}"><i class="fa-solid ${ic}"></i><b>${n(ch[i][0])}</b>${t}</span>`).join('') || '<span class="z">Ainda sem mudanças na estrutura</span>'}<span class="pm-fin ${dif > 0 ? 'mais' : dif < 0 ? 'menos' : ''}"><i class="fa-solid fa-coins"></i>${dif ? (dif > 0 ? '+' : '−') + fmtM0(Math.abs(dif)) + '/mês' : 'sem impacto financeiro'}</span></div>
+      <div class="pm-ac">${pode ? `<button class="btn btn-p btn-sm" onclick="editarPropostaMapa(${arg(p.id)})"><i class="fa-solid fa-pen-ruler"></i>Abrir mapa e editar</button>` : `<button class="btn btn-p btn-sm" onclick="editarPropostaMapa(${arg(p.id)})"><i class="fa-solid fa-eye"></i>Ver no mapa</button>`}
+        <button class="btn btn-s btn-sm" onclick="cenMapa='${esc(p.id)}';aplicarCenario();trocarVista('lista')"><i class="fa-solid fa-list"></i>Lista</button>
+        <button class="btn btn-s btn-sm" onclick="abrirComparativo('', ${arg(p.id)})"><i class="fa-solid fa-code-compare"></i>Comparar com a atual</button>
+        <button class="btn btn-g btn-sm" onclick="propSel=${arg(p.id)};abaProp('propostas')"><i class="fa-solid fa-list-check"></i>Detalhes e custos</button>
+        ${ehAdmin() ? `<button class="btn btn-g btn-sm" onclick="aplicarProposta(${arg(p.id)})" title="Levar as alterações para a estrutura oficial"><i class="fa-solid fa-circle-check"></i>Aplicar à oficial</button>` : ''}</div></div>`; };
+  return `<div class="pm-intro"><div class="pm-passos">${[['fa-plus', 'Crie uma proposta', 'Ela começa igual à estrutura oficial.'], ['fa-pen-ruler', 'Edite no mapa', 'Crie, mova, renomeie, extinga e sinalize setores. A oficial não muda.'], ['fa-code-compare', 'Compare', 'Veja lado a lado o que mudou e o impacto nos custos.'], ['fa-circle-check', 'Aplique', 'O administrador leva a proposta aprovada para a estrutura oficial.']].map(([ic, t, d], i) => `<div><span>${i + 1}</span><i class="fa-solid ${ic}"></i><b>${t}</b><small>${d}</small></div>`).join('')}</div>
+      ${pode ? '<button class="btn btn-p" onclick="novaProposta()"><i class="fa-solid fa-plus"></i>Nova proposta</button>' : ''}</div>
+    <h4 class="adm-sub">Propostas em andamento <small>${abertas.length}</small></h4>
+    <div class="pm-grade">${abertas.map(card).join('') || `<div class="cartao vazio"><i class="fa-solid fa-diagram-project"></i>Nenhuma proposta em andamento.${pode ? ' Crie uma para editar a estrutura no mapa.' : ''}</div>`}</div>
+    ${aplicadas.length ? `<details class="pm-apl"><summary><i class="fa-solid fa-box-archive"></i>Propostas já aplicadas <em>${aplicadas.length}</em></summary><div class="pm-grade">${aplicadas.map(p => `<div class="pm-card apl"><div class="pm-top"><span class="pm-ic"><i class="fa-solid fa-circle-check"></i></span><div><b>${esc(p.nome)}</b><small>aplicada ${p.atualizadoEm ? fmtData(p.atualizadoEm) : ''}</small></div></div></div>`).join('')}</div></details>` : ''}`;
+}
+function editarPropostaMapa(id){ escolherCenarioMapa(id); }
+function escolherPropostaParaEditar(){
+  const L = DB.propostas.filter(p => p.status !== 'Aplicada'), pode = podeEditarSec('propostas');
+  if (!pode) return toast('A estrutura oficial é só para consulta. Seu perfil não edita propostas.', 'aviso');
+  abrirModal({ titulo:'Editar a estrutura numa proposta', rotulo:'Fechar', semCancelar:true, largura:560, html:`<p class="s" style="margin-top:0">A estrutura oficial fica só para consulta. As mudanças são feitas numa proposta e, quando aprovadas, aplicadas à oficial.</p>
+    <div class="pm-esc">${L.map(p => `<button type="button" onclick="this.closest('.modal').remove();editarPropostaMapa(${arg(p.id)})"><i class="fa-solid fa-diagram-project"></i><span><b>${esc(p.nome)}</b><small>${itensProp(p).length + overridesDe(p.id).length} alteração(ões)</small></span><i class="fa-solid fa-chevron-right"></i></button>`).join('')}
+      <button type="button" class="nova" onclick="this.closest('.modal').remove();novaProposta('',true)"><i class="fa-solid fa-plus"></i><span><b>Nova proposta</b><small>começa igual à estrutura oficial</small></span></button></div>` });
+}
+function novaProposta(copiaDe, abrirMapa){
+  if (!podeEditarSec('propostas')) return toast('Seu perfil não cria propostas.', 'aviso');
   const o = copiaDe ? DB.propostas.find(p => p.id === copiaDe) : null;
   abrirModal({ titulo: o ? 'Duplicar proposta' : 'Nova proposta', rotulo: o ? 'Duplicar' : 'Criar', largura:480,
     html:`<label><span class="rot">Nome da proposta</span><input id="np-nome" class="campo" required value="${o ? esc(o.nome + ' (cópia)') : ''}" placeholder="ex.: Reestruturação da SAGP 2027"></label>
@@ -2953,7 +2990,7 @@ function novaProposta(copiaDe){
       if (o) overridesDe(o.id).forEach(x => { const n = novoReg('propSetores', Object.assign({}, x, { id:p.id + '_' + x.setorId, propostaId:p.id })); DB.propSetores.push(n); enfileirar('propSetores', n); });
       salvarLocal(); propSel = p.id; return true;
     }
-  }).then(ok => { if (ok) { abaProp('propostas'); } });
+  }).then(ok => { if (!ok) return; if (abrirMapa) editarPropostaMapa(propSel); else { if (vistaAtual !== 'propostas') trocarVista('propostas'); abaProp('mapas'); } });
 }
 function nomeVirt(E, id){ const s = E.mapa.get(id); return s ? (s.sigla ? s.sigla + ' · ' : '') + s.nome : '(setor removido)'; }
 function descreverAlt(it, E){
@@ -3168,7 +3205,7 @@ function aplicarCenario(){
   DBoficial = DB.setores; DB.setores = E.lista; cenSwap = true; indexar();
 }
 function desaplicarCenario(){ if (!cenSwap) return; DB.setores = DBoficial; DBoficial = null; cenSwap = false; indexar(); }
-function sairCenario(){ desaplicarCenario(); cenMapa = ''; atualizarBarraCen(); preencherCenarios(); }
+function sairCenario(){ desaplicarCenario(); cenMapa = ''; atualizarBarraCen(); preencherCenarios(); document.body.classList.toggle('ro', somenteLeitura()); document.body.classList.toggle('est-consulta', estruturaConsulta()); if (vistaAtual === 'mapa' || vistaAtual === 'lista') trocarVista(vistaAtual); }
 function remarcarCenario(){
   if (!cenSwap) return; const p = DB.propostas.find(x => x.id === cenMapa); if (!p) return;
   const of = new Map(DBoficial.map(s => [s.id, s])), cargos = new Set(itensProp(p).filter(i => i.tipo === 'cargo').map(i => i.setorId));
@@ -3242,9 +3279,9 @@ function preencherCenarios(){
 }
 function escolherCenarioMapa(id){
   limparMulti(true); fecharPainel(); desaplicarCenario();
-  cenMapa = id || '';
+  cenMapa = id || ''; document.body.classList.toggle('ro', somenteLeitura());
   if (cenMapa) { ancestraisMarcados(listaCenario(cenMapa)).forEach(a => abertos.add(a)); aplicarCenario(); }
-  if (vistaAtual !== 'mapa') trocarVista('mapa'); else { atualizarBarraCen(); desenharMapa(); }
+  if (vistaAtual !== 'mapa') trocarVista('mapa'); else { trocarVista('mapa'); }
   setTimeout(() => ajustar(true), 40);
 }
 function verPropostaNoMapa(id){ escolherCenarioMapa(id); }

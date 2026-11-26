@@ -1,7 +1,7 @@
 /* GABOrg · service worker
  * Página e arquivo.js: sempre da rede primeiro (atualizações chegam na hora); a cópia guardada só entra sem internet.
  * Bibliotecas (ícones, fontes, mapa): guardadas e reaproveitadas. Chamadas ao Apps Script nunca são guardadas. */
-const VERSAO = 'gaborg-1.58.0', CDN = 'gaborg-cdn-1', MAPA = 'gaborg-mapa-1';
+const VERSAO = 'gaborg-1.59.0', CDN = 'gaborg-cdn-1', MAPA = 'gaborg-mapa-1';
 const CASCA = ['./', './index.html', './arquivo.js', './manifest.webmanifest', './gaborg-192.png', './gaborg-512.png', './gaborg-maskable.png', './gaborg-apple.png'];
 const EH_CDN = /(^|\.)(cdnjs\.cloudflare\.com|cdn\.jsdelivr\.net|unpkg\.com|fonts\.googleapis\.com|fonts\.gstatic\.com)$/;
 const EH_MAPA = /(^|\.)(tile\.openstreetmap\.org|arcgisonline\.com|servicodados\.ibge\.gov\.br|upload\.wikimedia\.org)$/;
