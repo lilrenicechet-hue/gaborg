@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.56.1';
+const VERSAO = '1.57.0';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -66,20 +66,53 @@ const TIPOS = {
   'Outro':              { cor:'#475569', ic:'fa-shapes' }
 };
 const STATUS_SETOR = { 'Ativo':'#16a34a', 'Em revisão':'#d97706', 'Proposto':'#2563eb', 'Extinto':'#94a3b8' };
+/* sinalizações do setor: aparecem como selos no canto do cartão; "DGA excluído" é um X vermelho */
+const SINAIS = {
+  'DGA excluído':      { cor:'#dc2626', ic:'fa-xmark', x:true },
+  'DGA criado':        { cor:'#16a34a', ic:'fa-plus' },
+  'DGA alterado':      { cor:'#d97706', ic:'fa-arrows-rotate' },
+  'Setor novo':        { cor:'#2563eb', ic:'fa-star' },
+  'A extinguir':       { cor:'#475569', ic:'fa-ban' },
+  'Fusão':             { cor:'#7c3aed', ic:'fa-code-merge' },
+  'Remanejado':        { cor:'#0891b2', ic:'fa-right-left' },
+  'Atenção':           { cor:'#ea580c', ic:'fa-triangle-exclamation' }
+};
+const sinaisDe = s => String((s && s.sinais) || '').split(/\s*;\s*/).filter(Boolean);
+const sinalInfo = k => SINAIS[k] || { cor:'#64748b', ic:'fa-tag' };
+function sinaisCantoHTML(s){
+  const l = sinaisDe(s); if (!l.length) return '';
+  const xs = l.filter(k => sinalInfo(k).x), os = l.filter(k => !sinalInfo(k).x);
+  return `<span class="no-sin" title="${esc(l.join(' · '))}">${os.map(k => `<i class="fa-solid ${sinalInfo(k).ic}" style="--c:${sinalInfo(k).cor}"></i>`).join('')}${xs.length ? `<b class="no-x" style="--c:${sinalInfo(xs[0]).cor}"><i class="fa-solid fa-xmark"></i></b>` : ''}</span>`;
+}
+function alternarSinal(id, k){ const s = porId.get(id); if (!s) return; const l = sinaisDe(s), i = l.indexOf(k); i < 0 ? l.push(k) : l.splice(i, 1); alterar(s, 'sinais', l.join('; ')); if (selId === id) renderPainel(); }
+function addSinalLivre(id, inp){ const v = String(inp.value || '').trim().replace(/;/g, ','); if (!v) return; const s = porId.get(id); const l = sinaisDe(s); if (!l.includes(v)) { l.push(v); alterar(s, 'sinais', l.join('; ')); } inp.value = ''; renderPainel(); }
+async function sinalizarSel(){
+  const ids = [...multi]; if (!ids.length) return;
+  const cont = k => ids.filter(i => sinaisDe(porId.get(i)).includes(k)).length;
+  const r = await abrirModal({ titulo:`Sinalizar ${ids.length} setor(es)`, rotulo:'Aplicar',
+    html:`<p class="s">Marque o que vale para todos os selecionados. Desmarcar tira a sinalização de todos; o que está só em parte deles fica como está se você não mexer.</p>
+      <div class="sin-op">${Object.entries(SINAIS).map(([k, v]) => `<label style="--c:${v.cor}"><input type="checkbox" value="${esc(k)}" data-ini="${cont(k) === ids.length ? 1 : cont(k) ? 'p' : 0}" ${cont(k) === ids.length ? 'checked' : ''}><i class="fa-solid ${v.ic}"></i>${esc(k)}${cont(k) && cont(k) < ids.length ? `<small>${cont(k)} de ${ids.length}</small>` : ''}</label>`).join('')}</div>`,
+    aoConfirmar:m => [...m.querySelectorAll('.sin-op input')].map(i => [i.value, i.checked, i.dataset.ini]) });
+  if (!r || r === true) return;
+  ids.forEach(i => { const s = porId.get(i); let l = sinaisDe(s);
+    r.forEach(([k, on, ini]) => { if (on) { if (!l.includes(k)) l.push(k); } else if (ini !== 'p') l = l.filter(x => x !== k); });
+    alterar(s, 'sinais', l.join('; '), true); registrar(s.id, 'Sinalizações: ' + (l.join(', ') || 'nenhuma')); });
+  toast(`Sinalizações aplicadas em ${ids.length} setor(es).`); desenharMapa();
+}
 const STATUS_VAL = { 'Sem validação':'#94a3b8', 'Pendente':'#d97706', 'Aprovado':'#16a34a', 'Aprovado com ressalvas':'#0891b2', 'Reprovado':'#dc2626' };
 const IMPACTO = [ ['Não avaliado','#94a3b8'], ['Muito baixo','#22c55e'], ['Baixo','#84cc16'], ['Médio','#eab308'], ['Alto','#f97316'], ['Crítico','#dc2626'] ];
 const TIPOS_VINCULO = ['Apoio técnico','Supervisão','Fluxo de processos','Colaboração','Atuação regional','Vinculação administrativa'];
 const PALETA_AREA = ['#1e3a8a','#0891b2','#7c3aed','#ea580c','#059669','#db2777','#ca8a04','#4f46e5','#0d9488','#9333ea','#64748b','#be123c'];
 
 const CAMPOS = {
-  setores: ['id','nome','sigla','tipo','paiId','ordem','status','responsavel','contato','competencias','entregas','orcamento','custoMensal','servidores','comissionados','impacto','impactoDescricao','positivos','negativos','layout','colunas','dx','dy','atualizadoEm','atualizadoPor','quantidade'],
+  setores: ['id','nome','sigla','tipo','paiId','ordem','status','responsavel','contato','competencias','entregas','orcamento','custoMensal','servidores','comissionados','impacto','impactoDescricao','positivos','negativos','layout','colunas','dx','dy','atualizadoEm','atualizadoPor','quantidade','sinais'],
   validacoes: ['id','setorId','validadorId','status','parecer','solicitadoEm','solicitadoPor','respondidoEm','respondidoPor'],
   vinculos: ['id','origemId','destinoId','tipo','descricao'],
   historico: ['id','setorId','data','usuario','acao'],
   rubricas: ['id','codigo','nome','categoria','valorMensal','encargos','meses','observacao','ativo','atualizadoEm','atualizadoPor','percEfetivo','fonte'],
   despesas: ['id','setorId','rubricaId','descricao','quantidade','valorUnitario','meses','cenario','observacao','atualizadoEm','atualizadoPor','vinculo'],
   propostas: ['id','nome','descricao','status','itens','criadoEm','criadoPor','atualizadoEm','atualizadoPor'],
-  propSetores: ['id','propostaId','setorId','nome','sigla','tipo','paiId','ordem','status','responsavel','contato','competencias','entregas','orcamento','custoMensal','servidores','comissionados','impacto','impactoDescricao','positivos','negativos','layout','colunas','dx','dy','atualizadoEm','atualizadoPor','quantidade','excluido'],
+  propSetores: ['id','propostaId','setorId','nome','sigla','tipo','paiId','ordem','status','responsavel','contato','competencias','entregas','orcamento','custoMensal','servidores','comissionados','impacto','impactoDescricao','positivos','negativos','layout','colunas','dx','dy','atualizadoEm','atualizadoPor','quantidade','excluido','sinais'],
   escolas: ['id','codigo','nome','dre','municipio','tipo','localidade','endereco','numero','cep','bairro','telefone','email','latitude','longitude','atualizadoEm','atualizadoPor','alunos','inclusiva','profissionais'],
   obras: ['id','origem','instrumento','codigo','dre','municipio','unidade','escolaCodigo','vinculo','rede','objeto','salas','alunos','empresa','status','valor','execFisica','execFinanceira','situacao','previsao','inaugurar','aptaSpat','aptaSagr','atoGs','dataInauguracao','obsSuob','obsSpat','obsSagr','observacoes','latitude','longitude','atualizadoEm','atualizadoPor'],
   convenios: ['id','municipio','numero','objeto','escolaCodigo','rede','dataAssinatura','dataTermino','valorConcedente','valorContrapartida','valorRepassado','valorExecutado','execFisica','situacaoPrazo','prestacaoContas','situacao','observacoes','responsavel','dataAtualizacao','atualizadoEm','atualizadoPor'],
@@ -668,7 +701,7 @@ function registrar(setorId, acao){
   DB.historico.unshift(h); if (DB.historico.length > 3000) DB.historico.length = 3000;
   enfileirar('historico', h);
 }
-const ROTULOS = { quantidade:'Unidades representadas', nome:'Nome', sigla:'Sigla', tipo:'Tipo', paiId:'Setor superior', status:'Situação', responsavel:'Responsável', contato:'Contato', competencias:'Competências', entregas:'Entregas', orcamento:'Orçamento anual', custoMensal:'Custo mensal', servidores:'Servidores', comissionados:'Cargos comissionados', impacto:'Impacto', impactoDescricao:'Descrição do impacto', positivos:'Pontos positivos', negativos:'Pontos negativos', layout:'Disposição dos subordinados', colunas:'Colunas', ordem:'Ordem' };
+const ROTULOS = { sinais:'Sinalizações', quantidade:'Unidades representadas', nome:'Nome', sigla:'Sigla', tipo:'Tipo', paiId:'Setor superior', status:'Situação', responsavel:'Responsável', contato:'Contato', competencias:'Competências', entregas:'Entregas', orcamento:'Orçamento anual', custoMensal:'Custo mensal', servidores:'Servidores', comissionados:'Cargos comissionados', impacto:'Impacto', impactoDescricao:'Descrição do impacto', positivos:'Pontos positivos', negativos:'Pontos negativos', layout:'Disposição dos subordinados', colunas:'Colunas', ordem:'Ordem' };
 const ESTRUTURAIS = ['paiId','layout','colunas','ordem','nome','tipo','status','dx','dy'];
 function alterar(s, campo, valor, silencioso){
   valor = String(valor ?? '');
@@ -720,8 +753,9 @@ function medir(s, d){
   }
   caixas.set(s.id, b); return b;
 }
+let orgSemManual = false;
 function posicionar(s, ox, oy){
-  const b = caixas.get(s.id), dx = num(s.dx), dy = num(s.dy);
+  const b = caixas.get(s.id), dx = orgSemManual ? 0 : num(s.dx), dy = orgSemManual ? 0 : num(s.dy);
   pos.set(s.id, { x:ox + b.nx + dx, y:oy + dy }); visiveis.push(s);
   b.rel.forEach((r, kid) => posicionar(porId.get(kid), ox + dx + r.x, oy + dy + r.y));
 }
@@ -736,6 +770,128 @@ function reposicionar(){
   raizes().forEach(r => posicionar(r, origemRaiz.get(r.id) || 0, 0));
 }
 
+/* ===================== ORGANOGRAMA EM PDF (A1 a A4) ===================== */
+const PAPEIS = { A1:[594, 841], A2:[420, 594], A3:[297, 420], A4:[210, 297] };
+let pdfOrg = Object.assign({ papel:'A3', orient:'auto', escopo:'geral', alvo:'', todas:false, niveis:0, cor:'tipo', resp:true, serv:true, sinais:true, legenda:true, cab:true, manual:true, titulo:'' }, store.get('gaborg_pdforg', {}) || {});
+const pdfAdjuntas = () => { const g = DB.setores.filter(s => s.status !== 'Extinto' && /Secret[aá]ri[oa] Adjunt|Secretaria Adjunta/i.test(s.nome) && !caminho(s.id).some(a => /Secret[aá]ri[oa] Adjunt|Secretaria Adjunta/i.test(a.nome))); return g.length ? g : areas.map(id => porId.get(id)).filter(Boolean); };
+const pdfSupers = () => DB.setores.filter(s => s.tipo === 'Superintendência' && s.status !== 'Extinto').sort((a, b) => nomeCurto(a).localeCompare(nomeCurto(b), 'pt-BR'));
+/* monta o desenho de um ramo com tudo aberto, sem mexer no mapa da tela */
+function pdfLayout(raizesIds, niveis, manual){
+  const salva = { abertos, caixas, modos, pos, visiveis, origemRaiz }, semMan = orgSemManual;
+  const base = raizesIds.map(id => porId.get(id)).filter(Boolean);
+  const ab = new Set(); const marca = (s, d) => { if (s.status === 'Extinto' && !cenSwap) return; if (!niveis || d < niveis - 1) ab.add(s.id); filhosDe(s.id).forEach(k => marca(k, d + 1)); };
+  base.forEach(r => marca(r, 0));
+  try {
+    abertos = ab; caixas = new Map(); modos = new Map(); pos = new Map(); visiveis = []; orgSemManual = !manual;
+    let x = 0; base.forEach(r => { medir(r, 0); posicionar(r, x, 0); x += caixas.get(r.id).w + 140; });
+    const nos = visiveis.slice(), P = new Map(pos), arestas = [];
+    nos.forEach(s => filhosVis(s.id).forEach(k => { if (P.has(k.id)) arestas.push(caminhoAresta(s, k)); }));
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity; P.forEach(p => { x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y); x1 = Math.max(x1, p.x + NW); y1 = Math.max(y1, p.y + NH); });
+    return { nos, P, arestas, x0, y0, w:x1 - x0 + 24, h:y1 - y0 + 24 };
+  } finally { ({ abertos, caixas, modos, pos, visiveis, origemRaiz } = salva); orgSemManual = semMan; }
+}
+function pdfCor(s, cor){ const m = $('#m-cor'), v = m.value; m.value = cor; const c = corDe(s); m.value = v; return c; }
+function pdfPaginas(){
+  const o = pdfOrg; let grupos;
+  if (o.escopo === 'adjunta') grupos = (o.todas ? pdfAdjuntas() : [porId.get(o.alvo) || pdfAdjuntas()[0]]).filter(Boolean).map(s => [s, [s.id]]);
+  else if (o.escopo === 'super') grupos = (o.todas ? pdfSupers() : [porId.get(o.alvo) || pdfSupers()[0]]).filter(Boolean).map(s => [s, [s.id]]);
+  else grupos = [[null, raizes().map(r => r.id)]];
+  return grupos.map(([alvo, ids]) => ({ alvo, L:pdfLayout(ids, num(o.niveis), o.manual) }));
+}
+function pdfDimensoes(L){
+  const [a, b] = PAPEIS[pdfOrg.papel], pais = pdfOrg.orient === 'paisagem' || (pdfOrg.orient === 'auto' && L.w >= L.h);
+  const W = pais ? b : a, H = pais ? a : b, mm = 3.7795, cab = pdfOrg.cab ? 22 : 0, leg = pdfOrg.legenda ? 12 : 0, mg = 10;
+  const aw = (W - 2 * mg) * mm, ah = (H - 2 * mg - cab - leg) * mm, k = Math.min(aw / L.w, ah / L.h, 1.6);
+  return { W, H, k, pt:+(13 * k * .75).toFixed(1), mg, cab, leg };
+}
+function pdfCartao(s, P, L){
+  const o = pdfOrg, p = P.get(s.id), c = pdfCor(s, o.cor), qt = num(s.quantidade), si = o.sinais ? sinaisDe(s) : [], x = si.some(k => sinalInfo(k).x);
+  return `<div class="po-no ${s.status === 'Extinto' ? 'ext' : ''} ${x ? 'sx' : ''}" style="left:${p.x - L.x0 + 12}px;top:${p.y - L.y0 + 12}px;--c:${c}">
+    <div class="t"><i class="fa-solid ${icTipo(s.tipo)}"></i>${esc(s.tipo)}${s.sigla ? ' · ' + esc(s.sigla) : ''}</div><div class="n">${esc(s.nome)}</div>
+    <div class="p">${qt ? `<b>${fmtN(qt)}</b> ${rotuloUnid(s)}` : o.resp ? (s.responsavel ? '<i class="fa-solid fa-user"></i>' + esc(s.responsavel) : '<span class="sr">Sem responsável</span>') : ''}${o.serv && num(s.servidores) ? `<span class="sv"><i class="fa-solid fa-users"></i>${fmtN(s.servidores)}</span>` : ''}</div>
+    ${si.length ? `<span class="po-sin">${si.filter(k => !sinalInfo(k).x).map(k => `<i class="fa-solid ${sinalInfo(k).ic}" style="--c:${sinalInfo(k).cor}" title="${esc(k)}"></i>`).join('')}${x ? '<b><i class="fa-solid fa-xmark"></i></b>' : ''}</span>` : ''}</div>`;
+}
+function pdfLegenda(paginas){
+  const o = pdfOrg, nos = paginas.flatMap(g => g.L.nos), it = new Map();
+  nos.forEach(s => { const c = pdfCor(s, o.cor), r = o.cor === 'tipo' ? s.tipo : o.cor === 'area' ? nomeCurto(porId.get(areaDe.get(s.id)) || s) : o.cor === 'status' ? (s.status || 'Ativo') : o.cor === 'sinais' ? (sinaisDe(s)[0] || 'Sem sinalização') : ''; if (r && !it.has(r)) it.set(r, c); });
+  const sin = new Map(); if (o.sinais) nos.forEach(s => sinaisDe(s).forEach(k => sin.set(k, (sin.get(k) || 0) + 1)));
+  return `<div class="po-leg">${[...it.entries()].slice(0, 18).map(([r, c]) => `<span><i style="background:${c}"></i>${esc(r)}</span>`).join('')}${sin.size ? `<span class="sep"></span>${[...sin.entries()].map(([k, n]) => `<span class="sn" style="--c:${sinalInfo(k).cor}"><b><i class="fa-solid ${sinalInfo(k).ic}"></i></b>${esc(k)} (${n})</span>`).join('')}` : ''}</div>`;
+}
+function pdfHTML(paginas, previa){
+  const o = pdfOrg, hoje = new Date().toLocaleDateString('pt-BR'), leg = o.legenda ? pdfLegenda(paginas) : '';
+  return paginas.map(({ alvo, L }, i) => { const d = pdfDimensoes(L), mm = 3.7795;
+    const tit = o.titulo || (alvo ? nomeCurto(alvo) === alvo.nome ? alvo.nome : alvo.nome : 'Estrutura organizacional da SEDUC-MT');
+    return `<section class="po-pg" style="width:${d.W}mm;height:${d.H}mm">
+      ${o.cab ? `<header class="po-cab"><div><small>GOVERNO DE MATO GROSSO · SECRETARIA DE ESTADO DE EDUCAÇÃO</small><h1>${esc(tit)}</h1><p>${alvo ? (o.escopo === 'adjunta' ? 'Secretaria adjunta' : 'Superintendência') + ' · ' : ''}${fmtN(L.nos.length)} setores${cenSwap ? ' · cenário em análise' : ''} · ${hoje}</p></div><div class="po-gab"><b>GAB<em>Org</em></b><small>${paginas.length > 1 ? `Folha ${i + 1} de ${paginas.length} · ` : ''}${o.papel}</small></div></header>` : ''}
+      <div class="po-area" style="left:${d.mg}mm;right:${d.mg}mm;top:${d.mg + d.cab}mm;bottom:${d.mg + d.leg}mm"><div class="po-mundo" style="width:${L.w}px;height:${L.h}px;transform:translate(-50%,-50%) scale(${d.k})">
+        <svg class="po-ar" width="${L.w}" height="${L.h}" viewBox="${L.x0 - 12} ${L.y0 - 12} ${L.w} ${L.h}">${L.arestas.map(a => `<path d="${a}"/>`).join('')}</svg>
+        ${L.nos.map(s => pdfCartao(s, L.P, L)).join('')}</div></div>
+      ${o.legenda ? `<footer class="po-pe" style="left:${d.mg}mm;right:${d.mg}mm;bottom:${d.mg - 4}mm">${leg}</footer>` : ''}</section>`; }).join('');
+}
+const PO_CSS = `.po-pg{position:relative;background:#fff;color:#0f172a;font-family:Inter,system-ui,sans-serif;overflow:hidden;box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact;page-break-after:always;break-after:page}
+.po-pg:last-child{page-break-after:auto;break-after:auto}.po-pg *{box-sizing:border-box}
+.po-cab{position:absolute;left:10mm;right:10mm;top:7mm;height:17mm;display:flex;justify-content:space-between;align-items:center;gap:8mm;border-bottom:.6mm solid #1c3f94;padding-bottom:2mm}
+.po-cab small{display:block;font-size:2.6mm;font-weight:800;letter-spacing:.12em;color:#1c3f94}.po-cab h1{margin:1mm 0 .6mm;font-size:6mm;font-weight:900;letter-spacing:-.01em;line-height:1.05}.po-cab p{margin:0;font-size:3mm;color:#475569}
+.po-gab{text-align:right;flex:none}.po-gab b{display:block;font-size:6mm;font-weight:900;color:#1e3a8a}.po-gab b em{font-style:normal;color:#0e7490}.po-gab small{font-size:2.6mm;color:#64748b}
+.po-area{position:absolute}.po-mundo{position:absolute;left:50%;top:50%;transform-origin:50% 50%}
+.po-ar{position:absolute;left:0;top:0;overflow:visible}.po-ar path{fill:none;stroke:#94a3b8;stroke-width:1.6}
+.po-no{position:absolute;width:${NW}px;height:${NH}px;border-radius:10px;background:#fff;border:1.5px solid color-mix(in srgb,var(--c) 45%,#e2e8f0);border-left:6px solid var(--c);padding:7px 10px 6px;display:flex;flex-direction:column;gap:2px;box-shadow:0 1px 3px rgba(15,23,42,.1)}
+.po-no .t{font-size:10px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--c);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.po-no .t i{margin-right:4px}
+.po-no .n{font-size:13px;font-weight:800;line-height:1.15;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.po-no .p{margin-top:auto;display:flex;gap:8px;align-items:center;font-size:10.5px;color:#475569;white-space:nowrap;overflow:hidden}.po-no .p i{margin-right:3px;color:#94a3b8}.po-no .p .sv{margin-left:auto}.po-no .p .sr{color:#94a3b8;font-style:italic}
+.po-no.ext{opacity:.5;border-style:dashed}.po-no.sx{background:#fff5f5}
+.po-sin{position:absolute;top:-9px;right:-9px;display:flex;gap:3px;align-items:center}
+.po-sin>i{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-size:10px;color:#fff;background:var(--c);border:2px solid #fff}
+.po-sin>b{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:#dc2626;color:#fff;font-size:15px;border:2.5px solid #fff;box-shadow:0 2px 4px rgba(0,0,0,.25)}
+.po-pe{position:absolute;height:9mm;display:flex;align-items:center;border-top:.3mm solid #e2e8f0}
+.po-leg{display:flex;flex-wrap:wrap;gap:1mm 4mm;align-items:center;font-size:2.7mm;color:#334155}.po-leg span{display:inline-flex;align-items:center;gap:1.4mm}.po-leg span>i{width:3mm;height:3mm;border-radius:.8mm}
+.po-leg .sep{width:.3mm;height:4mm;background:#cbd5e1}.po-leg .sn b{width:3.8mm;height:3.8mm;border-radius:50%;display:grid;place-items:center;background:var(--c);color:#fff;font-size:2.2mm}`;
+function abrirPdfOrg(){
+  const o = pdfOrg, ads = pdfAdjuntas(), sups = pdfSupers();
+  if (o.escopo === 'adjunta' && !porId.has(o.alvo)) o.alvo = ads[0] ? ads[0].id : '';
+  if (o.escopo === 'super' && !porId.has(o.alvo)) o.alvo = sups[0] ? sups[0].id : '';
+  const ck = (k, t) => `<label class="po-ck"><input type="checkbox" data-po="${k}" ${o[k] ? 'checked' : ''}>${t}</label>`;
+  const opAlvo = o.escopo === 'adjunta' ? ads : o.escopo === 'super' ? sups : [];
+  abrirModal({ titulo:'Baixar organograma em PDF', rotulo:'Gerar PDF', largura:980, html:`<div class="po-cfg">
+    <div class="po-op">
+      <div><span class="rot">Papel</span><div class="po-seg">${Object.keys(PAPEIS).map(k => `<button type="button" class="${o.papel === k ? 'on' : ''}" data-set="papel" data-v="${k}">${k}<small>${PAPEIS[k][0]}×${PAPEIS[k][1]} mm</small></button>`).join('')}</div></div>
+      <div><span class="rot">Orientação</span><div class="po-seg">${[['auto', 'Automática'], ['paisagem', 'Paisagem'], ['retrato', 'Retrato']].map(([k, t]) => `<button type="button" class="${o.orient === k ? 'on' : ''}" data-set="orient" data-v="${k}">${t}</button>`).join('')}</div></div>
+      <div><span class="rot">O que mostrar</span><div class="po-seg">${[['geral', 'Estrutura geral'], ['adjunta', 'Por secretaria adjunta'], ['super', 'Por superintendência']].map(([k, t]) => `<button type="button" class="${o.escopo === k ? 'on' : ''}" data-set="escopo" data-v="${k}">${t}</button>`).join('')}</div></div>
+      ${o.escopo !== 'geral' ? `<div class="g2"><label><span class="rot">${o.escopo === 'adjunta' ? 'Secretaria adjunta' : 'Superintendência'}</span><select class="campo" data-po="alvo" ${o.todas ? 'disabled' : ''}>${opAlvo.map(s => `<option value="${esc(s.id)}" ${o.alvo === s.id ? 'selected' : ''}>${esc(s.nome)}</option>`).join('')}</select></label>${ck('todas', `Todas, uma por folha (${opAlvo.length})`)}</div>` : ''}
+      <div class="g2"><label><span class="rot">Níveis</span><select class="campo" data-po="niveis"><option value="0" ${!num(o.niveis) ? 'selected' : ''}>Todos os setores abertos</option>${[2, 3, 4, 5].map(n => `<option value="${n}" ${num(o.niveis) === n ? 'selected' : ''}>Até ${n} níveis</option>`).join('')}</select></label>
+        <label><span class="rot">Cores</span><select class="campo" data-po="cor">${[['tipo', 'Tipo de setor'], ['area', 'Secretaria adjunta'], ['status', 'Situação'], ['sinais', 'Sinalizações']].map(([k, t]) => `<option value="${k}" ${o.cor === k ? 'selected' : ''}>${t}</option>`).join('')}</select></label></div>
+      <label><span class="rot">Título <small>em branco: automático</small></span><input class="campo" data-po="titulo" value="${esc(o.titulo)}" placeholder="Estrutura organizacional da SEDUC-MT" maxlength="120"></label>
+      <div class="po-cks">${ck('resp', 'Responsáveis')}${ck('serv', 'Nº de servidores')}${ck('sinais', 'Sinalizações (X de DGA excluído)')}${ck('legenda', 'Legenda')}${ck('cab', 'Cabeçalho com título e data')}${ck('manual', 'Usar as posições ajustadas no mapa')}</div>
+    </div>
+    <div class="po-prev"><div class="po-pv" id="po-pv"></div><p class="po-info" id="po-info"></p></div></div>`,
+    aoConfirmar:() => { gerarPdfOrg(); } });
+  const m = [...document.querySelectorAll('.modal')].pop(); if (!m) return;
+  m.addEventListener('click', e => { const b = e.target.closest('[data-set]'); if (!b) return; o[b.dataset.set] = b.dataset.v; if (b.dataset.set === 'escopo') { o.alvo = ''; o.todas = false; } salvarPdfOrg(); m.remove(); abrirPdfOrg(); });
+  m.addEventListener('change', e => { const el = e.target.closest('[data-po]'); if (!el) return; const k = el.dataset.po; o[k] = el.type === 'checkbox' ? el.checked : el.value; salvarPdfOrg(); if (k === 'todas') { m.remove(); abrirPdfOrg(); } else pdfPrevia(); });
+  m.addEventListener('input', e => { if (e.target.dataset.po === 'titulo') { o.titulo = e.target.value; salvarPdfOrg(); clearTimeout(pdfPrevia.t); pdfPrevia.t = setTimeout(pdfPrevia, 300); } });
+  pdfPrevia();
+}
+function salvarPdfOrg(){ store.set('gaborg_pdforg', pdfOrg); }
+function pdfPrevia(){
+  const el = $('#po-pv'), info = $('#po-info'); if (!el) return;
+  if (!$('#po-css')) { const st = document.createElement('style'); st.id = 'po-css'; st.textContent = PO_CSS; document.head.appendChild(st); }
+  const pg = pdfPaginas(); if (!pg.length || !pg[0].L.nos.length) { el.innerHTML = '<p class="s">Nada para mostrar.</p>'; info.textContent = ''; return; }
+  const d = pdfDimensoes(pg[0].L), mm = 3.7795, cw = el.clientWidth || 380, esc_ = Math.min(cw / (d.W * mm), 420 / (d.H * mm));
+  el.innerHTML = `<div style="width:${d.W * mm * esc_}px;height:${d.H * mm * esc_}px;position:relative;margin:auto"><div style="transform:scale(${esc_});transform-origin:0 0;position:absolute;left:0;top:0">${pdfHTML([pg[0]], true)}</div></div>`;
+  const pts = pg.map(g => pdfDimensoes(g.L).pt), menor = Math.min(...pts), setores = pg.reduce((t, g) => t + g.L.nos.length, 0);
+  const sug = menor < 4 ? Object.keys(PAPEIS).find(k => { const [a, b] = PAPEIS[k], L = pg[pts.indexOf(menor)].L, pais = L.w >= L.h, W = pais ? b : a, H = pais ? a : b; return 13 * Math.min((W - 20) * mm / L.w, (H - 50) * mm / L.h) * .75 >= 5; }) : '';
+  info.innerHTML = `<b>${pg.length} folha${pg.length > 1 ? 's' : ''} ${pdfOrg.papel}</b> · ${fmtN(setores)} setores · nome do setor com cerca de <b class="${menor < 4 ? 'ruim' : menor < 6 ? 'medio' : 'bom'}">${String(menor).replace('.', ',')} pt</b> no papel${menor < 4 ? ` <span class="ruim">— pequeno demais para ler${sug ? `; experimente ${sug}, recortar por secretaria adjunta ou limitar os níveis` : '; recorte por secretaria adjunta ou limite os níveis'}</span>` : menor < 6 ? ' (legível de perto)' : ''}`;
+}
+function gerarPdfOrg(){
+  const pg = pdfPaginas(); if (!pg.length) return;
+  const sz = pg.map(g => pdfDimensoes(g.L)), mesma = sz.every(d => d.W === sz[0].W);
+  const f = document.createElement('iframe'); f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0'; document.body.appendChild(f);
+  const d = f.contentWindow.document;
+  d.open(); d.write(`<!doctype html><html><head><meta charset="utf-8"><title>Organograma SEDUC-MT · ${pdfOrg.papel}</title><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"><style>@page{size:${mesma ? `${sz[0].W}mm ${sz[0].H}mm` : pdfOrg.papel};margin:0}html,body{margin:0;background:#fff}${PO_CSS}</style></head><body>${pdfHTML(pg)}</body></html>`); d.close();
+  let n = 0; const tenta = () => { const ok = !d.fonts || d.fonts.status === 'loaded'; if (ok || n++ > 40) { try { f.contentWindow.focus(); f.contentWindow.print(); } catch (e) {} setTimeout(() => f.remove(), 3000); } else setTimeout(tenta, 120); };
+  setTimeout(tenta, 400); toast('Na janela de impressão, escolha "Salvar como PDF" e o tamanho ' + pdfOrg.papel + '.');
+}
+
 /* ===================== DESENHO DO MAPA ===================== */
 let view = store.get('gaborg_view', { x:60, y:90, k:.8 });
 const elNo = new Map();
@@ -745,6 +901,7 @@ function corDe(s){
   if (m === 'validacao') return STATUS_VAL[statusVal(s.id)];
   if (m === 'impacto') return IMPACTO[num(s.impacto)] ? IMPACTO[num(s.impacto)][1] : IMPACTO[0][1];
   if (m === 'status') return STATUS_SETOR[s.status] || '#64748b';
+  if (m === 'sinais') { const l = sinaisDe(s); return l.length ? sinalInfo(l[0]).cor : '#cbd5e1'; }
   return corTipo(s.tipo);
 }
 function cardHTML(s){
@@ -753,12 +910,12 @@ function cardHTML(s){
   const sv = statusVal(s.id), imp = num(s.impacto);
   const ser = num(s.servidores);
   const mk = s._marcas && s._marcas.length ? [...new Set(s._marcas)] : [], qt = num(s.quantidade);
-  return `<div class="no ${qt ? 'grupo' : ''} ${estilo} ${s.status === 'Extinto' ? 'extinto' : ''} ${modos.get(s.id) === 'v' ? 'v-mode' : ''} ${s.id === selId ? 'sel' : ''} ${multi.has(s.id) ? 'msel' : ''} ${mk.length ? 'cen-m cen-' + mk[0] : ''}" data-id="${esc(s.id)}" style="--c:${corDe(s)};--d:${Math.min(prof.get(s.id) || 0, 8)};transform:translate(${p.x}px,${p.y}px)" title="${esc(s.nome)}">
+  return `<div class="no ${qt ? 'grupo' : ''} ${estilo} ${s.status === 'Extinto' ? 'extinto' : ''} ${sinaisDe(s).some(k => sinalInfo(k).x) ? 'sin-x' : ''} ${modos.get(s.id) === 'v' ? 'v-mode' : ''} ${s.id === selId ? 'sel' : ''} ${multi.has(s.id) ? 'msel' : ''} ${mk.length ? 'cen-m cen-' + mk[0] : ''}" data-id="${esc(s.id)}" style="--c:${corDe(s)};--d:${Math.min(prof.get(s.id) || 0, 8)};transform:translate(${p.x}px,${p.y}px)" title="${esc(s.nome)}">
     <div class="no-tipo"><i class="fa-solid ${icTipo(s.tipo)}"></i>${esc(s.tipo)}${s.sigla ? ' · ' + esc(s.sigla) : ''}</div>
     <div class="no-nome">${esc(s.nome)}</div>
     ${qt ? `<span class="no-qt" title="${fmtN(qt)} ${rotuloUnid(s)} representadas neste cartão"><b>${fmtN(qt)}</b>${rotuloUnid(s)}</span>` : ''}
     <div class="no-pe"><span class="r">${qt ? '' : s.responsavel ? '<i class="fa-solid fa-user"></i> ' + esc(s.responsavel) : 'Sem responsável'}</span>${ser ? `<span><i class="fa-solid fa-users"></i> ${fmtN(ser)}</span>` : ''}${imp ? `<span class="p" style="background:${IMPACTO[imp][1]}" title="Impacto: ${IMPACTO[imp][0]}"></span>` : ''}${sv !== 'Sem validação' ? `<span class="p" style="background:${STATUS_VAL[sv]};border-radius:2px" title="Validação: ${sv}"></span>` : ''}</div>
-    ${mk.length ? `<span class="cen-tags">${marcasHTML(s)}</span>` : ''}
+    ${mk.length ? `<span class="cen-tags">${marcasHTML(s)}</span>` : ''}${sinaisCantoHTML(s)}
     ${n ? `<button class="no-exp ${ab ? 'aberto' : ''}" data-exp title="${ab ? 'Recolher' : 'Mostrar'} ${n} subordinado(s)">${ab ? '<i class="fa-solid fa-minus"></i>' : n}</button>` : ''}
   </div>`;
 }
@@ -847,6 +1004,7 @@ function desenharLegenda(){
   else if (m === 'area') it = areas.map(a => [nomeCurto(porId.get(a)), corArea(a)]);
   else if (m === 'validacao') it = Object.entries(STATUS_VAL);
   else if (m === 'impacto') it = IMPACTO.map(x => [x[0], x[1]]);
+  else if (m === 'sinais') { const c = {}; DB.setores.forEach(x => sinaisDe(x).forEach(k => c[k] = (c[k] || 0) + 1)); it = [...Object.entries(c).sort((a, b) => b[1] - a[1]).map(([k, n]) => [k + ' (' + n + ')', sinalInfo(k).cor]), ['Sem sinalização', '#cbd5e1']]; }
   else it = Object.entries(STATUS_SETOR);
   if (cenMapa) it = Object.values(ROT_MARCA).map(([n, c]) => [n + ' (proposta)', c]).concat(it);
   $('#m-leg').innerHTML = `<button class="leg-x" onclick="alternarMapaUI('leg')" title="Esconder a legenda (L)"><i class="fa-solid fa-xmark"></i></button>` + it.map(([n, c]) => `<span><i class="q" style="background:${c}"></i>${esc(n)}</span>`).join('')
@@ -1217,6 +1375,9 @@ const CORPO = {
         <div><span class="rot">Posição entre os pares</span><div style="display:flex;gap:6px"><button class="btn btn-s btn-sm" ${i <= 0 ? 'disabled' : ''} onclick="moverOrdem(${arg(s.id)},-1)"><i class="fa-solid fa-arrow-up"></i>Antes</button><button class="btn btn-s btn-sm" ${i < 0 || i >= irmaos.length - 1 ? 'disabled' : ''} onclick="moverOrdem(${arg(s.id)},1)"><i class="fa-solid fa-arrow-down"></i>Depois</button></div></div>
       </div>
       ${s.tipo === 'Unidades Escolares' || num(s.quantidade) ? `<label><span class="rot">Quantidade de ${rotuloUnid(s)} <small>representadas por este cartão, sem desenhar uma a uma</small></span><input class="campo" data-campo="quantidade" data-num inputmode="numeric" value="${esc(s.quantidade)}" placeholder="ex.: 631"></label>` : ''}
+      <div><span class="rot">Sinalizações <small>aparecem no canto do cartão; "DGA excluído" mostra um X</small></span>
+        <div class="sin-ch">${(() => { const l = sinaisDe(s), todos = [...Object.keys(SINAIS), ...l.filter(k => !SINAIS[k])]; return todos.map(k => `<button type="button" class="${l.includes(k) ? 'on' : ''}" style="--c:${sinalInfo(k).cor}" onclick="alternarSinal(${arg(s.id)},${arg(k)})"><i class="fa-solid ${l.includes(k) ? sinalInfo(k).ic : 'fa-plus'}"></i>${esc(k)}</button>`).join(''); })()}
+          <form class="so-edit" onsubmit="event.preventDefault();addSinalLivre(${arg(s.id)},this.t)"><input name="t" class="campo" placeholder="Outra…" maxlength="40"></form></div></div>
       <div class="g2">
         <label><span class="rot">Responsável</span><input class="campo" data-campo="responsavel" value="${esc(s.responsavel)}" placeholder="Nome do titular"></label>
         <label><span class="rot">Contato</span><input class="campo" data-campo="contato" value="${esc(s.contato)}" placeholder="E-mail ou ramal"></label>
@@ -2594,7 +2755,7 @@ function salvarItensProp(p, itens, msgHist){
 }
 function backendSemPropostas(){ return online() && backendVersao && backendVersao.localeCompare('1.8.0', undefined, { numeric:true }) < 0; }
 /* Estrutura resultante da proposta (cópia virtual; nada muda na estrutura real) */
-const CAMPOS_COMPARA = ['nome','sigla','tipo','paiId','status','responsavel','contato','competencias','entregas','orcamento','custoMensal','servidores','comissionados','impacto','impactoDescricao','positivos','negativos','quantidade'];
+const CAMPOS_COMPARA = ['sinais','nome','sigla','tipo','paiId','status','responsavel','contato','competencias','entregas','orcamento','custoMensal','servidores','comissionados','impacto','impactoDescricao','positivos','negativos','quantidade'];
 const CAMPOS_DADOS = CAMPOS_COMPARA.filter(c => !['nome','sigla','tipo','paiId','status'].includes(c));
 function setoresOficiais(){ return cenSwap ? DBoficial : DB.setores; }
 function overridesDe(pid){ return (DB.propSetores || []).filter(o => o.propostaId === pid); }
