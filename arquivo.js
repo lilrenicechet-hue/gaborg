@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.60.0';
+const VERSAO = '1.61.0';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -1072,6 +1072,7 @@ function desenharArestas(){
   });
   if (cenMapa) visiveis.forEach(s => { if (s._paiOrig && pos.has(s._paiOrig) && pos.has(s.id)) { const a = pos.get(s._paiOrig), b = pos.get(s.id); h += `<path d="M${a.x + NW / 2},${a.y + NH} V${(a.y + NH + b.y) / 2} H${b.x + NW / 2} V${b.y}" class="orig"><title>Subordinação anterior</title></path>`; } });
   $('#arestas').innerHTML = h;
+  if (typeof legF !== 'undefined' && (legF.cat.size || legF.sin.size)) aplicarFiltroLeg();
 }
 function aplicarView(anim){
   const m = $('#mundo');
@@ -1112,17 +1113,74 @@ function centralizar(id, anim){
   view = { k, x:(vp.width - pn) / 2 - (p.x + NW / 2) * k, y:vp.height / 2.6 - (p.y + NH / 2) * k };
   aplicarView(anim !== false);
 }
+let legF = { modo:'', cat:new Set(), sin:new Set() }, legDica = false, legMini = store.get('gaborg_legmini', window.innerWidth < 820);
+function catDe(s, m){
+  if (m === 'area') return areaDe.get(s.id) || '';
+  if (m === 'validacao') return statusVal(s.id);
+  if (m === 'impacto') return (IMPACTO[num(s.impacto)] || IMPACTO[0])[0];
+  if (m === 'status') return s.status || 'Ativo';
+  if (m === 'sinais') return sinaisDe(s)[0] || 'Sem sinalização';
+  return s.tipo;
+}
+function legPassa(s, m){
+  if (legF.cat.size && !(m === 'sinais' ? (sinaisDe(s).length ? sinaisDe(s).some(k => legF.cat.has(k)) : legF.cat.has('Sem sinalização')) : legF.cat.has(catDe(s, m)))) return false;
+  if (legF.sin.size && !sinaisDe(s).some(k => legF.sin.has(k))) return false;
+  return true;
+}
 function desenharLegenda(){
-  const m = $('#m-cor').value; let it = [];
-  if (m === 'tipo') { const usados = new Set(DB.setores.map(s => s.tipo)); it = Object.keys(TIPOS).filter(t => usados.has(t)).map(t => [t, TIPOS[t].cor]); }
-  else if (m === 'area') it = areas.map(a => [nomeCurto(porId.get(a)), corArea(a)]);
-  else if (m === 'validacao') it = Object.entries(STATUS_VAL);
-  else if (m === 'impacto') it = IMPACTO.map(x => [x[0], x[1]]);
-  else if (m === 'sinais') { const c = {}; DB.setores.forEach(x => sinaisDe(x).forEach(k => c[k] = (c[k] || 0) + 1)); it = [...Object.entries(c).sort((a, b) => b[1] - a[1]).map(([k, n]) => [k + ' (' + n + ')', sinalInfo(k).cor]), ['Sem sinalização', '#cbd5e1']]; }
-  else it = Object.entries(STATUS_SETOR);
-  if (cenMapa) it = Object.values(ROT_MARCA).map(([n, c]) => [n + ' (proposta)', c]).concat(it);
-  $('#m-leg').innerHTML = `<button class="leg-x" onclick="alternarMapaUI('leg')" title="Esconder a legenda (L)"><i class="fa-solid fa-xmark"></i></button>` + it.map(([n, c]) => `<span><i class="q" style="background:${c}"></i>${esc(n)}</span>`).join('')
-    + (somenteLeitura() ? `<span class="dica"><i class="fa-solid fa-hand"></i> Arraste o fundo para navegar · roda do mouse para zoom · clique num setor para ver os detalhes · duplo clique abre/fecha · <b>Verificar</b> mostra pendências · <b>Apresentar</b> abre a apresentação em tela cheia</span>` : `<span class="dica"><i class="fa-solid fa-hand"></i> Arraste o fundo para navegar · roda do mouse para zoom · arraste um setor para reposicionar (encaixa nas guias; <b>Alt</b> solta livre) · <b>Ctrl</b> + clique seleciona vários · <b>Ctrl</b> + arrastar o fundo seleciona uma área · setas movem a seleção · <b>Shift</b> + arrastar sobre outro setor para subordinar · duplo clique abre/fecha</span>`);
+  const m = $('#m-cor').value, L = $('#m-leg'); if (!L) return;
+  if (legF.modo !== m) { legF.modo = m; legF.cat.clear(); }
+  const base = DB.setores.filter(x => x.status !== 'Extinto'), cont = {};
+  base.forEach(x => { if (m === 'sinais') { const l = sinaisDe(x); (l.length ? l : ['Sem sinalização']).forEach(k => cont[k] = (cont[k] || 0) + 1); } else { const k = catDe(x, m); cont[k] = (cont[k] || 0) + 1; } });
+  let it = [];
+  if (m === 'tipo') it = Object.keys(TIPOS).filter(t => cont[t]).map(t => [t, t, TIPOS[t].cor, icTipo(t)]);
+  else if (m === 'area') it = areas.map(a => [a, nomeCurto(porId.get(a)), corArea(a)]);
+  else if (m === 'validacao') it = Object.entries(STATUS_VAL).map(([k, c]) => [k, k, c]);
+  else if (m === 'impacto') it = IMPACTO.map(x => [x[0], x[0], x[1]]);
+  else if (m === 'sinais') it = [...Object.keys(cont).filter(k => k !== 'Sem sinalização').sort((a, b) => cont[b] - cont[a]).map(k => [k, k, sinalInfo(k).cor, sinalInfo(k).ic]), ['Sem sinalização', 'Sem sinalização', '#cbd5e1', 'fa-minus']];
+  else it = Object.entries(STATUS_SETOR).map(([k, c]) => [k, k, c]);
+  const chip = (g, k, n, c, ic, qt) => { const on = legF[g].has(k); return `<button type="button" class="lgf-c ${on ? 'on' : ''} ${qt ? '' : 'zero'}" style="--c:${c}" onclick="filtroLeg('${g}',${arg(k)})" title="${qt ? (on ? 'Remover do filtro' : 'Filtrar: ' + esc(n)) : 'Nenhum setor'}">${ic ? `<i class="ic fa-solid ${ic}"></i>` : '<i class="q"></i>'}<span>${esc(n)}</span><em>${qt || 0}</em></button>`; };
+  const sinCont = {}; base.forEach(x => sinaisDe(x).forEach(k => sinCont[k] = (sinCont[k] || 0) + 1));
+  const sinLista = [...new Set([...Object.keys(SINAIS), ...Object.keys(sinCont)])];
+  const ativo = legF.cat.size || legF.sin.size, nOk = ativo ? base.filter(x => legPassa(x, m)).length : base.length;
+  const rotModo = ($('#m-cor').selectedOptions[0] || {}).textContent || '';
+  L.classList.toggle('mini', legMini); L.classList.toggle('filtrando', !!ativo);
+  L.innerHTML = `<div class="lgf-cab"><button type="button" class="lgf-tt" onclick="legMini=!legMini;store.set('gaborg_legmini',legMini);desenharLegenda()" title="${legMini ? 'Expandir' : 'Minimizar'} a legenda"><i class="fa-solid fa-filter"></i>Legenda e filtros<i class="fa-solid fa-chevron-${legMini ? 'up' : 'down'} cv"></i></button>
+      ${ativo ? `<span class="lgf-st"><b>${nOk}</b> de ${base.length} setores</span><button type="button" class="lgf-lp" onclick="limparFiltroLeg()"><i class="fa-solid fa-xmark"></i>Limpar</button>` : `<span class="lgf-st">clique para filtrar</span>`}
+      <button type="button" class="lgf-i ${legDica ? 'on' : ''}" onclick="legDica=!legDica;desenharLegenda()" title="Como navegar"><i class="fa-solid fa-circle-question"></i></button>
+      <button type="button" class="lgf-i" onclick="alternarMapaUI('leg')" title="Esconder a legenda (L)"><i class="fa-solid fa-xmark"></i></button></div>
+    <div class="lgf-corpo">
+      ${cenMapa ? `<div class="lgf-sec"><small>Mudanças da proposta</small><div class="lgf-ch">${Object.values(ROT_MARCA).map(([n, c]) => `<span class="lgf-c fixo" style="--c:${c}"><i class="q"></i><span>${esc(n)}</span></span>`).join('')}</div></div>` : ''}
+      <div class="lgf-sec"><small>${esc(rotModo.replace(/^Cor:\s*/i, 'Cor por '))}</small><div class="lgf-ch">${it.map(([k, n, c, ic]) => chip('cat', k, n, c, ic, cont[k])).join('')}</div></div>
+      ${m === 'sinais' ? '' : `<div class="lgf-sec"><small>Sinalizações</small><div class="lgf-ch">${sinLista.map(k => chip('sin', k, k, sinalInfo(k).cor, sinalInfo(k).ic, sinCont[k])).join('')}</div></div>`}
+      ${ativo ? `<div class="lgf-ac"><span><i class="fa-solid fa-circle-info"></i>Os demais setores ficam esmaecidos.</span><button type="button" class="btn btn-p btn-sm" onclick="mostrarFiltradosLeg()"><i class="fa-solid fa-expand"></i>Abrir e enquadrar no mapa</button></div>` : ''}
+      ${legDica ? '<div class="lgf-dica">' + (somenteLeitura() ? `<span class="dica"><i class="fa-solid fa-hand"></i> Arraste o fundo para navegar · roda do mouse para zoom · clique num setor para ver os detalhes · duplo clique abre/fecha · <b>Verificar</b> mostra pendências · <b>Apresentar</b> abre a apresentação em tela cheia</span>` : `<span class="dica"><i class="fa-solid fa-hand"></i> Arraste o fundo para navegar · roda do mouse para zoom · arraste um setor para reposicionar (encaixa nas guias; <b>Alt</b> solta livre) · <b>Ctrl</b> + clique seleciona vários · <b>Ctrl</b> + arrastar o fundo seleciona uma área · setas movem a seleção · <b>Shift</b> + arrastar sobre outro setor para subordinar · duplo clique abre/fecha</span>`) + '</div>' : ''}
+    </div>`;
+  aplicarFiltroLeg();
+}
+function filtroLeg(g, k){ const S = legF[g]; S.has(k) ? S.delete(k) : S.add(k); desenharLegenda(); }
+function limparFiltroLeg(){ legF.cat.clear(); legF.sin.clear(); desenharLegenda(); }
+function aplicarFiltroLeg(){
+  const m = $('#m-cor').value, ativo = legF.cat.size || legF.sin.size, off = new Set();
+  elNo.forEach((el, id) => { const s = porId.get(id); const o = !!(ativo && s && !legPassa(s, m)); el.classList.toggle('lf-off', o); el.classList.toggle('lf-on', !!(ativo && !o)); if (o) off.add(id); });
+  document.querySelectorAll('#arestas path[data-f]').forEach(p => p.classList.toggle('lf-off', !!ativo && off.has(p.dataset.f)));
+}
+function mostrarFiltradosLeg(){
+  const m = $('#m-cor').value, ids = DB.setores.filter(x => x.status !== 'Extinto' && legPassa(x, m)).map(x => x.id);
+  if (!ids.length) return toast('Nenhum setor corresponde ao filtro.');
+  ids.forEach(id => caminho(id).forEach(a => abertos.add(a.id)));
+  salvarAbertos(); desenharMapa();
+  setTimeout(() => enquadrarIds(ids, 150), 80);
+  toast(ids.length + ' setor(es) em destaque no mapa.');
+}
+function enquadrarIds(ids, base){
+  ids = ids.filter(i => pos.has(i) && visiveis.some(n => n.id === i)); if (!ids.length) return;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  ids.forEach(i => { const q = pos.get(i); x0 = Math.min(x0, q.x); y0 = Math.min(y0, q.y); x1 = Math.max(x1, q.x + NW); y1 = Math.max(y1, q.y + NH); });
+  const vp = vpEl.getBoundingClientRect(), topo = 80, lat = 40; base = base || 60;
+  const k = Math.max(.12, Math.min(1, (vp.width - lat * 2) / (x1 - x0), (vp.height - topo - base) / (y1 - y0)));
+  view = { k, x:(vp.width - (x1 - x0) * k) / 2 - x0 * k, y:topo + (vp.height - topo - base - (y1 - y0) * k) / 2 - y0 * k };
+  aplicarView(!semMovimento());
 }
 /* Minimapa */
 function desenharMini(){
