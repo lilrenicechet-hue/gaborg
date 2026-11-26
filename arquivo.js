@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.61.0';
+const VERSAO = '1.62.0';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -1507,23 +1507,60 @@ function renderPainel(){
   const cor = corTipo(s.tipo), cam = caminho(s.id), sv = statusVal(s.id);
   const contagem = { validacoes:(valPorSetor.get(s.id) || []).length, vinculos:DB.vinculos.filter(v => v.origemId === s.id || v.destinoId === s.id).length, historico:DB.historico.filter(h => h.setorId === s.id).length, analise:linhasDe(s.positivos).length + linhasDe(s.negativos).length };
   p.style.setProperty('--c', cor);
+  const ro = somenteLeitura(), fil = filhosDe(s.id), desc = descendentes(s.id), ser = num(s.servidores), sins = sinaisDe(s);
+  p.classList.toggle('pn-ro', ro);
   p.innerHTML = `
     <div class="pn-topo">
-      <button class="btn btn-g btn-i fechar" onclick="fecharPainel()" title="Fechar (Esc)"><i class="fa-solid fa-xmark"></i></button>
-      <div class="pn-cam">${cam.length ? cam.map(a => `<button onclick="irPara(${arg(a.id)})" title="${esc(a.nome)}">${esc(nomeCurto(a))}</button><i class="fa-solid fa-chevron-right"></i>`).join('') : '<span>Nível mais alto da estrutura</span>'}</div>
-      <div class="pn-tit"><span class="ic"><i class="fa-solid ${icTipo(s.tipo)}"></i></span><div style="min-width:0"><h2 id="pn-nome">${esc(s.nome)}</h2>
-        <div class="tags"><span class="chip sem" style="--c:${cor}">${esc(s.tipo)}${s.sigla ? ' · ' + esc(s.sigla) : ''}</span><span class="chip" style="--c:${STATUS_SETOR[s.status] || '#64748b'}">${esc(s.status || 'Ativo')}</span><span class="chip" style="--c:${STATUS_VAL[sv]}">${sv}</span></div></div></div>
+      <div class="pn-faixa">
+        <button class="pn-x" onclick="fecharPainel()" title="Fechar (Esc)"><i class="fa-solid fa-xmark"></i></button>
+        <div class="pn-cam">${cam.length ? cam.map(a => `<button onclick="irPara(${arg(a.id)})" title="${esc(a.nome)}">${esc(nomeCurto(a))}</button><i class="fa-solid fa-chevron-right"></i>`).join('') : '<span>Nível mais alto da estrutura</span>'}</div>
+        <div class="pn-tit"><span class="ic"><i class="fa-solid ${icTipo(s.tipo)}"></i></span><div style="min-width:0"><small class="pn-tp">${esc(s.tipo)}${s.sigla ? ` <b>${esc(s.sigla)}</b>` : ''}</small><h2 id="pn-nome">${esc(s.nome)}</h2></div></div>
+        <div class="pn-pills"><span><i style="background:${STATUS_SETOR[s.status] || '#64748b'}"></i>${esc(s.status || 'Ativo')}</span><span><i style="background:${STATUS_VAL[sv]}"></i>${sv}</span>${ro ? '<span class="lk"><i class="fa-solid fa-lock"></i>Somente consulta</span>' : ''}${sins.map(k => `<span class="sn" style="--k:${sinalInfo(k).cor}"><b><i class="fa-solid ${sinalInfo(k).ic}"></i></b>${esc(k)}</span>`).join('')}</div>
+      </div>
+      <div class="pn-kpi">
+        <div><b>${fil.length}</b><span>subordinados diretos</span></div>
+        <div><b>${desc.size}</b><span>setores no ramo</span></div>
+        <div><b>${ser ? fmtN(ser) : '—'}</b><span>servidores</span></div>
+        <div><b>${cam.length + 1}º</b><span>nível hierárquico</span></div>
+      </div>
       <div class="pn-acoes">
         <button class="btn btn-s btn-sm" onclick="irPara(${arg(s.id)})"><i class="fa-solid fa-location-crosshairs"></i>Mostrar no mapa</button>
+        ${fil.length ? `<button class="btn btn-s btn-sm" onclick="abrirRamo(${arg(s.id)})"><i class="fa-solid fa-angles-down"></i>Abrir ramo</button><button class="btn btn-s btn-sm" onclick="focarRamo(${arg(s.id)})"><i class="fa-solid fa-expand"></i>Enquadrar</button>` : ''}
         <button class="btn btn-s btn-sm so-edit" onclick="novoSetorEm(${arg(s.id)})"><i class="fa-solid fa-plus"></i>Subordinado</button>
-        ${temFilhos(s.id) ? `<button class="btn btn-s btn-sm" onclick="abrirRamo(${arg(s.id)})"><i class="fa-solid fa-angles-down"></i>Abrir ramo</button>` : ''}
         <button class="btn btn-s btn-sm so-edit" onclick="duplicarSetor(${arg(s.id)})" title="Duplicar setor"><i class="fa-regular fa-copy"></i></button>
         <button class="btn btn-perigo btn-sm so-edit" onclick="excluirSetor(${arg(s.id)})" title="Excluir"><i class="fa-solid fa-trash-can"></i></button>
       </div>
-      <div class="pn-abas" role="tablist">${ABAS.filter(a => !cenSwap || !['validacoes','vinculos'].includes(a[0])).map(([k, n, ic]) => `<button class="${abaPainel === k ? 'on' : ''}" onclick="abaPainel='${k}';renderPainel()" role="tab"><i class="fa-solid ${ic}"></i>${n}${contagem[k] ? `<span class="n">${contagem[k]}</span>` : ''}</button>`).join('')}</div>
+      <div class="pn-abas" role="tablist">${ABAS.filter(a => !cenSwap || !['validacoes','vinculos'].includes(a[0])).map(([k, n, ic]) => `<button class="${abaPainel === k ? 'on' : ''}" onclick="abaPainel='${k}';renderPainel()" role="tab"><i class="fa-solid ${ic}"></i>${k === 'dados' && ro ? 'Ficha' : n}${contagem[k] ? `<span class="n">${contagem[k]}</span>` : ''}</button>`).join('')}</div>
     </div>
     <div class="pn-corpo" id="pn-corpo">${CORPO[cenSwap && CORPO_ABAS_CEN.includes(abaPainel) ? (abaPainel = 'dados') : abaPainel](s)}</div>`;
   p.classList.add('aberto');
+}
+function fichaSetor(s){
+  const pai = s.paiId && porId.get(s.paiId), fil = filhosDe(s.id), comp = linhasDe(s.competencias), ent = linhasDe(s.entregas), sins = sinaisDe(s);
+  const ini = n => String(n || '').trim().split(/\s+/).filter(w => w.length > 2 || /^[A-ZÁ-Ú]/.test(w)).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+  const cont = String(s.contato || '').trim(), email = /@/.test(cont);
+  const linha = (x, cls) => `<button type="button" class="pf-no ${cls || ''}" style="--c:${corTipo(x.tipo)}" onclick="irPara(${arg(x.id)})" title="${esc(x.nome)}"><i class="fa-solid ${icTipo(x.tipo)}"></i><span><small>${esc(x.tipo)}${x.sigla ? ' · ' + esc(x.sigla) : ''}</small>${esc(x.nome)}</span>${filhosDe(x.id).length ? `<em>${filhosDe(x.id).length}</em>` : ''}</button>`;
+  return `
+    ${sins.length ? `<div class="pf-sins">${sins.map(k => `<div style="--c:${sinalInfo(k).cor}"><b><i class="fa-solid ${sinalInfo(k).ic}"></i></b><span><strong>${esc(k)}</strong>${sinalInfo(k).x ? 'Setor marcado com X no organograma.' : 'Sinalização registrada para este setor.'}</span></div>`).join('')}</div>` : ''}
+    <div class="pf-bl">
+      <div class="pf-t"><i class="fa-solid fa-user-tie"></i>Titular</div>
+      <div class="pf-tit">${s.responsavel ? `<span class="av">${esc(ini(s.responsavel))}</span><div><b>${esc(s.responsavel)}</b><small>Responsável · ${esc(s.tipo)}${s.sigla ? ' ' + esc(s.sigla) : ''}</small></div>` : `<span class="av vz"><i class="fa-solid fa-user"></i></span><div><b class="vz">Sem responsável definido</b><small>Nenhum titular informado</small></div>`}</div>
+      ${cont ? `<div class="pf-ct"><i class="fa-solid ${email ? 'fa-envelope' : 'fa-phone'}"></i>${email ? `<a href="mailto:${esc(cont)}">${esc(cont)}</a>` : esc(cont)}</div>` : ''}
+    </div>
+    <div class="pf-bl">
+      <div class="pf-t"><i class="fa-solid fa-sitemap"></i>Posição na estrutura</div>
+      <div class="pf-arv">
+        ${pai ? `<div class="pf-r"><span class="pf-l">Responde a</span>${linha(pai)}</div>` : '<div class="pf-r"><span class="pf-l">Nível mais alto da estrutura</span></div>'}
+        <div class="pf-r eu"><span class="pf-l">Este setor</span><div class="pf-no atual" style="--c:${corTipo(s.tipo)}"><i class="fa-solid ${icTipo(s.tipo)}"></i><span><small>${esc(s.tipo)}${s.sigla ? ' · ' + esc(s.sigla) : ''}</small>${esc(s.nome)}</span></div></div>
+        ${fil.length ? `<div class="pf-r"><span class="pf-l">Subordinados diretos (${fil.length})</span><div class="pf-fil">${fil.slice(0, 14).map(x => linha(x)).join('')}${fil.length > 14 ? `<button type="button" class="pf-mais" onclick="abrirRamo(${arg(s.id)})">+ ${fil.length - 14} setores · abrir ramo</button>` : ''}</div></div>` : ''}
+      </div>
+    </div>
+    <div class="pf-bl">
+      <div class="pf-t"><i class="fa-solid fa-list-check"></i>Competências e funções ${comp.length ? `<em>${comp.length}</em>` : ''}</div>
+      ${comp.length ? `<ol class="pf-ls">${comp.map(t => `<li>${esc(t)}</li>`).join('')}</ol>` : '<p class="pf-vz">Competências ainda não descritas.</p>'}
+    </div>
+    ${ent.length ? `<div class="pf-bl"><div class="pf-t"><i class="fa-solid fa-box-open"></i>Principais entregas <em>${ent.length}</em></div><ul class="pf-ls ent">${ent.map(t => `<li>${esc(t)}</li>`).join('')}</ul></div>` : ''}
+    <p class="pf-rod"><i class="fa-regular fa-clock"></i>${s.atualizadoEm ? `Última alteração em ${fmtData(s.atualizadoEm)}${s.atualizadoPor ? ' por ' + esc(s.atualizadoPor) : ''}.` : 'Estrutura original do Decreto nº 2.236/2026.'}</p>`;
 }
 function opcoesSetores(excluir, valor, vazio){
   const ex = excluir || new Set(); let h = vazio !== undefined ? `<option value="">${esc(vazio)}</option>` : '';
@@ -1534,6 +1571,7 @@ const sel = (campo, opcoes, valor) => `<select class="campo" data-campo="${campo
 const CORPO_ABAS_CEN = ['validacoes','vinculos'];
 const CORPO = {
   dados(s){
+    if (somenteLeitura() && !cenMapa) return fichaSetor(s);
     const irmaos = filhosDe(s.paiId && porId.has(s.paiId) ? s.paiId : ''), i = irmaos.indexOf(s);
     return `
       <label><span class="rot">Nome do setor</span><input class="campo" data-campo="nome" value="${esc(s.nome)}" maxlength="200"></label>
@@ -2564,7 +2602,7 @@ function travarLeitura(raiz){
 }
 ['renderPainel','renderValidacoes'].forEach(n => {
   const f = window[n];
-  window[n] = function(){ const r = f.apply(this, arguments); travarLeitura(n === 'renderPainel' ? $('#pn-corpo') : $('#v-corpo')); if (n === 'renderPainel' && somenteLeitura() && $('#pn-corpo') && !$('#pn-corpo .ro-aviso')) $('#pn-corpo').insertAdjacentHTML('afterbegin', (estruturaConsulta() ? '<div class="ro-aviso"><i class="fa-solid fa-lock"></i>Estrutura oficial · somente consulta.</div>' : '<div class="ro-aviso"><i class="fa-solid fa-eye"></i>Seu perfil permite consultar, mas não alterar.</div>')); return r; };
+  window[n] = function(){ const r = f.apply(this, arguments); travarLeitura(n === 'renderPainel' ? $('#pn-corpo') : $('#v-corpo')); if (n === 'renderPainel' && somenteLeitura() && $('#pn-corpo') && !$('#pn-corpo .ro-aviso') && !$('#pn-corpo .pf-bl')) $('#pn-corpo').insertAdjacentHTML('afterbegin', (estruturaConsulta() ? '<div class="ro-aviso"><i class="fa-solid fa-lock"></i>Estrutura oficial · somente consulta.</div>' : '<div class="ro-aviso"><i class="fa-solid fa-eye"></i>Seu perfil permite consultar, mas não alterar.</div>')); return r; };
 });
 window.addEventListener('resize', () => { if (vistaAtual === 'mapa') desenharMini(); });
 
