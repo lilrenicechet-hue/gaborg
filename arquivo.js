@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.57.0';
+const VERSAO = '1.58.0';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -422,21 +422,27 @@ const SECOES_LISTA = SECOES_ACESSO.flatMap(g => g[1]);
 const SEM_EDICAO = new Set(SECOES_LISTA.filter(x => x[5]).map(x => x[0]));
 const EXTRAS_ACESSO = [['administrar', 'Administrar usuários e perfis', 'fa-user-shield', 'Criar logins, redefinir senhas, criar perfis, restaurar a estrutura'], ['nomesServidores', 'Ver nomes e matrículas de servidores', 'fa-id-card', 'Sem isso a seção Servidores mostra só números'],
   ['exportar', 'Exportar planilhas e cópias', 'fa-file-csv', 'Baixar CSV das listas e a cópia completa (JSON)'], ['documentos', 'Emitir relatórios e minutas', 'fa-file-signature', 'Gerar PDF, Word e impressão com código de verificação']];
-const NIVEIS = { oculto:['Oculto', 'fa-eye-slash', '#94a3b8'], ver:['Ver', 'fa-eye', '#2563eb'], editar:['Editar', 'fa-pen', '#16a34a'] };
+/* quatro níveis por seção (Codigo.gs 1.22.0): só "Completo" exclui registros e importa substituindo a lista */
+const NIVEIS = { oculto:['Oculto', 'fa-eye-slash', '#94a3b8', 'Não aparece no menu; os dados nem chegam ao computador'], ver:['Visualizar', 'fa-eye', '#2563eb', 'Consulta, filtra e imprime; não altera nada'], editar:['Editar', 'fa-pen', '#16a34a', 'Cria e altera registros; não exclui'], completo:['Completo', 'fa-star', '#7c3aed', 'Edita, exclui e importa planilhas que substituem a lista'] };
+const ORDEM_NIV = ['oculto', 'ver', 'editar', 'completo'];
+const editaNiv = v => v === 'editar' || v === 'completo';
+/* nível que vale de fato para o perfil numa seção (administrador = completo; seções sem edição param em "ver") */
+const nivelEf = (p, k) => { const v = p.administrar ? 'completo' : ((p.secoes || {})[k] || 'oculto'); return (SEM_EDICAO.has(k) || k === 'apresentacao') && editaNiv(v) ? 'ver' : v; };
 const VISTA_SECAO = {}; SECOES_LISTA.forEach(([k, , , vs]) => vs.forEach(v => { VISTA_SECAO[v] = k; }));
 function perfilSistema(nome){
   const tudo = v => SECOES_LISTA.reduce((o, [k]) => (o[k] = v, o), {});
-  if (nome === 'Administrador') return { id:'Administrador', nome, sistema:true, cor:'#dc2626', descricao:'Tudo, inclusive usuários, perfis e restauração da estrutura.', administrar:true, secoes:tudo('editar'), extras:{ nomesServidores:true, exportar:true, documentos:true } };
-  if (nome === 'Editor') return { id:'Editor', nome, sistema:true, cor:'#2563eb', descricao:'Vê e altera todas as seções; não gerencia usuários.', administrar:false, secoes:tudo('editar'), extras:{ nomesServidores:true, exportar:true, documentos:true } };
+  if (nome === 'Administrador') return { id:'Administrador', nome, sistema:true, cor:'#dc2626', descricao:'Tudo, inclusive usuários, perfis e restauração da estrutura.', administrar:true, secoes:tudo('completo'), extras:{ nomesServidores:true, exportar:true, documentos:true } };
+  if (nome === 'Editor') return { id:'Editor', nome, sistema:true, cor:'#2563eb', descricao:'Acesso completo a todas as seções; não gerencia usuários.', administrar:false, secoes:tudo('completo'), extras:{ nomesServidores:true, exportar:true, documentos:true } };
   return { id:'Leitor', nome:'Leitor', sistema:true, cor:'#64748b', descricao:'Consulta todas as seções, sem alterar nada; não vê nomes de servidores.', administrar:false, secoes:tudo('ver'), extras:{ nomesServidores:false, exportar:true, documentos:true } };
 }
 let perfisLista = [];
 const acesso = () => cfg.simulado || cfg.acesso || perfilSistema(cfg.perfil);
-const nivelSec = k => { const a = acesso(), sc = a.secoes || {}; if (a.administrar) return 'editar'; if (k === 'apresentacao' && !sc[k]) return sc.escolas && sc.escolas !== 'oculto' ? 'ver' : 'oculto'; if (k === 'convenios' && !sc[k]) return sc.obras || sc.escolas || 'oculto'; if (k === 'obras' && !sc[k]) return sc.escolas || 'oculto'; return sc[k] || 'oculto'; };
+const nivelSec = k => { const a = acesso(), sc = a.secoes || {}; if (a.administrar) return 'completo'; if (k === 'apresentacao' && !sc[k]) return sc.escolas && sc.escolas !== 'oculto' ? 'ver' : 'oculto'; if (k === 'convenios' && !sc[k]) return sc.obras || sc.escolas || 'oculto'; if (k === 'obras' && !sc[k]) return sc.escolas || 'oculto'; return sc[k] || 'oculto'; };
 const podeVerSec = k => nivelSec(k) !== 'oculto';
-const podeEditarSec = k => !SEM_EDICAO.has(k) && nivelSec(k) === 'editar';
+const podeEditarSec = k => !SEM_EDICAO.has(k) && editaNiv(nivelSec(k));
+const podeExcluirSec = k => !SEM_EDICAO.has(k) && nivelSec(k) === 'completo';
 const podeExtra = k => { const a = acesso(); return !!(a.administrar || (a.extras || {})[k]); };
-const editaAlgo = a => !!(a.administrar || SECOES_LISTA.some(([k]) => !SEM_EDICAO.has(k) && (a.secoes || {})[k] === 'editar'));
+const editaAlgo = a => !!(a.administrar || SECOES_LISTA.some(([k]) => !SEM_EDICAO.has(k) && editaNiv((a.secoes || {})[k])));
 const VISTAS_REMOVIDAS = new Set(['implantacao', 'resultados', 'reunioes']);
 const podeVerVista = v => !VISTAS_REMOVIDAS.has(v) && (!VISTA_SECAO[v] || podeVerSec(VISTA_SECAO[v]) || (v === 'usuarios' && ehAdmin()));
 const primeiraVista = () => { const b = [...document.querySelectorAll('.lado .nav-b[data-vista]')].find(b => podeVerVista(b.dataset.vista)); return b ? b.dataset.vista : 'config'; };
@@ -455,6 +461,9 @@ function simularPerfil(id){
 function sairSimulacao(){ delete cfg.simulado; aplicarAcessoUI(); trocarVista('usuarios'); abaAdm('perfis'); }
 /* exportações e documentos respeitam as permissões extras */
 ['exportarCSV', 'exportarJSON', 'exportarEscolasMT', 'svExportar', 'exportarChefias', 'csvBaixar'].forEach(n => { const f = window[n]; if (typeof f !== 'function') return; window[n] = function(){ if (!podeExtra('exportar')) return toast('Seu perfil não pode exportar planilhas.', 'aviso'); return f.apply(this, arguments); }; });
+/* excluir e importar substituindo exigem o nível Completo na seção */
+[['excluirSetor', 'estrutura'], ['excluirDespesa', 'financeiro'], ['excluirRubrica', 'financeiro'], ['excluirProposta', 'propostas'], ['svExcluir', 'servidores'], ['svConfirmar', 'servidores'], ['obExcluir', 'obras'], ['obImportar', 'obras'], ['cvExcluir', 'convenios'], ['importarEscolasMT', 'escolas']].forEach(([n, k]) => { const f = window[n]; if (typeof f !== 'function') return;
+  window[n] = function(){ if (!podeExcluirSec(k)) return toast(`Seu perfil pode editar ${(SECOES_LISTA.find(x => x[0] === k) || [0, k])[1]}, mas excluir e importar exigem o acesso Completo.`, 'aviso'); return f.apply(this, arguments); }; });
 ['emitirDoc', 'exportarMinuta'].forEach(n => { const f = window[n]; if (typeof f !== 'function') return; window[n] = function(){ if (!podeExtra('documentos')) return toast('Seu perfil não pode emitir documentos.', 'aviso'); return f.apply(this, arguments); }; });
 
 /* ---------- tela de perfis ---------- */
@@ -465,84 +474,183 @@ async function carregarPerfis(){
 }
 const backendSemPerfis = () => online() && backendVersao && svVerMaior('1.13.0', backendVersao);
 const corPerfil = nome => (perfisLista.find(p => p.nome === nome) || {}).cor || COR_PERFIL[nome] || '#7c3aed';
-function contagemNiveis(p){ const c = { oculto:0, ver:0, editar:0 }; SECOES_LISTA.forEach(([k]) => { const v = p.administrar ? (SEM_EDICAO.has(k) ? 'ver' : 'editar') : (p.secoes[k] || 'oculto'); c[SEM_EDICAO.has(k) && v === 'editar' ? 'ver' : v]++; }); return c; }
+function contagemNiveis(p){ const c = { oculto:0, ver:0, editar:0, completo:0 }; SECOES_LISTA.forEach(([k]) => { c[nivelEf(p, k)]++; }); return c; }
+/* ---------- utilidades da administração ---------- */
+const perfilDeNome = nome => perfisLista.find(p => p.nome === nome) || perfilSistema(nome);
+const usuariosDoPerfil = (nome, soAtivos) => usuarios.filter(u => u.perfil === nome && (!soAtivos || u.ativo === 'Sim'));
+async function admGarantirDados(){
+  if (!perfisLista.length || !usuarios.length) {
+    await carregarPerfis();
+    if (!usuarios.length) { try { const r = await chamar({ action:'users_list' }, 30000); if (r.status === 'success') usuarios = r.usuarios || []; } catch (e) {} }
+  }
+}
+const nivChip = (v, curto) => `<span class="pf-niv ${v}" style="--c:${NIVEIS[v][2]}"><i class="fa-solid ${NIVEIS[v][1]}"></i>${v === 'oculto' && curto ? '—' : NIVEIS[v][0]}</span>`;
+const legendaNiveis = () => `<div class="pf-legn">${ORDEM_NIV.map(v => `<div style="--c:${NIVEIS[v][2]}"><span><i class="fa-solid ${NIVEIS[v][1]}"></i></span><b>${NIVEIS[v][0]}</b><small>${NIVEIS[v][3]}</small></div>`).join('')}</div>`;
+const avatares = (lista, max) => `<span class="pf-avs">${lista.slice(0, max || 5).map(u => `<span class="u-av" title="${esc(u.nome)} (${esc(u.login)})" style="background:${corPerfil(u.perfil)}">${esc(iniciais(u.nome))}</span>`).join('')}${lista.length > (max || 5) ? `<span class="u-av mais">+${lista.length - (max || 5)}</span>` : ''}</span>`;
+function irUsuariosDoPerfil(nome){ abaAdm('usuarios'); setTimeout(() => { const s = $('#ua-perfil'); if (s) { s.value = nome; filtrarUsuarios(); } }, 350); }
+
+/* ---------- visão geral ---------- */
+async function renderAdmGeral(){
+  const el = $('#u-corpo'); if (!el) return;
+  if (!perfisLista.length || !usuarios.length) el.innerHTML = '<div class="cartao vazio"><i class="fa-solid fa-circle-notch fa-spin"></i>Carregando...</div>';
+  await admGarantirDados(); if (abaAdmAtual !== 'geral') return;
+  if (!acessos.length) { try { const r = await chamar({ action:'access_log', limite:60 }, 20000); if (r.status === 'success') acessos = r.acessos || []; } catch (e) {} }
+  if (abaAdmAtual !== 'geral') return;
+  const ativos = usuarios.filter(u => u.ativo === 'Sim'), adms = ativos.filter(u => perfilDeNome(u.perfil).administrar);
+  const dias = u => u.ultimoAcesso ? (Date.now() - Date.parse(u.ultimoAcesso)) / 864e5 : Infinity;
+  const alertas = [
+    [usuarios.filter(u => u.bloqueado), 'fa-lock', '#dc2626', 'bloqueado(s) por senhas erradas', 'Bloqueado'],
+    [ativos.filter(u => u.trocarSenha === 'Sim' && !u.ultimoAcesso), 'fa-hourglass-half', '#d97706', 'ainda não fizeram o 1º acesso', 'Aguardando 1º acesso'],
+    [ativos.filter(u => u.ultimoAcesso && dias(u) > 60), 'fa-user-clock', '#0891b2', 'ativos sem entrar há mais de 60 dias', ''],
+    [perfisLista.filter(p => !p.sistema && !usuariosDoPerfil(p.nome, true).length), 'fa-id-badge', '#64748b', 'perfil(is) personalizado(s) sem ninguém usando', ''],
+    [adms.length < 2 ? adms : [], 'fa-user-shield', '#dc2626', 'administrador ativo: cadastre um segundo para não ficar sem acesso', '']
+  ].filter(a => a[0].length);
+  const maxU = Math.max(1, ...perfisLista.map(p => usuariosDoPerfil(p.nome, true).length));
+  const kpi = (cor, ic, r, v, sub, onc) => `<button type="button" class="cartao kpi adm-kpi" style="--c:${cor}" ${onc ? `onclick="${onc}"` : 'disabled'}><div class="r"><i class="fa-solid ${ic}"></i>${r}</div><div class="v">${v}</div><div class="s">${sub}</div></button>`;
+  el.innerHTML = `<div class="kpis">
+      ${kpi('#2563eb', 'fa-users', 'Usuários', usuarios.length, `${ativos.length} ativo(s) · ${usuarios.length - ativos.length} desativado(s)`, "abaAdm('usuarios')")}
+      ${kpi('#7c3aed', 'fa-id-badge', 'Perfis de acesso', perfisLista.length, `${perfisLista.filter(p => !p.sistema).length} personalizado(s)`, "abaAdm('perfis')")}
+      ${kpi('#dc2626', 'fa-user-shield', 'Administradores', adms.length, adms.length < 2 ? 'tenha ao menos 2, por segurança' : 'ativos', "irUsuariosDoPerfil('Administrador')")}
+      ${kpi('#16a34a', 'fa-right-to-bracket', 'Entraram em 7 dias', ativos.filter(u => dias(u) <= 7).length, 'usuários ativos', "abaAdm('acessos')")}
+    </div>
+    <div class="adm-g">
+      <div class="cartao adm-bloco"><div class="adm-h"><h3><i class="fa-solid fa-id-badge"></i>Usuários por perfil</h3><button class="lk" onclick="abaAdm('matriz')">ver acessos de cada perfil</button></div>
+        ${perfisLista.map(p => { const l = usuariosDoPerfil(p.nome, true), c = contagemNiveis(p); return `<button class="adm-pf" style="--c:${esc(p.cor)}" onclick="formPerfil(${arg(p.id)},${p.sistema ? 'true' : 'false'})">
+          <span class="ic"><i class="fa-solid ${p.administrar ? 'fa-user-shield' : p.sistema ? 'fa-user-lock' : 'fa-user-gear'}"></i></span>
+          <span class="tx"><b>${esc(p.nome)}</b><small>${c.completo ? c.completo + ' completo · ' : ''}${c.editar ? c.editar + ' editar · ' : ''}${c.ver} visualizar · ${c.oculto} ocultas</small></span>
+          <span class="br"><i style="width:${(l.length / maxU * 100).toFixed(0)}%"></i></span>${avatares(l, 4)}<b class="n">${l.length}</b></button>`; }).join('')}</div>
+      <div class="adm-col">
+        <div class="cartao adm-bloco"><div class="adm-h"><h3><i class="fa-solid fa-bell"></i>Precisa de atenção</h3></div>
+          ${alertas.length ? alertas.map(([l, ic, c, t, sit]) => `<button class="adm-al" style="--c:${c}" onclick="${sit ? `abaAdm('usuarios');setTimeout(()=>{const s=$('#ua-sit');if(s){s.value='${sit}';filtrarUsuarios()}},350)` : l[0] && l[0].nome && l[0].secoes ? "abaAdm('perfis')" : "abaAdm('usuarios')"}"><i class="fa-solid ${ic}"></i><b>${l.length}</b><span>${t}</span><i class="fa-solid fa-chevron-right sv"></i></button>`).join('') : '<div class="obp-vazio"><i class="fa-solid fa-circle-check"></i>Tudo em ordem.</div>'}</div>
+        <div class="cartao adm-bloco"><div class="adm-h"><h3><i class="fa-solid fa-clock-rotate-left"></i>Últimos acessos</h3><button class="lk" onclick="abaAdm('acessos')">registro completo</button></div>
+          ${acessos.slice(0, 7).map(a => `<div class="adm-ev"><span class="pt" style="background:${COR_EVENTO[a.evento] || '#64748b'}"></span><span class="tx"><b>${esc(a.nome || a.login || '—')}</b><small>${esc(a.evento || '')}${a.detalhe ? ' · ' + esc(String(a.detalhe).slice(0, 60)) : ''}</small></span><small class="qd">${a.quando ? fmtData(a.quando) : ''}</small></div>`).join('') || '<div class="obp-vazio">Sem registros carregados.</div>'}</div>
+        <div class="cartao adm-bloco adm-atalhos"><button class="btn btn-p" onclick="formUsuario()"><i class="fa-solid fa-user-plus"></i>Novo usuário</button><button class="btn btn-s" onclick="novoPerfil()"><i class="fa-solid fa-plus"></i>Novo perfil</button><button class="btn btn-s" onclick="abaAdm('matriz')"><i class="fa-solid fa-table-cells"></i>Matriz de acessos</button></div>
+      </div></div>`;
+}
+
+/* ---------- perfis ---------- */
 async function renderPerfis(){
   const el = $('#u-corpo'); if (!el) return;
-  if (!perfisLista.length || !usuarios.length) { el.innerHTML = '<div class="cartao vazio"><i class="fa-solid fa-circle-notch fa-spin"></i>Carregando perfis...</div>'; await carregarPerfis(); if (!usuarios.length) { try { const r = await chamar({ action:'users_list' }, 30000); if (r.status === 'success') usuarios = r.usuarios || []; } catch (e) {} } }
-  if (abaAdmAtual !== 'perfis') return;
-  const n = nome => usuarios.filter(u => u.perfil === nome && u.ativo === 'Sim').length;
-  const card = p => { const c = contagemNiveis(p), ex = EXTRAS_ACESSO.filter(([k]) => k === 'administrar' ? p.administrar : p.extras && p.extras[k]);
-    return `<div class="pf-card" style="--c:${esc(p.cor)}"><div class="pf-top"><span class="pf-ic"><i class="fa-solid ${p.administrar ? 'fa-user-shield' : p.sistema ? 'fa-user-lock' : 'fa-user-gear'}"></i></span><div><b>${esc(p.nome)}</b>${p.sistema ? ' <span class="chip" style="--c:#64748b">do sistema</span>' : ''}<small>${esc(p.descricao || 'Sem descrição')}</small></div><span class="pf-n" title="usuários ativos com este perfil">${n(p.nome)}<small>usuário(s)</small></span></div>
-      <div class="pf-barra"><span style="flex:${c.editar};background:#16a34a" title="${c.editar} para editar"></span><span style="flex:${c.ver};background:#2563eb" title="${c.ver} só para ver"></span><span style="flex:${c.oculto};background:#cbd5e1" title="${c.oculto} ocultas"></span></div>
-      <div class="pf-cont"><span><i class="fa-solid fa-pen" style="color:#16a34a"></i>${c.editar} editar</span><span><i class="fa-solid fa-eye" style="color:#2563eb"></i>${c.ver} ver</span><span><i class="fa-solid fa-eye-slash" style="color:#94a3b8"></i>${c.oculto} ocultas</span></div>
+  if (!perfisLista.length || !usuarios.length) el.innerHTML = '<div class="cartao vazio"><i class="fa-solid fa-circle-notch fa-spin"></i>Carregando perfis...</div>';
+  await admGarantirDados(); if (abaAdmAtual !== 'perfis') return;
+  const card = p => { const c = contagemNiveis(p), l = usuariosDoPerfil(p.nome, true), ex = EXTRAS_ACESSO.filter(([k]) => k === 'administrar' ? p.administrar : p.administrar || (p.extras && p.extras[k]));
+    return `<div class="pf-card" style="--c:${esc(p.cor)}"><div class="pf-top"><span class="pf-ic"><i class="fa-solid ${p.administrar ? 'fa-user-shield' : p.sistema ? 'fa-user-lock' : 'fa-user-gear'}"></i></span><div><b>${esc(p.nome)}</b>${p.sistema ? ' <span class="chip" style="--c:#64748b">do sistema</span>' : ''}<small>${esc(p.descricao || 'Sem descrição')}</small></div></div>
+      <div class="pf-barra">${ORDEM_NIV.slice().reverse().map(v => c[v] ? `<span style="flex:${c[v]};background:${NIVEIS[v][2]}" title="${c[v]} ${NIVEIS[v][0].toLowerCase()}"></span>` : '').join('')}</div>
+      <div class="pf-cont">${ORDEM_NIV.slice().reverse().map(v => `<span class="${c[v] ? '' : 'z'}"><i class="fa-solid ${NIVEIS[v][1]}" style="color:${NIVEIS[v][2]}"></i>${c[v]} ${NIVEIS[v][0].toLowerCase()}</span>`).join('')}</div>
       <div class="pf-ex">${ex.map(([, t, ic]) => `<span title="${esc(t)}"><i class="fa-solid ${ic}"></i>${esc(t)}</span>`).join('') || '<span class="s">Sem permissões extras</span>'}</div>
-      <div class="pf-ac">${p.sistema ? `<button class="btn btn-s btn-sm" onclick="formPerfil(${arg(p.id)},true)"><i class="fa-solid fa-eye"></i>Ver detalhes</button>` : `<button class="btn btn-p btn-sm" onclick="formPerfil(${arg(p.id)})"><i class="fa-solid fa-pen"></i>Editar</button>`}
+      <button type="button" class="pf-us" onclick="irUsuariosDoPerfil(${arg(p.nome)})" title="Ver os usuários deste perfil">${l.length ? avatares(l, 6) : '<span class="s">Ninguém usa este perfil</span>'}<b>${l.length}</b><small>usuário(s) ativo(s)</small></button>
+      <div class="pf-ac">${p.sistema ? `<button class="btn btn-s btn-sm" onclick="formPerfil(${arg(p.id)},true)"><i class="fa-solid fa-eye"></i>Ver acessos</button>` : `<button class="btn btn-p btn-sm" onclick="formPerfil(${arg(p.id)})"><i class="fa-solid fa-pen"></i>Editar</button>`}
         <button class="btn btn-s btn-sm" onclick="formPerfil(${arg(p.id)},false,true)" title="Criar um perfil novo a partir deste"><i class="fa-regular fa-copy"></i>Duplicar</button>
         <button class="btn btn-s btn-sm" onclick="simularPerfil(${arg(p.id)})" title="Ver a tela como este perfil vê"><i class="fa-solid fa-user-secret"></i>Ver como</button>
         ${p.sistema ? '' : `<button class="btn btn-g btn-sm btn-i" title="Excluir perfil" onclick="apagarPerfil(${arg(p.id)})"><i class="fa-solid fa-trash"></i></button>`}</div></div>`; };
-  const cel = (p, k) => { const v = p.administrar ? 'editar' : p.secoes[k] || 'oculto', w = SEM_EDICAO.has(k) && v === 'editar' ? 'ver' : v; return `<td class="pf-cel"><span class="pf-niv ${w}" style="--c:${NIVEIS[w][2]}"><i class="fa-solid ${NIVEIS[w][1]}"></i>${w === 'oculto' ? '—' : NIVEIS[w][0]}</span></td>`; };
-  el.innerHTML = `${backendSemPerfis() ? `<div class="cartao bl" style="--c:#dc2626"><h3><i class="fa-solid fa-triangle-exclamation"></i>Atualize o Codigo.gs para a versão 1.13.0</h3><p class="s">A planilha está com o backend ${esc(backendVersao)}, que só conhece os perfis Administrador, Editor e Leitor. Cole o novo Codigo.gs e publique uma nova versão para criar perfis personalizados.</p></div>` : ''}
-    <div class="pf-cab"><div><h3 style="margin:0">Perfis de acesso</h3><p class="s" style="margin:2px 0 0">Defina, seção por seção, o que cada perfil <b>vê</b> e o que pode <b>editar</b>. As regras valem também na planilha: o servidor não envia dados de seções ocultas.</p></div>
-      <div class="pf-novo"><button class="btn btn-p" onclick="novoPerfil()" ${backendSemPerfis() ? 'disabled' : ''}><i class="fa-solid fa-plus"></i>Novo perfil</button></div></div>
-    <div class="pf-grade">${perfisLista.map(card).join('')}</div>
-    <div class="cartao bl" style="--c:#7c3aed;margin-top:16px"><h3><i class="fa-solid fa-table-cells"></i>O que cada perfil vê e acessa</h3><p class="s"><span class="pf-leg"><i class="fa-solid fa-pen" style="color:#16a34a"></i>editar <i class="fa-solid fa-eye" style="color:#2563eb"></i>só ver <i class="fa-solid fa-eye-slash" style="color:#94a3b8"></i>oculto</span></p>
-      <div class="tab-wrap"><table class="tab pf-mat"><thead><tr><th>Seção</th>${perfisLista.map(p => `<th style="--c:${esc(p.cor)}"><span>${esc(p.nome)}</span></th>`).join('')}</tr></thead><tbody>
-      ${SECOES_ACESSO.map(([g, l]) => `<tr class="pf-g"><td colspan="${perfisLista.length + 1}">${g}</td></tr>` + l.map(([k, t, ic]) => `<tr><td><i class="fa-solid ${ic}" style="color:var(--mut);width:18px"></i>${t}</td>${perfisLista.map(p => cel(p, k)).join('')}</tr>`).join('')).join('')}
-      <tr class="pf-g"><td colspan="${perfisLista.length + 1}">Permissões extras</td></tr>
-      ${EXTRAS_ACESSO.map(([k, t, ic]) => `<tr><td><i class="fa-solid ${ic}" style="color:var(--mut);width:18px"></i>${t}</td>${perfisLista.map(p => { const v = k === 'administrar' ? p.administrar : p.administrar || (p.extras || {})[k]; return `<td class="pf-cel">${v ? '<span class="pf-niv" style="--c:#16a34a"><i class="fa-solid fa-check"></i>Sim</span>' : '<span class="pf-niv oculto" style="--c:#94a3b8">—</span>'}</td>`; }).join('')}</tr>`).join('')}
-      <tr><td><b>Usuários ativos</b></td>${perfisLista.map(p => `<td class="pf-cel"><b>${n(p.nome)}</b></td>`).join('')}</tr></tbody></table></div></div>
-    <div class="cartao bl" style="margin-top:14px"><h3><i class="fa-solid fa-shield-halved"></i>Regras de segurança</h3>
-      <p class="s" style="line-height:1.7">• As permissões são conferidas no servidor (Apps Script): uma seção oculta não tem seus dados enviados, e gravações fora do perfil são recusadas.<br>• Os perfis Administrador, Editor e Leitor são do sistema e não podem ser alterados; duplique-os para criar variações.<br>• Sempre fica pelo menos um usuário ativo com permissão de administrar.<br>• Senhas com no mínimo 8 caracteres, letras e números, guardadas só de forma cifrada; 5 senhas erradas bloqueiam o login por 15 minutos.<br>• Mudanças de perfil valem no próximo carregamento da pessoa (ou ao recarregar a página).</p></div>`;
+  const sis = perfisLista.filter(p => p.sistema), pers = perfisLista.filter(p => !p.sistema);
+  el.innerHTML = `${backendSemPerfis() ? `<div class="cartao bl" style="--c:#dc2626"><h3><i class="fa-solid fa-triangle-exclamation"></i>Atualize o Codigo.gs</h3><p class="s">A planilha está com o backend ${esc(backendVersao)}, que só conhece os perfis Administrador, Editor e Leitor. Cole o novo Codigo.gs e publique uma nova versão para criar perfis personalizados.</p></div>` : ''}
+    <div class="pf-cab"><div><h3 style="margin:0">Perfis de acesso</h3><p class="s" style="margin:2px 0 0">Cada perfil define, seção por seção, um de quatro níveis de acesso. As regras valem também na planilha.</p></div>
+      <div class="pf-novo"><button class="btn btn-s" onclick="abaAdm('matriz')"><i class="fa-solid fa-table-cells"></i>Comparar perfis</button><button class="btn btn-p" onclick="novoPerfil()" ${backendSemPerfis() ? 'disabled' : ''}><i class="fa-solid fa-plus"></i>Novo perfil</button></div></div>
+    ${legendaNiveis()}
+    <h4 class="adm-sub">Perfis personalizados <small>${pers.length}</small></h4>
+    <div class="pf-grade">${pers.map(card).join('') || `<button class="pf-card pf-vazio" onclick="novoPerfil()"><i class="fa-solid fa-plus"></i><b>Criar o primeiro perfil</b><small>Comece por um modelo: consulta, gabinete, pessoas, DRE, financeiro…</small></button>`}</div>
+    <h4 class="adm-sub">Perfis do sistema <small>não podem ser alterados; duplique para criar variações</small></h4>
+    <div class="pf-grade">${sis.map(card).join('')}</div>
+    <div class="cartao bl" style="margin-top:16px"><h3><i class="fa-solid fa-shield-halved"></i>Regras de segurança</h3>
+      <p class="s" style="line-height:1.7">• As permissões são conferidas no servidor (Apps Script): uma seção oculta não tem seus dados enviados, gravações fora do perfil são recusadas e exclusões exigem o nível Completo.<br>• Sempre fica pelo menos um usuário ativo com permissão de administrar.<br>• Senhas com no mínimo 8 caracteres, letras e números, guardadas só de forma cifrada; 5 senhas erradas bloqueiam o login por 15 minutos.<br>• Mudanças de perfil valem no próximo carregamento da pessoa (ou ao recarregar a página).</p></div>`;
 }
+
+/* ---------- matriz de acessos (comparar e ajustar vários perfis de uma vez) ---------- */
+let pfMat = { pend:new Map(), grupo:'' };
+function renderMatriz(){
+  const el = $('#u-corpo'); if (!el) return;
+  admGarantirDados().then(() => { if (abaAdmAtual !== 'matriz') return;
+    const P = perfisLista.map(p => pfMat.pend.get(p.id) || p);
+    const cel = (p, k) => { const v = nivelEf(p, k), mud = pfMat.pend.has(p.id) && nivelEf(perfisLista.find(x => x.id === p.id), k) !== v;
+      return `<td class="pf-cel ${mud ? 'mud' : ''}">${p.sistema || p.administrar ? nivChip(v, true) : `<button type="button" class="pf-cb" onclick="pfMatCiclo(${arg(p.id)},'${k}')" title="Clique para trocar o nível">${nivChip(v, true)}</button>`}</td>`; };
+    const ext = (p, k) => { const v = k === 'administrar' ? p.administrar : p.administrar || (p.extras || {})[k];
+      return `<td class="pf-cel">${p.sistema || (p.administrar && k !== 'administrar') ? (v ? '<span class="pf-niv" style="--c:#16a34a"><i class="fa-solid fa-check"></i>Sim</span>' : '<span class="pf-niv oculto" style="--c:#94a3b8">—</span>') : `<button type="button" class="pf-cb" onclick="pfMatExtra(${arg(p.id)},'${k}')">${v ? '<span class="pf-niv" style="--c:#16a34a"><i class="fa-solid fa-check"></i>Sim</span>' : '<span class="pf-niv oculto" style="--c:#94a3b8">—</span>'}</button>`}</td>`; };
+    const grupos = SECOES_ACESSO.filter(([g]) => !pfMat.grupo || g === pfMat.grupo);
+    el.innerHTML = `<div class="pf-cab"><div><h3 style="margin:0">Matriz de acessos</h3><p class="s" style="margin:2px 0 0">O que cada perfil pode fazer em cada seção. Nos perfis personalizados, <b>clique numa célula</b> para trocar o nível; nada é gravado até você salvar.</p></div>
+        <div class="pf-novo"><select class="campo" style="width:auto" onchange="pfMat.grupo=this.value;renderMatriz()"><option value="">Todas as áreas</option>${SECOES_ACESSO.map(([g]) => `<option ${pfMat.grupo === g ? 'selected' : ''}>${g}</option>`).join('')}</select></div></div>
+      ${legendaNiveis()}
+      ${pfMat.pend.size ? `<div class="pf-pend"><i class="fa-solid fa-pen-to-square"></i><span><b>${pfMat.pend.size} perfil(is) alterado(s)</b> · ${[...pfMat.pend.values()].map(p => esc(p.nome)).join(', ')}</span><button class="btn btn-s btn-sm" onclick="pfMat.pend.clear();renderMatriz()">Desfazer</button><button class="btn btn-p btn-sm" onclick="pfMatSalvar(this)"><i class="fa-solid fa-floppy-disk"></i>Salvar alterações</button></div>` : ''}
+      <div class="cartao" style="padding:0;overflow:hidden"><div class="tab-wrap pf-mat-w"><table class="tab pf-mat"><thead><tr><th class="pf-c0">Seção</th>${P.map(p => `<th style="--c:${esc(p.cor)}"><button type="button" class="pf-th" onclick="formPerfil(${arg(p.id)},${p.sistema ? 'true' : 'false'})" title="${esc(p.descricao || '')}"><span>${esc(p.nome)}</span><small>${usuariosDoPerfil(p.nome, true).length} usuário(s)</small></button></th>`).join('')}</tr></thead><tbody>
+        ${grupos.map(([g, l]) => `<tr class="pf-g"><td colspan="${P.length + 1}">${g}</td></tr>` + l.map(([k, t, ic, , d]) => `<tr><td class="pf-c0"><i class="fa-solid ${ic}"></i><span><b>${t}</b><small>${d}${SEM_EDICAO.has(k) ? ' · só leitura' : ''}</small></span></td>${P.map(p => cel(p, k)).join('')}</tr>`).join('')).join('')}
+        ${!pfMat.grupo ? `<tr class="pf-g"><td colspan="${P.length + 1}">Permissões extras</td></tr>${EXTRAS_ACESSO.map(([k, t, ic, d]) => `<tr><td class="pf-c0"><i class="fa-solid ${ic}"></i><span><b>${t}</b><small>${d}</small></span></td>${P.map(p => ext(p, k)).join('')}</tr>`).join('')}` : ''}
+        </tbody></table></div></div>`; });
+}
+function pfMatBase(id){ if (!pfMat.pend.has(id)) pfMat.pend.set(id, JSON.parse(JSON.stringify(perfisLista.find(p => p.id === id)))); return pfMat.pend.get(id); }
+function pfMatCiclo(id, k){ const p = pfMatBase(id), ops = SEM_EDICAO.has(k) || k === 'apresentacao' ? ['oculto', 'ver'] : ORDEM_NIV, v = nivelEf(p, k); p.secoes[k] = ops[(ops.indexOf(v) + 1) % ops.length]; pfMatLimpa(id); renderMatriz(); }
+function pfMatExtra(id, k){ const p = pfMatBase(id); if (k === 'administrar') { p.administrar = !p.administrar; } else { p.extras = p.extras || {}; p.extras[k] = !p.extras[k]; } pfMatLimpa(id); renderMatriz(); }
+function pfMatLimpa(id){ const a = perfisLista.find(p => p.id === id), b = pfMat.pend.get(id); if (a && b && JSON.stringify([a.secoes, a.extras, a.administrar]) === JSON.stringify([b.secoes, b.extras, b.administrar])) pfMat.pend.delete(id); }
+async function pfMatSalvar(bt){
+  bt.disabled = true; let ok = 0;
+  for (const p of pfMat.pend.values()) {
+    if (!p.administrar && !SECOES_LISTA.some(([k]) => nivelEf(p, k) !== 'oculto')) { toast(`O perfil ${p.nome} precisa ver ao menos uma seção.`, 'erro'); continue; }
+    try { const r = await chamar({ action:'profile_save', perfil:p }, 30000); if (r.status !== 'success') throw new Error(r.message); perfisLista = r.perfis || perfisLista; pfMat.pend.delete(p.id); ok++; }
+    catch (e) { toast(p.nome + ': ' + e.message, 'erro'); }
+  }
+  if (ok) toast(`${ok} perfil(is) salvo(s).`); renderMatriz();
+}
+
+/* ---------- modelos e editor de perfil ---------- */
 const MODELOS_PERFIL = [
   ['branco', 'Em branco', 'fa-file', 'Tudo oculto; você escolhe seção por seção', {}, {}],
-  ['consulta', 'Consulta total', 'fa-eye', 'Vê todas as seções, sem editar', { '*':'ver' }, { exportar:true, documentos:true }],
-  ['gabinete', 'Gabinete — análise e documentos', 'fa-landmark', 'Indicadores, relatórios, mapas e Apresentação', { estrutura:'ver', escolas:'ver', apresentacao:'ver', obras:'ver', convenios:'ver', painel:'ver', relatorios:'ver', tv:'ver', propostas:'ver', reestruturacao:'ver', resultados:'ver', regional:'ver', chefias:'ver' }, { documentos:true, exportar:true }],
-  ['pessoas', 'Gestão de pessoas', 'fa-id-card-clip', 'Edita servidores e chefias; consulta a estrutura', { estrutura:'ver', painel:'ver', servidores:'editar', chefias:'editar', implantacao:'ver', relatorios:'ver' }, { nomesServidores:true, exportar:true, documentos:true }],
-  ['regional', 'DRE / Gestão regional', 'fa-map-location-dot', 'Edita escolas e alunos; vê DREs, servidores e indicadores', { estrutura:'ver', escolas:'editar', apresentacao:'ver', regional:'ver', painel:'ver', servidores:'ver', relatorios:'ver', tv:'ver' }, { documentos:true }],
-  ['financeiro', 'Financeiro', 'fa-coins', 'Edita custos; vê estrutura e propostas', { estrutura:'ver', financeiro:'editar', propostas:'ver', painel:'ver', relatorios:'ver' }, { exportar:true, documentos:true }],
+  ['consulta', 'Visualizar tudo', 'fa-eye', 'Consulta todas as seções, sem alterar nada', { '*':'ver' }, { exportar:true, documentos:true }],
+  ['editor', 'Editar tudo', 'fa-pen', 'Cria e altera em todas as seções, sem excluir', { '*':'editar' }, { exportar:true, documentos:true, nomesServidores:true }],
+  ['completo', 'Completo', 'fa-star', 'Tudo em todas as seções, inclusive excluir; sem administrar usuários', { '*':'completo' }, { exportar:true, documentos:true, nomesServidores:true }],
+  ['gabinete', 'Gabinete: análise e documentos', 'fa-landmark', 'Indicadores, relatórios, mapas e Apresentação', { estrutura:'ver', escolas:'ver', apresentacao:'ver', obras:'ver', convenios:'ver', painel:'ver', relatorios:'ver', propostas:'ver', reestruturacao:'ver', regional:'ver', chefias:'ver' }, { documentos:true, exportar:true }],
+  ['pessoas', 'Gestão de pessoas', 'fa-id-card-clip', 'Edita servidores e chefias; consulta a estrutura', { estrutura:'ver', painel:'ver', servidores:'editar', chefias:'editar', relatorios:'ver' }, { nomesServidores:true, exportar:true, documentos:true }],
+  ['regional', 'DRE / Gestão regional', 'fa-map-location-dot', 'Edita escolas e alunos; vê DREs, obras e indicadores', { estrutura:'ver', escolas:'editar', apresentacao:'ver', regional:'ver', painel:'ver', obras:'ver', convenios:'ver', relatorios:'ver' }, { documentos:true }],
+  ['obras', 'Obras e convênios', 'fa-helmet-safety', 'Cuida de obras, inaugurações e convênios', { estrutura:'ver', escolas:'ver', obras:'completo', convenios:'completo', apresentacao:'ver', relatorios:'ver', painel:'ver' }, { documentos:true, exportar:true }],
+  ['financeiro', 'Financeiro', 'fa-coins', 'Edita custos; vê estrutura e propostas', { estrutura:'ver', financeiro:'completo', propostas:'ver', painel:'ver', relatorios:'ver' }, { exportar:true, documentos:true }],
   ['indicadores', 'Somente indicadores', 'fa-chart-line', 'Indicadores e Apresentação, nada mais', { painel:'ver', apresentacao:'ver' }, {}]
 ];
 function novoPerfil(){
-  abrirModal({ titulo:'Novo perfil: comece por um modelo', rotulo:'Fechar', semCancelar:true, largura:760, html:`<p class="s" style="margin:0 0 10px">Escolha um ponto de partida. Depois você ajusta cada seção.</p><div class="pf-modelos">${MODELOS_PERFIL.map(([k, t, ic, d]) => `<button type="button" onclick="this.closest('.modal').remove();formPerfil('',false,false,${arg(k)})"><i class="fa-solid ${ic}"></i><b>${t}</b><small>${d}</small></button>`).join('')}</div>` });
+  abrirModal({ titulo:'Novo perfil: comece por um modelo', rotulo:'Fechar', semCancelar:true, largura:820, html:`<p class="s" style="margin:0 0 10px">Escolha um ponto de partida. Depois você ajusta cada seção.</p><div class="pf-modelos">${MODELOS_PERFIL.map(([k, t, ic, d]) => `<button type="button" onclick="this.closest('.modal').remove();formPerfil('',false,false,${arg(k)})"><i class="fa-solid ${ic}"></i><b>${t}</b><small>${d}</small></button>`).join('')}</div>` });
 }
 let pfEd = null;
 function formPerfil(id, soVer, duplicar, modelo){
   const base = perfisLista.find(p => p.id === id);
   let p;
-  if (modelo) { const m = MODELOS_PERFIL.find(x => x[0] === modelo); p = { id:'', nome:m[0] === 'branco' ? '' : m[1], descricao:m[3], cor:'#7c3aed', administrar:false, secoes:{}, extras:Object.assign({ nomesServidores:false, exportar:false, documentos:false }, m[5]) }; SECOES_LISTA.forEach(([k]) => { p.secoes[k] = m[4][k] || m[4]['*'] || 'oculto'; }); }
+  if (modelo) { const m = MODELOS_PERFIL.find(x => x[0] === modelo); p = { id:'', nome:m[0] === 'branco' ? '' : m[1], descricao:m[3], cor:'#7c3aed', administrar:false, secoes:{}, extras:Object.assign({ nomesServidores:false, exportar:false, documentos:false }, m[5]) };
+    SECOES_LISTA.forEach(([k]) => { const v = m[4][k] || m[4]['*'] || 'oculto'; p.secoes[k] = (SEM_EDICAO.has(k) || k === 'apresentacao') && editaNiv(v) ? 'ver' : v; }); }
   else { p = JSON.parse(JSON.stringify(base || perfilSistema('Leitor'))); if (duplicar) { p.id = ''; p.nome = 'Cópia de ' + p.nome; p.sistema = false; } }
-  pfEd = p; const ro = !!soVer;
-  abrirModal({ titulo:ro ? 'Perfil ' + p.nome : (p.id ? 'Editar perfil' : 'Novo perfil'), rotulo:ro ? 'Fechar' : 'Salvar perfil', semCancelar:ro, largura:1040, html:`<div class="pf-ed ${ro ? 'ro' : ''}">
+  p.extras = p.extras || {}; pfEd = p; const ro = !!soVer, usam = p.nome ? usuariosDoPerfil(p.nome) : [];
+  abrirModal({ titulo:ro ? 'Acessos do perfil ' + p.nome : (p.id ? 'Editar perfil' : 'Novo perfil'), rotulo:ro ? 'Fechar' : 'Salvar perfil', semCancelar:ro, largura:1100, html:`<div class="pf-ed ${ro ? 'ro' : ''}">
     <div class="pf-ed-l">
       <div class="g2"><label><span class="rot">Nome do perfil</span><input class="campo" id="pf-nome" value="${esc(p.nome)}" placeholder="ex.: Coordenação de Pessoas" ${ro ? 'disabled' : 'required'} oninput="pfEd.nome=this.value;pfPrevia()"></label>
-        <label><span class="rot">Cor</span><div class="pf-cores">${['#7c3aed', '#0e7490', '#16a34a', '#d97706', '#db2777', '#0f766e', '#4f46e5', '#b45309'].map(c => `<button type="button" style="background:${c}" class="${c === p.cor ? 'on' : ''}" onclick="pfEd.cor='${c}';this.parentNode.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b===this));pfPrevia()" ${ro ? 'disabled' : ''}></button>`).join('')}</div></label></div>
+        <label><span class="rot">Cor</span><div class="pf-cores">${['#7c3aed', '#0e7490', '#16a34a', '#d97706', '#db2777', '#0f766e', '#4f46e5', '#b45309', '#475569'].map(c => `<button type="button" style="background:${c}" class="${c === p.cor ? 'on' : ''}" onclick="pfEd.cor='${c}';this.parentNode.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b===this));pfPrevia()" ${ro ? 'disabled' : ''}></button>`).join('')}</div></label></div>
       <label><span class="rot">Descrição <small>para quem é este perfil</small></span><input class="campo" id="pf-desc" value="${esc(p.descricao || '')}" ${ro ? 'disabled' : ''}></label>
-      <div class="pf-rap">${ro ? '' : `<span class="s">Aplicar a todas:</span>${Object.entries(NIVEIS).map(([v, [t, ic]]) => `<button type="button" class="btn btn-s btn-sm" onclick="pfTodas('${v}')"><i class="fa-solid ${ic}"></i>${t}</button>`).join('')}`}</div>
-      <div class="pf-secs">${SECOES_ACESSO.map(([g, l]) => `<div class="pf-gr"><h4>${g}</h4>${l.map(([k, t, ic, , d]) => `<div class="pf-lin"><i class="fa-solid ${ic} pf-li"></i><div class="pf-lt"><b>${t}</b><small>${d}</small></div>
-          <div class="pf-seg" data-k="${k}">${Object.entries(NIVEIS).map(([v, [tt, ic2, c]]) => `<button type="button" data-v="${v}" style="--c:${c}" class="${(p.administrar ? (SEM_EDICAO.has(k) ? 'ver' : 'editar') : p.secoes[k]) === v ? 'on' : ''}" ${ro || (v === 'editar' && SEM_EDICAO.has(k)) ? 'disabled' : ''} onclick="pfNivel('${k}','${v}')" title="${v === 'editar' && SEM_EDICAO.has(k) ? 'Esta seção não tem edição' : tt}"><i class="fa-solid ${ic2}"></i>${tt}</button>`).join('')}</div></div>`).join('')}</div>`).join('')}</div>
-      <div class="pf-gr"><h4>Permissões extras</h4>${EXTRAS_ACESSO.map(([k, t, ic, d]) => `<div class="pf-lin pf-x" onclick="if(event.target.tagName!=='INPUT'){const c=this.querySelector('input');if(!c.disabled){c.checked=!c.checked;c.dispatchEvent(new Event('change'))}}"><i class="fa-solid ${ic} pf-li"></i><div class="pf-lt"><b>${t}</b><small>${d}</small></div><input type="checkbox" class="pf-sw" data-x="${k}" ${(k === 'administrar' ? p.administrar : p.extras[k]) ? 'checked' : ''} ${ro ? 'disabled' : ''} onchange="pfExtra('${k}',this.checked)"></div>`).join('')}</div>
+      ${legendaNiveis()}
+      ${ro ? '' : `<div class="pf-rap"><span class="s">Aplicar a todas as seções:</span>${ORDEM_NIV.map(v => `<button type="button" class="btn btn-s btn-sm" onclick="pfTodas('${v}')" style="--c:${NIVEIS[v][2]}"><i class="fa-solid ${NIVEIS[v][1]}" style="color:${NIVEIS[v][2]}"></i>${NIVEIS[v][0]}</button>`).join('')}</div>`}
+      <div class="pf-secs">${SECOES_ACESSO.map(([g, l], gi) => `<div class="pf-gr"><h4>${g}${ro ? '' : `<span class="pf-gap">${ORDEM_NIV.map(v => `<button type="button" title="${NIVEIS[v][0]} em toda a área ${g}" onclick="pfGrupo(${gi},'${v}')" style="--c:${NIVEIS[v][2]}"><i class="fa-solid ${NIVEIS[v][1]}"></i></button>`).join('')}</span>`}</h4>${l.map(([k, t, ic, , d]) => `<div class="pf-lin"><i class="fa-solid ${ic} pf-li"></i><div class="pf-lt"><b>${t}</b><small>${d}</small></div>
+          <div class="pf-seg" data-k="${k}">${ORDEM_NIV.map(v => { const so = (SEM_EDICAO.has(k) || k === 'apresentacao') && editaNiv(v); return `<button type="button" data-v="${v}" style="--c:${NIVEIS[v][2]}" class="${nivelEf(p, k) === v ? 'on' : ''}" ${ro || so || p.administrar ? 'disabled' : ''} onclick="pfNivel('${k}','${v}')" title="${so ? 'Esta seção é só de leitura' : NIVEIS[v][3]}"><i class="fa-solid ${NIVEIS[v][1]}"></i><span>${NIVEIS[v][0]}</span></button>`; }).join('')}</div></div>`).join('')}</div>`).join('')}</div>
+      <div class="pf-gr"><h4>Permissões extras</h4>${EXTRAS_ACESSO.map(([k, t, ic, d]) => `<div class="pf-lin pf-x" onclick="if(event.target.tagName!=='INPUT'){const c=this.querySelector('input');if(!c.disabled){c.checked=!c.checked;c.dispatchEvent(new Event('change'))}}"><i class="fa-solid ${ic} pf-li"></i><div class="pf-lt"><b>${t}</b><small>${d}</small></div><input type="checkbox" class="pf-sw" data-x="${k}" ${(k === 'administrar' ? p.administrar : p.administrar || p.extras[k]) ? 'checked' : ''} ${ro ? 'disabled' : ''} onchange="pfExtra('${k}',this.checked)"></div>`).join('')}</div>
     </div>
-    <div class="pf-ed-r"><div class="pf-prev-t">Como a pessoa verá o menu</div><div id="pf-prev"></div></div></div>`,
+    <div class="pf-ed-r"><div class="pf-prev-t">Como a pessoa verá o menu</div><div id="pf-prev"></div>
+      ${p.id || ro ? `<div class="pf-prev-t" style="margin-top:14px">Quem usa este perfil (${usam.length})</div><div class="pf-quem">${usam.slice(0, 12).map(u => `<div><span class="u-av" style="background:${esc(p.cor)}">${esc(iniciais(u.nome))}</span><span><b>${esc(u.nome)}</b><small>${esc(u.login)}${u.ativo !== 'Sim' ? ' · desativado' : ''}</small></span></div>`).join('') || '<p class="pf-vz">Nenhum usuário.</p>'}${usam.length > 12 ? `<p class="s">e mais ${usam.length - 12}</p>` : ''}</div>` : ''}</div></div>`,
     aoConfirmar:ro ? undefined : async m => {
       pfEd.nome = m.querySelector('#pf-nome').value.trim(); pfEd.descricao = m.querySelector('#pf-desc').value.trim();
       if (pfEd.nome.length < 3) throw new Error('Dê um nome ao perfil (mínimo 3 letras).');
       if (!pfEd.administrar && !SECOES_LISTA.some(([k]) => pfEd.secoes[k] !== 'oculto')) throw new Error('O perfil precisa ver ao menos uma seção.');
       const r = await chamar({ action:'profile_save', perfil:pfEd }, 30000); if (r.status !== 'success') throw new Error(r.message);
       perfisLista = r.perfis || perfisLista; toast('Perfil salvo.'); return true;
-    } }).then(ok => { if (ok) renderPerfis(); });
+    } }).then(ok => { if (ok) renderUsuarios(); });
   pfPrevia();
 }
-function pfNivel(k, v){ if (!pfEd) return; pfEd.secoes[k] = v; if (pfEd.administrar && v !== 'editar') { pfEd.administrar = false; const x = document.querySelector('.pf-sw[data-x=administrar]'); if (x) x.checked = false; } const s = document.querySelector(`.pf-seg[data-k="${k}"]`); if (s) s.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === v)); pfPrevia(); }
-function pfTodas(v){ SECOES_LISTA.forEach(([k]) => pfNivel(k, v === 'editar' && SEM_EDICAO.has(k) ? 'ver' : v)); }
-function pfExtra(k, on){ if (!pfEd) return; if (k === 'administrar') { pfEd.administrar = on; if (on) { pfTodas('editar'); EXTRAS_ACESSO.forEach(([x]) => { if (x !== 'administrar') { pfEd.extras[x] = true; const c = document.querySelector(`.pf-sw[data-x=${x}]`); if (c) c.checked = true; } }); } } else pfEd.extras[k] = on; pfPrevia(); }
+function pfNivel(k, v){ if (!pfEd || pfEd.administrar) return; if ((SEM_EDICAO.has(k) || k === 'apresentacao') && editaNiv(v)) v = 'ver'; pfEd.secoes[k] = v; const s = document.querySelector(`.pf-seg[data-k="${k}"]`); if (s) s.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === v)); pfPrevia(); }
+function pfTodas(v){ SECOES_LISTA.forEach(([k]) => pfNivel(k, v)); }
+function pfGrupo(gi, v){ (SECOES_ACESSO[gi] || [0, []])[1].forEach(([k]) => pfNivel(k, v)); }
+function pfExtra(k, on){ if (!pfEd) return; if (k === 'administrar') { pfEd.administrar = on; document.querySelectorAll('.pf-seg button').forEach(b => { const kk = b.closest('.pf-seg').dataset.k, so = (SEM_EDICAO.has(kk) || kk === 'apresentacao') && editaNiv(b.dataset.v); b.disabled = on || so; b.classList.toggle('on', b.dataset.v === nivelEf(pfEd, kk)); });
+    if (on) EXTRAS_ACESSO.forEach(([x]) => { if (x !== 'administrar') { pfEd.extras[x] = true; const c = document.querySelector(`.pf-sw[data-x=${x}]`); if (c) c.checked = true; } }); } else pfEd.extras[k] = on; pfPrevia(); }
 function pfPrevia(){
-  const el = $('#pf-prev'); if (!el || !pfEd) return; const p = pfEd, niv = k => p.administrar ? (SEM_EDICAO.has(k) ? 'ver' : 'editar') : (p.secoes[k] || 'oculto');
-  const vis = SECOES_LISTA.filter(([k]) => niv(k) !== 'oculto'), c = { editar:vis.filter(([k]) => niv(k) === 'editar').length, ver:vis.filter(([k]) => niv(k) === 'ver').length };
-  el.innerHTML = `<div class="pf-menu" style="--c:${esc(p.cor)}"><div class="pf-menu-u"><span class="u-av" style="background:${esc(p.cor)}">${esc(iniciais(p.nome || 'Novo'))}</span><div><b>${esc(p.nome || 'Novo perfil')}</b><small>${c.editar} para editar · ${c.ver} só para ver</small></div></div>
-    ${SECOES_ACESSO.map(([g, l]) => { const it = l.filter(([k]) => niv(k) !== 'oculto'); return it.length ? `<h6>${g}</h6>` + it.map(([k, t, ic]) => `<div class="pf-mi"><i class="fa-solid ${ic}"></i><span>${t}</span><i class="fa-solid ${niv(k) === 'editar' ? 'fa-pen' : 'fa-eye'} pf-mi-n" style="color:${niv(k) === 'editar' ? '#16a34a' : '#93c5fd'}"></i></div>`).join('') : ''; }).join('') || '<p class="pf-vz">Nenhuma seção visível</p>'}
+  const el = $('#pf-prev'); if (!el || !pfEd) return; const p = pfEd, niv = k => nivelEf(p, k);
+  const vis = SECOES_LISTA.filter(([k]) => niv(k) !== 'oculto'), c = contagemNiveis(p);
+  const icn = { completo:['fa-star', '#c4b5fd'], editar:['fa-pen', '#86efac'], ver:['fa-eye', '#93c5fd'] };
+  el.innerHTML = `<div class="pf-menu" style="--c:${esc(p.cor)}"><div class="pf-menu-u"><span class="u-av" style="background:${esc(p.cor)}">${esc(iniciais(p.nome || 'Novo'))}</span><div><b>${esc(p.nome || 'Novo perfil')}</b><small>${vis.length} de ${SECOES_LISTA.length} seções no menu</small></div></div>
+    ${SECOES_ACESSO.map(([g, l]) => { const it = l.filter(([k]) => niv(k) !== 'oculto'); return it.length ? `<h6>${g}</h6>` + it.map(([k, t, ic]) => `<div class="pf-mi"><i class="fa-solid ${ic}"></i><span>${t}</span><i class="fa-solid ${icn[niv(k)][0]} pf-mi-n" style="color:${icn[niv(k)][1]}" title="${NIVEIS[niv(k)][0]}"></i></div>`).join('') : ''; }).join('') || '<p class="pf-vz">Nenhuma seção visível</p>'}
     ${p.administrar ? '<h6>Sistema</h6><div class="pf-mi"><i class="fa-solid fa-user-shield"></i><span>Administração</span></div>' : ''}<div class="pf-mi"><i class="fa-solid fa-gear"></i><span>Configurações</span></div></div>
+    <div class="pf-resn">${ORDEM_NIV.slice().reverse().map(v => `<span style="--c:${NIVEIS[v][2]}"><b>${c[v]}</b>${NIVEIS[v][0].toLowerCase()}</span>`).join('')}</div>
     <ul class="pf-res">${[p.extras.nomesServidores || p.administrar ? (podeVerAlgum(p, 'servidores') ? '<li><i class="fa-solid fa-id-card" style="color:#16a34a"></i>Vê nomes e matrículas dos servidores</li>' : '') : (podeVerAlgum(p, 'servidores') ? '<li><i class="fa-solid fa-lock" style="color:#d97706"></i>Servidores só em números (sem nomes)</li>' : ''),
+      c.completo ? `<li><i class="fa-solid fa-trash-can" style="color:#7c3aed"></i>Exclui e importa em ${c.completo} seção(ões)</li>` : (c.editar ? '<li><i class="fa-solid fa-ban" style="color:#94a3b8"></i>Edita, mas não exclui nada</li>' : ''),
       p.extras.exportar || p.administrar ? '<li><i class="fa-solid fa-file-csv" style="color:#16a34a"></i>Pode exportar planilhas</li>' : '<li><i class="fa-solid fa-ban" style="color:#94a3b8"></i>Não exporta planilhas</li>',
       p.extras.documentos || p.administrar ? '<li><i class="fa-solid fa-file-signature" style="color:#16a34a"></i>Emite relatórios e minutas</li>' : '<li><i class="fa-solid fa-ban" style="color:#94a3b8"></i>Não emite documentos</li>',
       p.administrar ? '<li><i class="fa-solid fa-user-shield" style="color:#dc2626"></i>Administra usuários e perfis</li>' : ''].join('')}</ul>`;
@@ -2133,7 +2241,7 @@ function modalTrocarSenha(obrigatorio, atualConhecida){
   return trocandoSenha;
 }
 
-let usuarios = [], acessos = [], abaAdmAtual = 'usuarios';
+let usuarios = [], acessos = [], abaAdmAtual = 'geral';
 const COR_PERFIL = { Administrador:'#dc2626', Editor:'#2563eb', Leitor:'#64748b' };
 const COR_EVENTO = { 'Login':'#16a34a', 'Senha incorreta':'#d97706', 'Login recusado':'#dc2626', 'Bloqueado por tentativas':'#dc2626', 'Usuário criado':'#2563eb', 'Usuário alterado':'#0891b2', 'Usuário desativado':'#64748b', 'Usuário excluído':'#dc2626', 'Usuário desbloqueado':'#16a34a', 'Senha alterada pelo usuário':'#7c3aed', 'Senha definida pelo administrador':'#7c3aed', 'Senha provisória gerada':'#7c3aed', 'Sessões encerradas':'#475569' };
 function situacaoUsuario(u){
@@ -2151,6 +2259,8 @@ async function renderUsuarios(recarregar){
   const c = $('#u-corpo'); if (!c) return;
   if (!ehAdmin()) { c.innerHTML = '<div class="cartao vazio">Apenas administradores acessam esta área.</div>'; return; }
   if (abaAdmAtual === 'perfis') return renderPerfis();
+  if (abaAdmAtual === 'geral') return renderAdmGeral();
+  if (abaAdmAtual === 'matriz') return renderMatriz();
   if (abaAdmAtual === 'acessos') return renderAcessos(recarregar);
   if (!usuarios.length) c.innerHTML = '<div class="cartao vazio"><i class="fa-solid fa-circle-notch fa-spin"></i>Carregando usuários...</div>';
   try { const [r] = await Promise.all([chamar({ action:'users_list' }, 30000), carregarPerfis()]); if (r.status !== 'success') throw new Error(r.message); usuarios = r.usuarios || []; }
@@ -2335,9 +2445,9 @@ function mostrarSenhaProvisoria(u, senha, nova){
       <button type="button" class="btn btn-s" onclick="navigator.clipboard && navigator.clipboard.writeText(${arg('Endereço: ' + location.href.split('#')[0] + '\nUsuário: ' + u.login + '\nSenha provisória: ' + senha)}).then(() => toast('Copiado.'))"><i class="fa-regular fa-copy"></i>Copiar usuário e senha</button>` });
 }
 function resumoPerfilHTML(nome){
-  const p = perfisLista.find(x => x.nome === nome) || perfilSistema(nome), niv = k => p.administrar ? 'editar' : p.secoes[k] || 'oculto';
-  const ed = SECOES_LISTA.filter(([k]) => !SEM_EDICAO.has(k) && niv(k) === 'editar').map(x => x[1]), ve = SECOES_LISTA.filter(([k]) => niv(k) !== 'oculto' && !(niv(k) === 'editar' && !SEM_EDICAO.has(k))).map(x => x[1]), oc = SECOES_LISTA.filter(([k]) => niv(k) === 'oculto').length;
-  return `<b style="color:${esc(p.cor)}">${esc(p.nome)}</b>: ${esc(p.descricao || '')}<br>${ed.length ? `<i class="fa-solid fa-pen" style="color:#16a34a"></i> edita ${ed.length === SECOES_LISTA.length - SEM_EDICAO.size ? 'todas as seções' : esc(ed.join(', '))}<br>` : ''}${ve.length ? `<i class="fa-solid fa-eye" style="color:#2563eb"></i> só vê ${esc(ve.join(', '))}<br>` : ''}${oc ? `<i class="fa-solid fa-eye-slash" style="color:#94a3b8"></i> ${oc} seção(ões) oculta(s)` : ''}${p.administrar ? '<br><i class="fa-solid fa-user-shield" style="color:#dc2626"></i> administra usuários e perfis' : ''}`;
+  const p = perfilDeNome(nome), por = v => SECOES_LISTA.filter(([k]) => nivelEf(p, k) === v).map(x => x[1]), tot = SECOES_LISTA.length;
+  const lin = (v, l) => l.length ? `<i class="fa-solid ${NIVEIS[v][1]}" style="color:${NIVEIS[v][2]}"></i> ${NIVEIS[v][0].toLowerCase()}: ${l.length === tot ? 'todas as seções' : esc(l.join(', '))}<br>` : '';
+  return `<b style="color:${esc(p.cor)}">${esc(p.nome)}</b>: ${esc(p.descricao || '')}<br>${lin('completo', por('completo'))}${lin('editar', por('editar'))}${lin('ver', por('ver'))}${por('oculto').length ? `<i class="fa-solid fa-eye-slash" style="color:#94a3b8"></i> ${por('oculto').length} seção(ões) oculta(s)` : ''}${p.administrar ? '<br><i class="fa-solid fa-user-shield" style="color:#dc2626"></i> administra usuários e perfis' : ''}`;
 }
 function formUsuario(id){
   const u = usuarios.find(x => x.id === id) || { login:'', nome:'', email:'', perfil:'Editor', ativo:'Sim' };
