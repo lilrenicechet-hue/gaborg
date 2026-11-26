@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.59.0';
+const VERSAO = '1.60.0';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -947,11 +947,11 @@ const PO_CSS = `.po-pg{position:relative;background:#fff;color:#0f172a;font-fami
 .po-cab small{display:block;font-size:2.6mm;font-weight:800;letter-spacing:.12em;color:#1c3f94}.po-cab h1{margin:1mm 0 .6mm;font-size:6mm;font-weight:900;letter-spacing:-.01em;line-height:1.05}.po-cab p{margin:0;font-size:3mm;color:#475569}
 .po-gab{text-align:right;flex:none}.po-gab b{display:block;font-size:6mm;font-weight:900;color:#1e3a8a}.po-gab b em{font-style:normal;color:#0e7490}.po-gab small{font-size:2.6mm;color:#64748b}
 .po-area{position:absolute}.po-mundo{position:absolute;left:50%;top:50%;transform-origin:50% 50%}
-.po-ar{position:absolute;left:0;top:0;overflow:visible}.po-ar path{fill:none;stroke:#94a3b8;stroke-width:1.6}
-.po-no{position:absolute;width:${NW}px;height:${NH}px;border-radius:10px;background:#fff;border:1.5px solid color-mix(in srgb,var(--c) 45%,#e2e8f0);border-left:6px solid var(--c);padding:7px 10px 6px;display:flex;flex-direction:column;gap:2px;box-shadow:0 1px 3px rgba(15,23,42,.1)}
-.po-no .t{font-size:10px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--c);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.po-no .t i{margin-right:4px}
+.po-ar{position:absolute;left:0;top:0;overflow:visible}.po-ar path{fill:none;stroke:#64748b;stroke-width:1.3;stroke-linecap:square;stroke-linejoin:miter}
+.po-no{position:absolute;width:${NW}px;height:${NH}px;border-radius:3px;background:#fff;border:1px solid #c3ccd8;border-top:5px solid var(--c);padding:6px 10px 5px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:2px;box-shadow:none}
+.po-no .t{font-size:9.5px;font-weight:800;letter-spacing:.07em;max-width:100%;text-transform:uppercase;color:var(--c);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.po-no .t i{margin-right:4px}
 .po-no .n{font-size:13px;font-weight:800;line-height:1.15;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.po-no .p{margin-top:auto;display:flex;gap:8px;align-items:center;font-size:10.5px;color:#475569;white-space:nowrap;overflow:hidden}.po-no .p i{margin-right:3px;color:#94a3b8}.po-no .p .sv{margin-left:auto}.po-no .p .sr{color:#94a3b8;font-style:italic}
+.po-no .p{margin-top:auto;display:flex;gap:8px;align-items:center;justify-content:center;width:100%;border-top:1px solid #e2e8f0;padding-top:3px;font-size:10.5px;color:#475569;white-space:nowrap;overflow:hidden}.po-no .p i{margin-right:3px;color:#94a3b8}.po-no .p .sv{margin-left:0}.po-no .p .sr{color:#94a3b8;font-style:italic}
 .po-no.ext{opacity:.5;border-style:dashed}.po-no.sx{background:#fff5f5}
 .po-sin{position:absolute;top:-9px;right:-9px;display:flex;gap:3px;align-items:center}
 .po-sin>i{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-size:10px;color:#fff;background:var(--c);border:2px solid #fff}
@@ -1051,13 +1051,14 @@ function desenharMapaBase(){
   primeiroDesenho = false;
 }
 function caminhoAresta(p, c){
-  const a = pos.get(p.id), b = pos.get(c.id);
+  // organograma institucional: ligações ortogonais (ângulos retos), sem curvas
+  const a = pos.get(p.id), b = pos.get(c.id), r = v => Math.round(v) + .5;
   if (modos.get(p.id) === 'v') {
-    const x1 = a.x + 16, y1 = a.y + NH, y2 = b.y + NH / 2, r = Math.min(10, Math.abs(y2 - y1) / 2);
-    return `M${x1},${y1} V${y2 - r} Q${x1},${y2} ${x1 + r},${y2} H${b.x}`;
+    const x1 = r(a.x + 16), y1 = a.y + NH, y2 = r(b.y + NH / 2);
+    return `M${x1},${y1} V${y2} H${b.x}`;
   }
-  const x1 = a.x + NW / 2, y1 = a.y + NH, x2 = b.x + NW / 2, y2 = b.y, k = Math.max(26, Math.abs(y2 - y1) / 2);
-  return `M${x1},${y1} C${x1},${y1 + k} ${x2},${y2 - k} ${x2},${y2}`;
+  const x1 = r(a.x + NW / 2), y1 = a.y + NH, x2 = r(b.x + NW / 2), y2 = b.y, ym = r(y1 + Math.max(14, (y2 - y1) / 2));
+  return `M${x1},${y1} V${ym} H${x2} V${y2}`;
 }
 function desenharArestas(){
   if (cenMapa && !desenharArestas.dentro) { desenharArestas.dentro = true; try { return emCenario(desenharArestas); } finally { desenharArestas.dentro = false; } }
@@ -1067,9 +1068,9 @@ function desenharArestas(){
   DB.vinculos.forEach(v => {
     const a = pos.get(v.origemId), b = pos.get(v.destinoId); if (!a || !b) return;
     const x1 = a.x + NW / 2, y1 = a.y + NH / 2, x2 = b.x + NW / 2, y2 = b.y + NH / 2, my = Math.min(y1, y2) - 80;
-    h += `<path d="M${x1},${y1} C${x1},${my} ${x2},${my} ${x2},${y2}" class="vin ${v.origemId === selId || v.destinoId === selId ? 'ativa' : ''}"><title>${esc(v.tipo)}</title></path>`;
+    h += `<path d="M${x1},${y1} V${my} H${x2} V${y2}" class="vin ${v.origemId === selId || v.destinoId === selId ? 'ativa' : ''}"><title>${esc(v.tipo)}</title></path>`;
   });
-  if (cenMapa) visiveis.forEach(s => { if (s._paiOrig && pos.has(s._paiOrig) && pos.has(s.id)) { const a = pos.get(s._paiOrig), b = pos.get(s.id); h += `<path d="M${a.x + NW / 2},${a.y + NH} C${a.x + NW / 2},${a.y + NH + 60} ${b.x + NW / 2},${b.y - 60} ${b.x + NW / 2},${b.y}" class="orig"><title>Subordinação anterior</title></path>`; } });
+  if (cenMapa) visiveis.forEach(s => { if (s._paiOrig && pos.has(s._paiOrig) && pos.has(s.id)) { const a = pos.get(s._paiOrig), b = pos.get(s.id); h += `<path d="M${a.x + NW / 2},${a.y + NH} V${(a.y + NH + b.y) / 2} H${b.x + NW / 2} V${b.y}" class="orig"><title>Subordinação anterior</title></path>`; } });
   $('#arestas').innerHTML = h;
 }
 function aplicarView(anim){
@@ -1121,7 +1122,7 @@ function desenharLegenda(){
   else it = Object.entries(STATUS_SETOR);
   if (cenMapa) it = Object.values(ROT_MARCA).map(([n, c]) => [n + ' (proposta)', c]).concat(it);
   $('#m-leg').innerHTML = `<button class="leg-x" onclick="alternarMapaUI('leg')" title="Esconder a legenda (L)"><i class="fa-solid fa-xmark"></i></button>` + it.map(([n, c]) => `<span><i class="q" style="background:${c}"></i>${esc(n)}</span>`).join('')
-    + `<span class="dica"><i class="fa-solid fa-hand"></i> Arraste o fundo para navegar · roda do mouse para zoom · arraste um setor para reposicionar (encaixa nas guias; <b>Alt</b> solta livre) · <b>Ctrl</b> + clique seleciona vários · <b>Ctrl</b> + arrastar o fundo seleciona uma área · setas movem a seleção · <b>Shift</b> + arrastar sobre outro setor para subordinar · duplo clique abre/fecha</span>`;
+    + (somenteLeitura() ? `<span class="dica"><i class="fa-solid fa-hand"></i> Arraste o fundo para navegar · roda do mouse para zoom · clique num setor para ver os detalhes · duplo clique abre/fecha · <b>Verificar</b> mostra pendências · <b>Apresentar</b> abre a apresentação em tela cheia</span>` : `<span class="dica"><i class="fa-solid fa-hand"></i> Arraste o fundo para navegar · roda do mouse para zoom · arraste um setor para reposicionar (encaixa nas guias; <b>Alt</b> solta livre) · <b>Ctrl</b> + clique seleciona vários · <b>Ctrl</b> + arrastar o fundo seleciona uma área · setas movem a seleção · <b>Shift</b> + arrastar sobre outro setor para subordinar · duplo clique abre/fecha</span>`);
 }
 /* Minimapa */
 function desenharMini(){
@@ -1671,13 +1672,13 @@ function addVinculo(id){
 function rmVinculo(vid){ const v = DB.vinculos.find(x => x.id === vid); if (!v) return; DB.vinculos = DB.vinculos.filter(x => x.id !== vid); enfileirar('vinculos', v, true); renderPainel(); if (vistaAtual === 'mapa') desenharArestas(); }
 
 /* ===================== VISTAS ===================== */
-document.querySelectorAll('.nav-b').forEach(b => { b.title = b.querySelector('span').textContent; b.addEventListener('click', () => trocarVista(b.dataset.vista)); });
+document.querySelectorAll('.nav-b').forEach(b => { b.title = b.querySelector('span').textContent; b.addEventListener('click', () => { if (typeof cenMapa !== 'undefined' && cenMapa) { sairCenario(true); } trocarVista(b.dataset.vista); }); });
 function trocarVista(v){
   if (!podeVerVista(v)) { if (document.querySelector('#app:not(.hidden)')) toast('Seu perfil não tem acesso a esta seção.', 'aviso'); v = primeiraVista(); }
   vistaAtual = v; document.body.classList.toggle('ro', somenteLeitura());
   if (cenMapa) { if (VISTAS_CEN.includes(v)) { if (!cenSwap) aplicarCenario(); } else if (cenSwap) desaplicarCenario(); }
   if (typeof atualizarBarraCen === 'function') atualizarBarraCen();
-  document.querySelectorAll('.nav-b').forEach(b => b.classList.toggle('on', b.dataset.vista === v || (cenMapa && (v === 'mapa' || v === 'lista') && b.dataset.vista === 'propostas')));
+  document.querySelectorAll('.nav-b').forEach(b => b.classList.toggle('on', (cenMapa && (v === 'mapa' || v === 'lista')) ? b.dataset.vista === 'propostas' : b.dataset.vista === v));
   document.body.classList.toggle('est-consulta', estruturaConsulta());
   { const mb = $('.nav-mais'); if (mb) mb.classList.toggle('on', !NAV_FIXOS.includes(v)); }
   if (history.replaceState && /^https?:$/.test(location.protocol)) try { history.replaceState(null, '', '#' + v); } catch (e) {}
@@ -2505,7 +2506,7 @@ function travarLeitura(raiz){
 }
 ['renderPainel','renderValidacoes'].forEach(n => {
   const f = window[n];
-  window[n] = function(){ const r = f.apply(this, arguments); travarLeitura(n === 'renderPainel' ? $('#pn-corpo') : $('#v-corpo')); if (n === 'renderPainel' && somenteLeitura() && $('#pn-corpo') && !$('#pn-corpo .ro-aviso')) $('#pn-corpo').insertAdjacentHTML('afterbegin', (estruturaConsulta() ? '<div class="ro-aviso"><i class="fa-solid fa-lock"></i>Estrutura oficial: somente consulta. Para alterar este setor, <a href="#" onclick="escolherPropostaParaEditar();return false">edite numa proposta</a>.</div>' : '<div class="ro-aviso"><i class="fa-solid fa-eye"></i>Seu perfil permite consultar, mas não alterar.</div>')); return r; };
+  window[n] = function(){ const r = f.apply(this, arguments); travarLeitura(n === 'renderPainel' ? $('#pn-corpo') : $('#v-corpo')); if (n === 'renderPainel' && somenteLeitura() && $('#pn-corpo') && !$('#pn-corpo .ro-aviso')) $('#pn-corpo').insertAdjacentHTML('afterbegin', (estruturaConsulta() ? '<div class="ro-aviso"><i class="fa-solid fa-lock"></i>Estrutura oficial · somente consulta.</div>' : '<div class="ro-aviso"><i class="fa-solid fa-eye"></i>Seu perfil permite consultar, mas não alterar.</div>')); return r; };
 });
 window.addEventListener('resize', () => { if (vistaAtual === 'mapa') desenharMini(); });
 
@@ -3205,7 +3206,8 @@ function aplicarCenario(){
   DBoficial = DB.setores; DB.setores = E.lista; cenSwap = true; indexar();
 }
 function desaplicarCenario(){ if (!cenSwap) return; DB.setores = DBoficial; DBoficial = null; cenSwap = false; indexar(); }
-function sairCenario(){ desaplicarCenario(); cenMapa = ''; atualizarBarraCen(); preencherCenarios(); document.body.classList.toggle('ro', somenteLeitura()); document.body.classList.toggle('est-consulta', estruturaConsulta()); if (vistaAtual === 'mapa' || vistaAtual === 'lista') trocarVista(vistaAtual); }
+function sairCenario(semRedesenho){ limparMulti(true); fecharPainel(); desaplicarCenario(); cenMapa = ''; atualizarBarraCen(); preencherCenarios(); document.body.classList.toggle('ro', somenteLeitura()); document.body.classList.toggle('est-consulta', estruturaConsulta()); if (!semRedesenho && (vistaAtual === 'mapa' || vistaAtual === 'lista')) trocarVista(vistaAtual); }
+function voltarPropostas(){ sairCenario(true); abaPropAtual = 'mapas'; trocarVista('propostas'); }
 function remarcarCenario(){
   if (!cenSwap) return; const p = DB.propostas.find(x => x.id === cenMapa); if (!p) return;
   const of = new Map(DBoficial.map(s => [s.id, s])), cargos = new Set(itensProp(p).filter(i => i.tipo === 'cargo').map(i => i.setorId));
@@ -3229,10 +3231,9 @@ function atualizarBarraCen(){
   b.classList.toggle('hidden', !p); if (!p) return;
   const cp = custoProposta(p), base = baseAtual(), d = cp.m - base.m, E = cp.E, n = c => E.lista.filter(s => s._marcas.includes(c)).length;
   const emEstrutura = VISTAS_CEN.includes(vistaAtual);
-  b.innerHTML = `<i class="fa-solid fa-lightbulb"></i><span class="cb-t">${somenteLeitura() ? 'Vendo' : 'Editando'} a proposta <b>${esc(p.nome)}</b></span>
+  b.innerHTML = `<span class="cb-mig"><i class="fa-solid fa-lightbulb"></i>Propostas ›</span><span class="cb-t">${vistaAtual === 'lista' ? 'Lista' : 'Mapa'} da proposta ${somenteLeitura() ? '' : '(em edição)'} <b>${esc(p.nome)}</b></span>
     <span class="cb-n">${n('novo') ? `<i style="--t:#16a34a">+${n('novo')} novo(s)</i>` : ''}${n('extinto') ? `<i style="--t:#dc2626">${n('extinto')} extinto(s)</i>` : ''}${n('movido') ? `<i style="--t:#7c3aed">${n('movido')} movido(s)</i>` : ''}${n('renomeado') ? `<i style="--t:#0891b2">${n('renomeado')} renomeado(s)</i>` : ''}${n('editado') ? `<i style="--t:#ca8a04">${n('editado')} editado(s)</i>` : ''}<i style="--t:${d > 0 ? '#dc2626' : '#16a34a'}">${d ? (d > 0 ? '+' : '−') + fmtM0(Math.abs(d)) + '/mês' : 'custo igual'}</i></span>
-    ${emEstrutura ? '' : '<span class="cb-x">a estrutura atual está sendo exibida nesta tela</span>'}
-    <span class="cb-a"><button class="btn btn-s btn-sm" onclick="abrirComparativo('', ${arg(p.id)})"><i class="fa-solid fa-code-compare"></i>Comparar</button><button class="btn btn-s btn-sm" onclick="trocarVista('propostas');propSel=${arg(p.id)};abaProp('propostas')"><i class="fa-solid fa-list-check"></i>Proposta</button><button class="btn btn-p btn-sm" onclick="escolherCenarioMapa('')"><i class="fa-solid fa-arrow-left"></i>Voltar à estrutura atual</button></span>`;
+    <span class="cb-a"><button class="btn btn-s btn-sm" onclick="abrirComparativo('', ${arg(p.id)})"><i class="fa-solid fa-code-compare"></i>Comparar</button><button class="btn btn-s btn-sm" onclick="trocarVista(vistaAtual === 'lista' ? 'mapa' : 'lista')"><i class="fa-solid ${vistaAtual === 'lista' ? 'fa-sitemap' : 'fa-list'}"></i>${vistaAtual === 'lista' ? 'Mapa' : 'Lista'}</button><button class="btn btn-s btn-sm" onclick="const i=${arg(p.id)};sairCenario(true);propSel=i;trocarVista('propostas');abaProp('propostas')"><i class="fa-solid fa-coins"></i>Detalhes e custos</button><button class="btn btn-p btn-sm" onclick="voltarPropostas()"><i class="fa-solid fa-arrow-left"></i>Voltar às propostas</button></span>`;
 }
 const ROT_MARCA = { novo:['Novo', '#16a34a'], extinto:['Extinto', '#dc2626'], movido:['Movido', '#7c3aed'], renomeado:['Renomeado', '#0891b2'], editado:['Editado', '#ca8a04'], cargo:['Cargo alterado', '#ea580c'] };
 function listaCenario(id){
@@ -9239,3 +9240,81 @@ window.GABORG_VERSAO_JS = VERSAO;
     if ($('#app').classList.contains('hidden')) mostrarLogin(e.message);
   }
 })();
+
+/* ===================== MAPA PRINCIPAL · VERIFICAR E APRESENTAR (1.59.1) ===================== */
+function verificarEstrutura(){
+  const at = DB.setores.filter(s => (s.status || 'Ativo') !== 'Extinto');
+  const T = [
+    ['Sem responsável', 'fa-user-slash', '#dc2626', s => !String(s.responsavel || '').trim()],
+    ['Sem sigla', 'fa-font', '#d97706', s => !String(s.sigla || '').trim()],
+    ['Sem competências descritas', 'fa-file-circle-question', '#d97706', s => !String(s.competencias || '').trim()],
+    ['Sem contato', 'fa-phone-slash', '#64748b', s => !String(s.contato || '').trim()],
+    ['Validação pendente ou reprovada', 'fa-stamp', '#7c3aed', s => ['Pendente', 'Reprovado'].includes(statusVal(s.id))],
+    ['Ainda sem validação', 'fa-hourglass', '#94a3b8', s => statusVal(s.id) === 'Sem validação'],
+  ];
+  const sin = {}; at.forEach(s => sinaisDe(s).forEach(k => (sin[k] = sin[k] || []).push(s)));
+  const item = (t, ic, c, l) => `<details class="vf-it ${l.length ? '' : 'ok'}" style="--c:${c}"><summary><i class="ic fa-solid ${ic}"></i>${esc(t)}<em>${l.length ? l.length : 'ok'}</em></summary>${l.length ? `<div class="vf-ls">${l.slice(0, 300).map(s => `<button type="button" onclick="this.closest('.modal').remove();irPara(${arg(s.id)})"><i class="fa-solid ${icTipo(s.tipo)}" style="color:${corTipo(s.tipo)}"></i>${esc(s.nome)}<small>${esc(caminho(s.id).map(nomeCurto).join(' › ') || 'Raiz')}</small></button>`).join('')}</div>` : ''}</details>`;
+  const comResp = at.filter(s => String(s.responsavel || '').trim()).length, aprov = at.filter(s => /^Aprovado/.test(statusVal(s.id))).length;
+  abrirModal({ titulo:'Verificação da estrutura oficial', rotulo:'Fechar', semCancelar:true, largura:640,
+    html:`<div class="vf-res"><div><b>${at.length}</b><span>setores ativos</span></div><div><b>${at.length ? Math.round(comResp / at.length * 100) : 0}%</b><span>com responsável</span></div><div><b>${at.length ? Math.round(aprov / at.length * 100) : 0}%</b><span>validados</span></div><div><b>${Object.values(sin).reduce((a, l) => a + l.length, 0)}</b><span>sinalizações</span></div></div>`
+      + T.map(([t, ic, c, f]) => item(t, ic, c, at.filter(f))).join('')
+      + Object.entries(sin).sort((a, b) => b[1].length - a[1].length).map(([k, l]) => item('Sinalização: ' + k, sinalInfo(k).ic, sinalInfo(k).cor, l)).join('')
+      + `<p class="s" style="margin:8px 0 0;font-size:12px;color:var(--mut)">Clique num setor para localizá-lo no mapa.</p>` });
+}
+let apres = null;
+function passosApres(){
+  const r = raizes(); const P = [{ id:'', t:'Estrutura completa', st:'Visão geral da organização' }];
+  const prim = r[0]; if (!prim) return P;
+  const ramos = [...r.slice(1), ...filhosDe(prim.id)].filter(s => filhosDe(s.id).length);
+  return P.concat(ramos.map(s => ({ id:s.id, t:s.nome, st:s.tipo })));
+}
+function apresentarMapa(){
+  if (vistaAtual !== 'mapa') trocarVista('mapa');
+  limparMulti(true); fecharPainel();
+  apres = { i:0, passos:passosApres(), ab:new Set(abertos) };
+  document.body.classList.add('apres-on');
+  try { if (document.documentElement.requestFullscreen && !document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {}); } catch (e) {}
+  window.addEventListener('keydown', teclaApres, true);
+  irPassoApres(0);
+}
+function irPassoApres(i){
+  if (!apres) return; const P = apres.passos; i = Math.max(0, Math.min(P.length - 1, i)); apres.i = i; const p = P[i];
+  fecharPainel();
+  if (!p.id) { abertos = new Set(raizes().map(s => s.id)); raizes().forEach(s => filhosDe(s.id).forEach(f => abertos.add(f.id))); }
+  else { abertos = new Set(caminho(p.id).map(a => a.id)); abertos.add(p.id); filhosDe(p.id).forEach(f => { if (filhosDe(f.id).length <= 12) abertos.add(f.id); }); }
+  desenharMapa();
+  setTimeout(() => { if (!p.id) return ajustar(true); const ids = [p.id, ...descendentes(p.id)]; enquadrarApres(ids); setTimeout(() => { if (apres && apres.passos[apres.i] === p) enquadrarApres(ids); }, 260); setTimeout(() => pulsar(p.id), 700); }, 60);
+  let st = p.st;
+  if (p.id) { const d = [...descendentes(p.id)].map(id => porId.get(id)).filter(Boolean), c = {}; d.forEach(s => c[s.tipo] = (c[s.tipo] || 0) + 1);
+    const s = porId.get(p.id); st = [s.responsavel ? 'Titular: ' + s.responsavel : '', d.length + ' setores subordinados', ...Object.entries(c).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([t, n]) => n + ' ' + t.toLowerCase() + (n > 1 && !/s$/.test(t) ? (/[aeiou]$/i.test(t) ? 's' : 'es') : ''))].filter(Boolean).join(' · '); }
+  else st = DB.setores.filter(s => (s.status || 'Ativo') !== 'Extinto').length + ' setores ativos · ' + (P.length - 1) + ' áreas para apresentar';
+  const ma = $('#m-apres'); ma.classList.remove('hidden');
+  ma.innerHTML = `<button class="ma-x" onclick="sairApres()" title="Sair (Esc)"><i class="fa-solid fa-xmark"></i></button>
+    <button class="ma-b" onclick="irPassoApres(apres.i-1)" ${i ? '' : 'disabled'} title="Anterior (←)"><i class="fa-solid fa-chevron-left"></i></button>
+    <div class="ma-t"><small>${i ? 'Área ' + i + ' de ' + (P.length - 1) : 'Apresentação da estrutura'}</small><h4>${esc(p.t)}</h4><p>${esc(st)}</p><div class="ma-d">${P.map((_, k) => `<i class="${k === i ? 'on' : ''}" onclick="irPassoApres(${k})" title="${esc(P[k].t)}"></i>`).join('')}</div></div>
+    <button class="ma-b" onclick="irPassoApres(apres.i+1)" ${i < P.length - 1 ? '' : 'disabled'} title="Próxima (→)"><i class="fa-solid fa-chevron-right"></i></button>`;
+}
+function enquadrarApres(ids){
+  ids = ids.filter(i => pos.has(i) && visiveis.some(n => n.id === i)); if (!ids.length) return;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  ids.forEach(i => { const q = pos.get(i); x0 = Math.min(x0, q.x); y0 = Math.min(y0, q.y); x1 = Math.max(x1, q.x + NW); y1 = Math.max(y1, q.y + NH); });
+  const vp = vpEl.getBoundingClientRect(), topo = 30, base = 160, lat = 40;
+  const k = Math.max(.12, Math.min(1, (vp.width - lat * 2) / (x1 - x0), (vp.height - topo - base) / (y1 - y0)));
+  view = { k, x:(vp.width - (x1 - x0) * k) / 2 - x0 * k, y:topo + (vp.height - topo - base - (y1 - y0) * k) / 2 - y0 * k };
+  aplicarView(!semMovimento());
+}
+function teclaApres(e){
+  if (!apres || document.querySelector('.modal')) return;
+  const k = e.key;
+  if (k === 'ArrowRight' || k === ' ' || k === 'PageDown') { e.preventDefault(); e.stopPropagation(); irPassoApres(apres.i + 1); }
+  else if (k === 'ArrowLeft' || k === 'PageUp') { e.preventDefault(); e.stopPropagation(); irPassoApres(apres.i - 1); }
+  else if (k === 'Escape') { e.preventDefault(); e.stopPropagation(); sairApres(); }
+}
+function sairApres(){
+  if (!apres) return; abertos = apres.ab; apres = null;
+  window.removeEventListener('keydown', teclaApres, true);
+  document.body.classList.remove('apres-on'); $('#m-apres').classList.add('hidden');
+  try { if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {}); } catch (e) {}
+  desenharMapa(); setTimeout(() => ajustar(true), 40);
+}
+document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && apres) sairApres(); });
