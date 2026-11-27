@@ -43,7 +43,7 @@
    GABOrg · Organização institucional da SEDUC-MT
    Front-end único. Backend: Google Apps Script + Google Sheets (Codigo.gs)
    ===================================================================== */
-const VERSAO = '1.65.1';
+const VERSAO = '1.66.0';
 const NW = 236, NH = 82, GX = 26, GY = 50, GV = 14, IND = 30;
 
 const TIPOS = {
@@ -9503,7 +9503,10 @@ function rdBase(){
   svLista().forEach(r => { const u = norm(r.unidade || ''); if (!u) return; const d = dres.find(d => u === norm(d) || u.includes(norm(String(d).replace(/^DRE\s+/i, '')))); if (d) sv.set(d, (sv.get(d) || 0) + 1); });
   const equipe = {}, fonteEq = {}; dres.forEach(d => { const man = num(eqP[d]), set = (R.get(d) || {}).ser || 0, imp = sv.get(d) || 0;
     equipe[d] = man || Math.max(set, imp); fonteEq[d] = man ? 'informada' : imp >= set && imp ? 'servidores importados' : set ? 'campo Servidores dos setores' : ''; });
-  return rdBase.c = { E, rev:DB_REV, dres, mun, sedeMun, equipe, fonteEq };
+  // profissionais por escola: usa o informado; onde falta, estima pela razão mediana alunos/profissional das escolas que informaram
+  const rz = E.filter(e => num(e.profissionais) > 0 && num(e.alunos) > 0).map(e => num(e.alunos) / num(e.profissionais)).sort((a, b) => a - b), razao = rz.length >= 5 ? rz[Math.floor(rz.length / 2)] : 0;
+  const prof = new Map(); let profInf = 0; E.forEach(e => { const v = num(e.profissionais); if (v > 0) { profInf++; prof.set(e.codigo, { v, est:false }); } else if (razao && num(e.alunos)) prof.set(e.codigo, { v:Math.max(1, Math.round(num(e.alunos) / razao)), est:true }); else prof.set(e.codigo, { v:0, est:false }); });
+  return rdBase.c = { E, rev:DB_REV, dres, mun, sedeMun, equipe, fonteEq, prof, profInf, razao, temProf:profInf > 0 };
 }
 function rdAtual(){
   const B = rdBase(), dres = {}, atrib = {}, exc = {};
@@ -9519,21 +9522,22 @@ function rdCalc(c){
   const porDre = {}; B.E.forEach(e => { porDre[e.dre] = (porDre[e.dre] || 0) + 1; });
   const fr = {}; B.dres.forEach(d => { fr[d] = porDre[d] ? B.equipe[d] / porDre[d] : 0; });
   const D = {};
-  Object.entries(c.dres).forEach(([k, d]) => { const m = B.mun.get(d.sede); D[k] = { k, nome:d.nome, cor:d.cor, sede:d.sede, sedeNome:m ? m.nome : '—', pt:m ? [m.lat, m.lng] : null, orig:d.orig || [], n:0, alunos:0, mun:new Set(), rur:0, tipos:{}, km:0, kmMax:0, longe:null, n100:0, n200:0, n300:0, esp200:0, prof:0, incl:0, equipe:0, origens:{} }; });
+  Object.entries(c.dres).forEach(([k, d]) => { const m = B.mun.get(d.sede); D[k] = { k, nome:d.nome, cor:d.cor, sede:d.sede, sedeNome:m ? m.nome : '—', pt:m ? [m.lat, m.lng] : null, orig:d.orig || [], n:0, alunos:0, mun:new Set(), rur:0, tipos:{}, km:0, kmMax:0, longe:null, n100:0, n200:0, n300:0, esp200:0, prof:0, profEst:0, profInfN:0, incl:0, equipe:0, origens:{} }; });
   B.E.forEach(e => { const x = D[rdDreEsc(c, e)]; if (!x) return; const km = x.pt ? kmEntre([e.latitude, e.longitude], x.pt) : 0, g = grupoTipo(e.tipo);
     x.n++; x.alunos += num(e.alunos); x.mun.add(chaveMun(e.municipio)); if (e.localidade === 'RURAL') x.rur++; x.tipos[g] = (x.tipos[g] || 0) + 1; x.km += km;
     if (km > x.kmMax) { x.kmMax = km; x.longe = e; } if (km > 100) x.n100++; if (km > 200) { x.n200++; if (RD_GRUPOS_ESP.includes(g)) x.esp200++; } if (km > 300) x.n300++;
-    x.prof += num(e.profissionais); x.incl += num(e.inclusiva); x.equipe += fr[e.dre] || 0; x.origens[e.dre] = (x.origens[e.dre] || 0) + 1; });
-  const L = Object.values(D), A = L.filter(x => x.n), tot = { n:B.E.length, alunos:A.reduce((t, x) => t + x.alunos, 0), equipe:A.reduce((t, x) => t + x.equipe, 0) };
+    const pf = B.prof.get(e.codigo) || { v:0 }; x.prof += pf.v; if (pf.est) x.profEst += pf.v; if (pf.v && !pf.est) x.profInfN++; x.incl += num(e.inclusiva); x.equipe += fr[e.dre] || 0; x.origens[e.dre] = (x.origens[e.dre] || 0) + 1; });
+  const L = Object.values(D), A = L.filter(x => x.n), tot = { n:B.E.length, alunos:A.reduce((t, x) => t + x.alunos, 0), equipe:A.reduce((t, x) => t + x.equipe, 0), prof:A.reduce((t, x) => t + x.prof, 0) };
   A.forEach(x => { x.med = x.km / x.n; x.circ = x.km * 2 * FATOR_ESTRADA; x.custo = x.circ * ck * vis; x.horas = x.circ / VEL_MEDIA * vis; x.nMun = x.mun.size; x.equipe = Math.round(x.equipe); });
-  const mE = tot.n / Math.max(1, A.length), mA = tot.alunos / Math.max(1, A.length), mC = A.reduce((t, x) => t + x.circ, 0) / Math.max(1, A.length);
-  A.forEach(x => { x.carga = .5 * x.n / mE + .3 * (mA ? x.alunos / mA : 1) + .2 * (mC ? x.circ / mC : 1); });
+  const mE = tot.n / Math.max(1, A.length), mA = tot.alunos / Math.max(1, A.length), mC = A.reduce((t, x) => t + x.circ, 0) / Math.max(1, A.length), mP = tot.prof / Math.max(1, A.length);
+  const PES = B.temProf || B.razao ? [.35, .25, .2, .2] : [.5, .3, 0, .2];
+  A.forEach(x => { x.carga = PES[0] * x.n / mE + PES[1] * (mA ? x.alunos / mA : 1) + PES[2] * (mP ? x.prof / mP : 1) + PES[3] * (mC ? x.circ / mC : 1); x.aluProf = x.prof ? x.alunos / x.prof : null; x.profEsc = x.n ? x.prof / x.n : 0; });
   const sc = A.reduce((t, x) => t + x.carga, 0); A.forEach(x => { x.eqRec = tot.equipe ? Math.round(tot.equipe * x.carga / sc) : null; x.escSer = x.equipe ? x.n / x.equipe : null; });
   const ns = A.map(x => x.n), med = ns.reduce((t, v) => t + v, 0) / Math.max(1, ns.length), dp = Math.sqrt(ns.reduce((t, v) => t + (v - med) ** 2, 0) / Math.max(1, ns.length));
   const s = f => A.reduce((t, x) => t + f(x), 0), maior = A.reduce((a, x) => !a || x.n > a.n ? x : a, null), menor = A.reduce((a, x) => !a || x.n < a.n ? x : a, null);
   const G = { nDre:A.length, vazias:L.filter(x => !x.n), kmMed:s(x => x.km) / Math.max(1, tot.n), n100:s(x => x.n100), n200:s(x => x.n200), n300:s(x => x.n300), esp200:s(x => x.esp200),
     cv:med ? dp / med : 0, maior, menor, custoDesl:s(x => x.custo), horasDesl:s(x => x.horas), custoFixo:cd ? A.length * cd : null, kmMax:A.reduce((a, x) => x.kmMax > a.kmMax ? x : a, { kmMax:0 }), tot, mediaEsc:med,
-    pior:A.reduce((a, x) => x.med > (a ? a.med : -1) ? x : a, null) };
+    pior:A.reduce((a, x) => x.med > (a ? a.med : -1) ? x : a, null), PES, profMax:A.reduce((a, x) => !a || x.prof > a.prof ? x : a, null), profMed:mP };
   G.custoTotal = G.custoDesl + (G.custoFixo || 0);
   return { c, D, L, A, G };
 }
@@ -9556,6 +9560,9 @@ function rdLeitura(A, C){
   const dc = h.cv - g.cv; if (Math.abs(dc) >= .03) r.push([dc < 0 ? 'ok' : 'atencao', `A divisão de escolas entre as DREs ficou <b>${dc < 0 ? 'mais equilibrada' : 'mais desigual'}</b> (variação de ${fmtP(g.cv * 100)} para ${fmtP(h.cv * 100)}). Maior: ${esc(h.maior.nome)} com ${h.maior.n} escolas; menor: ${esc(h.menor.nome)} com ${h.menor.n}.`]);
   if (h.maior && h.maior.n > h.mediaEsc * 1.8) r.push(['atencao', `<b>${esc(h.maior.nome)}</b> concentra ${h.maior.n} escolas (${(h.maior.n / h.mediaEsc).toLocaleString('pt-BR', { maximumFractionDigits:1 })}× a média de ${Math.round(h.mediaEsc)}): avalie reforço de equipe ou divisão.`]);
   const dd = h.custoDesl - g.custoDesl; if (Math.abs(dd) > 1000) r.push([dd > 0 ? 'atencao' : 'ok', `Custo estimado de deslocamento para visitar as escolas: <b>${fmtRc(h.custoDesl)}</b> por ano (${dd > 0 ? '+' : '−'}${fmtRc(Math.abs(dd))}).`]);
+  { const B = rdBase(); if (h.tot.prof) { const mx = h.profMax, d = h.tot.prof && g.profMax ? mx.prof - g.profMax.prof : 0;
+      r.push([mx.prof > h.profMed * 2 ? 'atencao' : 'info', `<b>${fmtN(Math.round(h.tot.prof))}</b> profissionais nas escolas${B.profInf < B.E.length ? ` (${fmtN(B.profInf)} escolas informaram; as demais foram estimadas pela média de ${B.razao.toLocaleString('pt-BR', { maximumFractionDigits:1 })} alunos por profissional)` : ''}. A maior rede de profissionais fica com <b>${esc(mx.nome)}</b>: ${fmtN(Math.round(mx.prof))} (${(mx.prof / Math.max(1, h.profMed)).toLocaleString('pt-BR', { maximumFractionDigits:1 })}× a média), que a DRE precisa acompanhar em formação, lotação e frequência.`]); }
+    else r.push(['info', 'O número de profissionais por escola ainda não foi informado. Preencha a coluna Profissionais na base de escolas (Mapa de MT › Editar escolas) para que a carga de pessoas nas escolas entre no cálculo.']); }
   if (h.tot.equipe) { const def = C.A.filter(x => x.eqRec !== null && x.eqRec - x.equipe >= Math.max(3, x.eqRec * .2)).sort((a, b) => (b.eqRec - b.equipe) - (a.eqRec - a.equipe));
     if (def.length) r.push(['atencao', `Equipes abaixo da carga: ${def.slice(0, 3).map(x => `<b>${esc(x.nome)}</b> (${x.equipe} servidores; recomendado ~${x.eqRec})`).join(', ')}${def.length > 3 ? ` e mais ${def.length - 3}` : ''}.`]); }
   else r.push(['info', 'As equipes das DREs ainda não foram informadas: importe os servidores, preencha o campo Servidores das DREs ou informe as equipes em Parâmetros para analisar a carga de pessoas.']);
@@ -9624,7 +9631,7 @@ function rdMunicipio(mk){
   const op = Object.keys(c.dres).map(x => [x, rdPt(c, x)]).filter(([, p]) => p).map(([x, p]) => [x, kmEntre([m.lat, m.lng], p)]).sort((a, b) => a[1] - b[1]);
   const tp = {}; m.esc.forEach(e => { const g = grupoTipo(e.tipo); tp[g] = (tp[g] || 0) + 1; });
   const pode = !Object.values(c.dres).some(x => x.sede === mk);
-  abrirModal({ titulo:m.nome, rotulo:'Fechar', semCancelar:true, largura:520, classe:'rr-mod', html:`<div class="rr-mm"><span style="--c:${d.cor}"><i class="fa-solid fa-building-flag"></i>${esc(d.nome)}</span><b>${m.esc.length}</b> escola(s) · <b>${fmtN(m.alunos)}</b> alunos${m.esc.some(e => e.localidade === 'RURAL') ? ` · ${m.esc.filter(e => e.localidade === 'RURAL').length} rural(is)` : ''}</div>
+  abrirModal({ titulo:m.nome, rotulo:'Fechar', semCancelar:true, largura:520, classe:'rr-mod', html:`<div class="rr-mm"><span style="--c:${d.cor}"><i class="fa-solid fa-building-flag"></i>${esc(d.nome)}</span><b>${m.esc.length}</b> escola(s) · <b>${fmtN(m.alunos)}</b> alunos · <b>${fmtN(m.esc.reduce((t, e) => t + ((rdBase().prof.get(e.codigo) || {}).v || 0), 0))}</b> profissionais${m.esc.some(e => e.localidade === 'RURAL') ? ` · ${m.esc.filter(e => e.localidade === 'RURAL').length} rural(is)` : ''}</div>
     <div class="rr-tps">${Object.entries(tp).map(([g, n]) => `<span>${iconeTipoSVG(g, CORES_TIPO[g], 14)}${esc(g)} ${n}</span>`).join('')}</div>
     <p class="rot" style="margin:12px 0 6px">Mover o município para</p>
     <div class="rr-op">${op.map(([x, km], i) => `<button type="button" class="${x === k ? 'on' : ''}" ${x === k || !pode ? 'disabled' : ''} onclick="rdMoverMun(${arg(mk)},${arg(x)})" style="--c:${c.dres[x].cor}"><i class="pt"></i><span>${esc(c.dres[x].nome)}${i === 0 ? ' <em>mais perto</em>' : ''}</span><small>${fmtKm(km)} · ~${fmtHoras(km)}</small>${x === k ? '<b>atual</b>' : ''}</button>`).join('')}</div>
@@ -9670,8 +9677,8 @@ function rdParametros(){
 }
 function rdExportar(){
   const C = rdCalc(rdGarantir()), T = Object.keys(CORES_TIPO);
-  const l = [['DRE', 'Sede', 'Escolas', 'Alunos', 'Municípios', 'Rurais', ...T, 'Dist. média (km)', 'Mais distante (km)', '> 200 km', 'Equipe atual (est.)', 'Equipe recomendada', 'Índice de carga', 'Custo deslocamento/ano']]
-    .concat(C.A.sort((a, b) => b.n - a.n).map(x => [x.nome, x.sedeNome, x.n, x.alunos, x.nMun, x.rur, ...T.map(t => x.tipos[t] || 0), Math.round(x.med), Math.round(x.kmMax), x.n200, x.equipe, x.eqRec ?? '', x.carga.toFixed(2).replace('.', ','), Math.round(x.custo)]));
+  const l = [['DRE', 'Sede', 'Escolas', 'Alunos', 'Profissionais', 'Alunos por profissional', 'Municípios', 'Rurais', ...T, 'Dist. média (km)', 'Mais distante (km)', '> 200 km', 'Equipe atual (est.)', 'Equipe recomendada', 'Índice de carga', 'Custo deslocamento/ano']]
+    .concat(C.A.sort((a, b) => b.n - a.n).map(x => [x.nome, x.sedeNome, x.n, x.alunos, Math.round(x.prof), x.aluProf ? x.aluProf.toFixed(1).replace('.', ',') : '', x.nMun, x.rur, ...T.map(t => x.tipos[t] || 0), Math.round(x.med), Math.round(x.kmMax), x.n200, x.equipe, x.eqRec ?? '', x.carga.toFixed(2).replace('.', ','), Math.round(x.custo)]));
   l.push([]); l.push(['Município', 'DRE atual', 'DRE no cenário', 'Situação', 'Dist. antes (km)', 'Dist. depois (km)']);
   rdMudancas(C.c).forEach(x => l.push([x.m.nome, nomeDRE(x.de), x.nomePara, { mudou:'mudou de DRE', fundiu:'DRE fundida', sede:'sede mudou' }[x.tipo], Math.round(x.kmA), Math.round(x.kmN)]));
   csvBaixar('gaborg-reestruturacao-dres', l);
@@ -9735,76 +9742,109 @@ function rdFocar(k){ rd.foco = rd.foco === k ? '' : k; const C = rdCalc(rdGarant
 function renderRedre(){
   const el = $('#rr-corpo'); if (!el) return;
   if (!escolasLista().length) { el.innerHTML = '<div class="cartao vazio">Sem base de escolas para simular.</div>'; return; }
-  const c = rdGarantir(), A = rdCalc(rdAtual()), C = rdCalc(c), g = A.G, h = C.G, salvos = rdSalvos(), ed = podeGestao(), mud = rdMudancas(c);
-  const dl = (a, b, menorMelhor, fmt) => { const d = b - a; if (Math.abs(d) < 1e-9 || (fmt === 'km' && Math.abs(d) < .5)) return '<span class="rr-dl ig">igual</span>'; const bom = menorMelhor ? d < 0 : d > 0; return `<span class="rr-dl ${bom ? 'bom' : 'ruim'}"><i class="fa-solid fa-arrow-${d > 0 ? 'up' : 'down'}"></i>${fmt === 'km' ? fmtKm(Math.abs(d)) : fmt === 'rs' ? fmtRc(Math.abs(d)) : fmt === 'p' ? fmtP(Math.abs(d) * 100) : fmtN(Math.abs(Math.round(d)))}</span>`; };
-  const kpi = (ic, cor, rot, v, atual, delta, sub) => `<div class="rr-k" style="--c:${cor}"><span class="r"><i class="fa-solid ${ic}"></i>${rot}</span><b>${v}</b><small>hoje ${atual} ${delta}</small>${sub ? `<em>${sub}</em>` : ''}</div>`;
+  const B = rdBase(), c = rdGarantir(), A = rdCalc(rdAtual()), C = rdCalc(c), g = A.G, h = C.G, salvos = rdSalvos(), ed = podeGestao(), mud = rdMudancas(c);
+  const f1 = v => (v || 0).toLocaleString('pt-BR', { maximumFractionDigits:1 }), f2 = v => (v || 0).toLocaleString('pt-BR', { maximumFractionDigits:2 });
+  const dl = (a, b, menorMelhor, fmt) => { const d = b - a; if (Math.abs(d) < 1e-9 || (fmt === 'km' && Math.abs(d) < .5) || (fmt === 'n' && Math.abs(d) < .5)) return '<span class="rr-dl ig">igual</span>'; const bom = menorMelhor === null ? null : menorMelhor ? d < 0 : d > 0;
+    const v = fmt === 'km' ? fmtKm(Math.abs(d)) : fmt === 'rs' ? fmtRc(Math.abs(d)) : fmt === 'p' ? fmtP(Math.abs(d) * 100) : fmt === 'f' ? f1(Math.abs(d)) : fmtN(Math.abs(Math.round(d)));
+    return `<span class="rr-dl ${bom === null ? 'neu' : bom ? 'bom' : 'ruim'}"><i class="fa-solid fa-arrow-${d > 0 ? 'up' : 'down'}"></i>${v}</span>`; };
   const IC = { alerta:'fa-circle-exclamation', atencao:'fa-triangle-exclamation', info:'fa-circle-info', ok:'fa-circle-check' };
-  const ord = { n:(a, b) => b.n - a.n, alunos:(a, b) => b.alunos - a.alunos, med:(a, b) => b.med - a.med, carga:(a, b) => b.carga - a.carga, nome:(a, b) => a.nome.localeCompare(b.nome, 'pt-BR') }[rd.ord] || ((a, b) => b.n - a.n);
+  const corCarga = v => v >= 1.4 ? '#dc2626' : v >= 1.15 ? '#d97706' : v < .6 ? '#64748b' : '#16a34a';
+  const ord = { n:(a, b) => b.n - a.n, alunos:(a, b) => b.alunos - a.alunos, prof:(a, b) => b.prof - a.prof, med:(a, b) => b.med - a.med, carga:(a, b) => b.carga - a.carga, nome:(a, b) => a.nome.localeCompare(b.nome, 'pt-BR') }[rd.ord] || ((a, b) => b.n - a.n);
+  const profTxt = B.temProf ? (B.profInf < B.E.length ? 'parte estimada' : 'informados') : B.razao ? 'estimados' : 'não informados';
+  const temP = h.tot.prof > 0;
+  // ---------- indicadores em grupos ----------
+  const lin = (rot, v, hoje, delta, dica) => `<div class="rr-gl" ${dica ? `title="${esc(dica)}"` : ''}><span>${rot}</span><b>${v}</b><small>hoje ${hoje}</small>${delta}</div>`;
+  const grupo = (ic, cor, tit, linhas) => `<section class="rr-g" style="--c:${cor}"><h4><i class="fa-solid ${ic}"></i>${tit}</h4>${linhas.join('')}</section>`;
+  const grupos = [
+    grupo('fa-building-flag', '#1e3a8a', 'Estrutura e custos', [
+      lin('DREs', h.nDre, g.nDre, dl(g.nDre, h.nDre, null, 'n')),
+      lin('Deslocamento/ano', fmtRc(h.custoDesl), fmtRc(g.custoDesl), dl(g.custoDesl, h.custoDesl, true, 'rs'), 'Circuito de visitas às escolas × visitas por ano × custo por km'),
+      h.custoFixo !== null ? lin('Custo total/ano', fmtRc(h.custoTotal), fmtRc(g.custoTotal), dl(g.custoTotal, h.custoTotal, true, 'rs'), 'Estrutura das DREs + deslocamento') : `<button type="button" class="rr-gx" onclick="rdParametros()"><i class="fa-solid fa-sliders"></i>Informe o custo anual de uma DRE para estimar a economia</button>`]),
+    grupo('fa-school', '#16a34a', 'Rede escolar por DRE', [
+      lin('Escolas (média)', f1(h.mediaEsc), f1(g.mediaEsc), dl(g.mediaEsc, h.mediaEsc, null, 'f')),
+      lin('Maior / menor DRE', `${h.maior ? h.maior.n : 0} / ${h.menor ? h.menor.n : 0}`, `${g.maior.n} / ${g.menor.n}`, ''),
+      lin('Desequilíbrio', fmtP(h.cv * 100), fmtP(g.cv * 100), dl(g.cv, h.cv, true, 'p'), 'Desvio padrão ÷ média de escolas por DRE: quanto menor, mais parecidas são as DREs')]),
+    grupo('fa-people-group', '#0891b2', 'Pessoas', [
+      lin(`Profissionais nas escolas <em>${profTxt}</em>`, temP ? fmtN(Math.round(h.tot.prof)) : '—', temP ? fmtN(Math.round(g.tot.prof)) : '—', ''),
+      lin('Profissionais por DRE (média)', temP ? fmtN(Math.round(h.profMed)) : '—', temP ? fmtN(Math.round(g.profMed)) : '—', temP ? dl(g.profMed, h.profMed, null, 'n') : ''),
+      lin('Alunos por DRE (média)', fmtN(Math.round(h.tot.alunos / Math.max(1, h.nDre))), fmtN(Math.round(g.tot.alunos / Math.max(1, g.nDre))), dl(g.tot.alunos / g.nDre, h.tot.alunos / Math.max(1, h.nDre), null, 'n')),
+      h.tot.equipe ? lin('Equipe das DREs', fmtN(Math.round(h.tot.equipe)), fmtN(Math.round(g.tot.equipe)), '') : `<button type="button" class="rr-gx" onclick="rdParametros()"><i class="fa-solid fa-user-plus"></i>Informe as equipes das DREs</button>`]),
+    grupo('fa-route', '#dc2626', 'Território e acesso', [
+      lin('Distância média', fmtKm(h.kmMed), fmtKm(g.kmMed), dl(g.kmMed, h.kmMed, true, 'km'), 'Linha reta da escola até a sede da DRE; por estrada ≈ ×1,3'),
+      lin('Escolas a mais de 200 km', fmtN(h.n200), fmtN(g.n200), dl(g.n200, h.n200, true, 'n')),
+      lin('Indígenas, quilombolas e campo > 200 km', fmtN(h.esp200), fmtN(g.esp200), dl(g.esp200, h.esp200, true, 'n'))])
+  ];
+  // ---------- cartão de DRE ----------
   const mxN = Math.max(...C.A.map(x => x.n), 1);
   const card = x => { const sel = rd.sel.has(x.k), tp = Object.entries(x.tipos).filter(([t]) => t !== 'Regular').sort((a, b) => b[1] - a[1]), novo = !x.orig.length, fund = x.orig.length > 1, eqd = x.eqRec !== null ? x.eqRec - x.equipe : 0;
-    const flag = [x.carga >= 1.4 ? ['#dc2626', 'fa-weight-hanging', 'Sobrecarga'] : null, x.med > 120 ? ['#d97706', 'fa-route', 'Escolas distantes'] : null, x.esp200 ? ['#c2410c', 'fa-feather', x.esp200 + ' esp. > 200 km'] : null, x.carga < .6 ? ['#64748b', 'fa-feather-pointed', 'Carga baixa'] : null].filter(Boolean);
-    return `<div class="rr-c ${sel ? 'sel' : ''} ${rd.foco === x.k ? 'foco' : ''} ${x.n ? '' : 'vz'}" style="--c:${x.cor}">
-      <div class="rr-ch"><label class="rr-cb" title="Marcar para fundir"><input type="checkbox" ${sel ? 'checked' : ''} onchange="this.checked?rd.sel.add(${arg(x.k)}):rd.sel.delete(${arg(x.k)});renderRedre()"></label>
-        <button type="button" class="rr-cn" onclick="rdFocar(${arg(x.k)})" title="Destacar no mapa"><b>${esc(x.nome)}</b><small><i class="fa-solid fa-location-dot"></i>sede: ${esc(x.sedeNome)}${novo ? ' · <em class="nv">nova</em>' : fund ? ' · <em class="fd">fundida</em>' : ''}</small></button>
-        <span class="rr-ca"><button type="button" class="btn btn-g btn-sm btn-i" onclick="rdEditar(${arg(x.k)})" title="Renomear ou trocar a sede"><i class="fa-solid fa-pen"></i></button><button type="button" class="btn btn-g btn-sm btn-i" onclick="rdExtinguir(${arg(x.k)})" title="Extinguir no cenário"><i class="fa-solid fa-trash-can"></i></button></span></div>
-      <div class="rr-cg"><span><b>${fmtN(x.n)}</b>escolas</span><span><b>${fmtN(x.alunos)}</b>alunos</span><span><b>${x.nMun || 0}</b>municípios</span><span><b>${x.n ? fmtKm(x.med) : '—'}</b>dist. média</span></div>
-      <div class="rr-bar" title="Escolas em relação à maior DRE"><i style="width:${x.n / mxN * 100}%"></i></div>
-      <div class="rr-cl"><span title="Índice de carga: 50% escolas, 30% alunos, 20% deslocamento; 1,0 = média"><i class="fa-solid fa-gauge-high"></i>carga <b style="color:${x.carga >= 1.4 ? '#dc2626' : x.carga >= 1.15 ? '#d97706' : x.carga < .6 ? '#64748b' : '#16a34a'}">${(x.carga || 0).toLocaleString('pt-BR', { maximumFractionDigits:2 })}</b></span>
-        <span title="Equipe estimada (acompanha as escolas) → recomendada pela carga"><i class="fa-solid fa-people-group"></i>${x.equipe ? `<b>${x.equipe}</b>${x.eqRec !== null ? ` → ${x.eqRec}${eqd ? ` <em class="${eqd > 0 ? 'ruim' : 'bom'}">${eqd > 0 ? '+' : ''}${eqd}</em>` : ''}` : ''}` : '<span class="mut">equipe não informada</span>'}</span>
-        <span title="Escolas a mais de 200 km da sede"><i class="fa-solid fa-route"></i><b>${x.n200}</b> &gt; 200 km</span><span title="Rurais"><i class="fa-solid fa-tree"></i>${x.rur} rurais</span></div>
+    const flag = x.n ? [x.carga >= 1.4 ? ['#dc2626', 'fa-weight-hanging', 'Sobrecarga'] : null, x.med > 120 ? ['#d97706', 'fa-route', 'Escolas distantes'] : null, x.esp200 ? ['#c2410c', 'fa-feather', x.esp200 + ' indíg./quil./campo > 200 km'] : null, x.carga < .6 ? ['#64748b', 'fa-feather-pointed', 'Carga baixa'] : null].filter(Boolean) : [['#dc2626', 'fa-circle-exclamation', 'Sem escolas']];
+    const cp = Math.min(100, (x.carga || 0) / 2 * 100);
+    return `<article class="rr-c ${sel ? 'sel' : ''} ${rd.foco === x.k ? 'foco' : ''} ${x.n ? '' : 'vz'}" style="--c:${x.cor}">
+      <header class="rr-ch"><label class="rr-cb" title="Marcar para fundir"><input type="checkbox" ${sel ? 'checked' : ''} onchange="this.checked?rd.sel.add(${arg(x.k)}):rd.sel.delete(${arg(x.k)});renderRedre()"></label>
+        <button type="button" class="rr-cn" onclick="rdFocar(${arg(x.k)})" title="Destacar no mapa"><b>${esc(x.nome)}</b><small><i class="fa-solid fa-location-dot"></i>${esc(x.sedeNome)}${novo ? '<em class="nv">nova</em>' : fund ? '<em class="fd">fundida</em>' : ''}</small></button>
+        <span class="rr-ca"><button type="button" class="btn btn-g btn-sm btn-i" onclick="rdEditar(${arg(x.k)})" title="Renomear ou trocar a sede"><i class="fa-solid fa-pen"></i></button><button type="button" class="btn btn-g btn-sm btn-i" onclick="rdExtinguir(${arg(x.k)})" title="Extinguir no cenário"><i class="fa-solid fa-trash-can"></i></button></span></header>
+      <div class="rr-cg">
+        <span><i class="fa-solid fa-school"></i><b>${fmtN(x.n)}</b>escolas</span>
+        <span><i class="fa-solid fa-children"></i><b>${fmtN(x.alunos)}</b>alunos</span>
+        <span title="${x.profEst ? 'inclui ' + fmtN(Math.round(x.profEst)) + ' estimados' : 'informados na base de escolas'}"><i class="fa-solid fa-chalkboard-user"></i><b>${x.prof ? fmtN(Math.round(x.prof)) : '—'}</b>profissionais</span>
+        <span><i class="fa-solid fa-map-pin"></i><b>${x.nMun || 0}</b>municípios</span>
+        <span><i class="fa-solid fa-route"></i><b>${x.n ? fmtKm(x.med) : '—'}</b>dist. média</span>
+        <span><i class="fa-solid fa-road-circle-exclamation"></i><b>${x.n200 || 0}</b>&gt; 200 km</span>
+      </div>
+      ${x.n ? `<div class="rr-carga" title="Índice de carga: ${C.G.PES[2] ? '35% escolas, 25% alunos, 20% profissionais, 20% deslocamento' : '50% escolas, 30% alunos, 20% deslocamento'}; 1,0 = média das DREs"><span>Carga</span><span class="rr-cbar"><i style="width:${cp}%;background:${corCarga(x.carga)}"></i><em style="left:50%"></em></span><b style="color:${corCarga(x.carga)}">${f2(x.carga)}</b></div>
+      <div class="rr-cl"><span><i class="fa-solid fa-user-tie"></i>Equipe da DRE: ${x.equipe ? `<b>${x.equipe}</b>${x.eqRec !== null ? ` · recomendada <b>${x.eqRec}</b>${eqd ? ` <em class="${eqd > 0 ? 'ruim' : 'bom'}">${eqd > 0 ? '+' : ''}${eqd}</em>` : ''}` : ''}` : '<span class="mut">não informada</span>'}</span>${x.aluProf ? `<span><i class="fa-solid fa-scale-unbalanced"></i><b>${f1(x.aluProf)}</b> alunos por profissional</span>` : ''}<span><i class="fa-solid fa-tree"></i>${x.rur} rurais</span></div>` : ''}
       ${tp.length ? `<div class="rr-tp">${tp.map(([t, n]) => `<span title="${esc(t)}">${iconeTipoSVG(t, CORES_TIPO[t], 13)}${esc(t)} <b>${n}</b></span>`).join('')}</div>` : ''}
       ${flag.length ? `<div class="rr-fl">${flag.map(([cr, ic, t]) => `<span style="--k:${cr}"><i class="fa-solid ${ic}"></i>${t}</span>`).join('')}</div>` : ''}
-    </div>`; };
+    </article>`; };
+  // ---------- abas de baixo ----------
   const tabela = () => { const T = Object.keys(CORES_TIPO).filter(t => t !== 'Regular' && C.A.some(x => x.tipos[t]));
-    return `<div class="tab-wrap"><table class="tab rr-tab"><thead><tr><th>DRE</th><th>Sede</th><th>Escolas</th><th>Alunos</th><th>Munic.</th><th>Rurais</th>${T.map(t => `<th title="${esc(t)}">${iconeTipoSVG(t, CORES_TIPO[t], 13)}</th>`).join('')}<th>Dist. média</th><th>Mais distante</th><th>&gt; 200 km</th><th>Equipe</th><th>Recom.</th><th>Carga</th><th>Desloc./ano</th></tr></thead>
-    <tbody>${C.A.slice().sort(ord).map(x => `<tr onclick="rdFocar(${arg(x.k)})"><td class="nm"><span class="pt" style="background:${x.cor}"></span>${esc(x.nome)}</td><td>${esc(x.sedeNome)}</td><td><b>${fmtN(x.n)}</b></td><td>${fmtN(x.alunos)}</td><td>${x.nMun}</td><td>${x.rur}</td>${T.map(t => `<td>${x.tipos[t] || '<span class="mut">–</span>'}</td>`).join('')}<td>${fmtKm(x.med)}</td><td title="${esc(x.longe ? x.longe.nome + ' · ' + x.longe.municipio : '')}">${fmtKm(x.kmMax)}</td><td>${x.n200 || '<span class="mut">–</span>'}</td><td>${x.equipe || '—'}</td><td>${x.eqRec ?? '—'}</td><td><b style="color:${x.carga >= 1.4 ? '#dc2626' : x.carga >= 1.15 ? '#d97706' : 'inherit'}">${x.carga.toLocaleString('pt-BR', { maximumFractionDigits:2 })}</b></td><td>${fmtRc(x.custo)}</td></tr>`).join('')}</tbody>
-    <tfoot><tr><td>Total</td><td>${h.nDre} DREs</td><td>${fmtN(h.tot.n)}</td><td>${fmtN(h.tot.alunos)}</td><td>${rdBase().mun.size}</td><td>${C.A.reduce((t, x) => t + x.rur, 0)}</td>${T.map(t => `<td>${C.A.reduce((s, x) => s + (x.tipos[t] || 0), 0)}</td>`).join('')}<td>${fmtKm(h.kmMed)}</td><td></td><td>${h.n200}</td><td>${h.tot.equipe ? Math.round(h.tot.equipe) : '—'}</td><td></td><td></td><td>${fmtRc(h.custoDesl)}</td></tr></tfoot></table></div>`; };
-  const mudTab = () => mud.length ? `<div class="tab-wrap"><table class="tab rr-tab"><thead><tr><th>Município</th><th>Escolas</th><th>Alunos</th><th>DRE hoje</th><th>No cenário</th><th>Distância até a sede</th><th></th></tr></thead><tbody>${mud.map(x => { const d = x.kmN - x.kmA;
-      return `<tr><td class="nm">${esc(x.m.nome)}</td><td>${x.m.esc.length}</td><td>${fmtN(x.m.alunos)}</td><td>${esc(nomeDRE(x.de))}</td><td><span class="pt" style="background:${c.dres[x.para].cor}"></span>${esc(x.nomePara)} <small class="mut">${{ mudou:'mudou de DRE', fundiu:'DRE fundida', sede:'nova sede' }[x.tipo]}</small></td><td>${fmtKm(x.kmA)} → <b>${fmtKm(x.kmN)}</b> <span class="rr-dl ${Math.abs(d) < 5 ? 'ig' : d > 0 ? 'ruim' : 'bom'}">${d > 0 ? '+' : d < 0 ? '−' : ''}${fmtKm(Math.abs(d))}</span></td><td><button class="btn btn-g btn-sm" onclick="rdMunicipio(${arg(x.m.k)})">mover</button></td></tr>`; }).join('')}</tbody></table></div>`
+    return `<div class="tab-wrap"><table class="tab rr-tab"><thead><tr><th>DRE</th><th>Sede</th><th>Escolas</th><th>Alunos</th><th>Profis.</th><th title="Alunos por profissional">Al./prof.</th><th>Munic.</th><th>Rurais</th>${T.map(t => `<th title="${esc(t)}">${iconeTipoSVG(t, CORES_TIPO[t], 13)}</th>`).join('')}<th>Dist. média</th><th>Mais distante</th><th>&gt; 200 km</th><th>Equipe</th><th>Recom.</th><th>Carga</th><th>Desloc./ano</th></tr></thead>
+    <tbody>${C.A.slice().sort(ord).map(x => `<tr onclick="rdFocar(${arg(x.k)})"><td class="nm"><span class="pt" style="background:${x.cor}"></span>${esc(x.nome)}</td><td>${esc(x.sedeNome)}</td><td><b>${fmtN(x.n)}</b></td><td>${fmtN(x.alunos)}</td><td>${x.prof ? fmtN(Math.round(x.prof)) : '—'}</td><td>${x.aluProf ? f1(x.aluProf) : '—'}</td><td>${x.nMun}</td><td>${x.rur}</td>${T.map(t => `<td>${x.tipos[t] || '<span class="mut">–</span>'}</td>`).join('')}<td>${fmtKm(x.med)}</td><td title="${esc(x.longe ? x.longe.nome + ' · ' + x.longe.municipio : '')}">${fmtKm(x.kmMax)}</td><td>${x.n200 || '<span class="mut">–</span>'}</td><td>${x.equipe || '—'}</td><td>${x.eqRec ?? '—'}</td><td><b style="color:${corCarga(x.carga)}">${f2(x.carga)}</b></td><td>${fmtRc(x.custo)}</td></tr>`).join('')}</tbody>
+    <tfoot><tr><td>Total</td><td>${h.nDre} DREs</td><td>${fmtN(h.tot.n)}</td><td>${fmtN(h.tot.alunos)}</td><td>${temP ? fmtN(Math.round(h.tot.prof)) : '—'}</td><td>${temP ? f1(h.tot.alunos / h.tot.prof) : '—'}</td><td>${B.mun.size}</td><td>${C.A.reduce((t, x) => t + x.rur, 0)}</td>${T.map(t => `<td>${C.A.reduce((q, x) => q + (x.tipos[t] || 0), 0)}</td>`).join('')}<td>${fmtKm(h.kmMed)}</td><td></td><td>${h.n200}</td><td>${h.tot.equipe ? Math.round(h.tot.equipe) : '—'}</td><td></td><td></td><td>${fmtRc(h.custoDesl)}</td></tr></tfoot></table></div>`; };
+  const distrib = () => { const L = C.A.slice().sort(ord), met = [['n', 'Escolas', '#16a34a', fmtN], ['alunos', 'Alunos', '#7c3aed', fmtN], ['prof', 'Profissionais', '#0891b2', v => fmtN(Math.round(v))], ['carga', 'Índice de carga', '#d97706', f2]].filter(m => m[0] !== 'prof' || temP);
+    return `<p class="rr-sub">Como o cenário distribui a rede entre as DREs. A linha tracejada marca a média.</p><div class="rr-dist">${met.map(([k, n, cor, fmt]) => { const mx = Math.max(...L.map(x => x[k]), 1e-9), md = L.reduce((t, x) => t + x[k], 0) / Math.max(1, L.length);
+      return `<div class="rr-dm"><h5 style="--c:${cor}">${n}</h5><div class="rr-dml" style="--md:${md / mx * 100}%">${L.map(x => `<div class="rr-db" onclick="rdFocar(${arg(x.k)})" title="${esc(x.nome)}: ${fmt(x[k])}"><span>${esc(x.nome)}</span><i><u style="width:${x[k] / mx * 100}%;background:${k === 'carga' ? corCarga(x.carga) : x.cor}"></u></i><b>${fmt(x[k])}</b></div>`).join('')}</div></div>`; }).join('')}</div>`; };
+  const mudTab = () => mud.length ? `<div class="tab-wrap"><table class="tab rr-tab"><thead><tr><th>Município</th><th>Escolas</th><th>Alunos</th><th>Profis.</th><th>DRE hoje</th><th>No cenário</th><th>Distância até a sede</th><th></th></tr></thead><tbody>${mud.map(x => { const d = x.kmN - x.kmA, pf = x.m.esc.reduce((t, e) => t + ((B.prof.get(e.codigo) || {}).v || 0), 0);
+      return `<tr><td class="nm">${esc(x.m.nome)}</td><td>${x.m.esc.length}</td><td>${fmtN(x.m.alunos)}</td><td>${pf ? fmtN(pf) : '—'}</td><td>${esc(nomeDRE(x.de))}</td><td><span class="pt" style="background:${c.dres[x.para].cor}"></span>${esc(x.nomePara)} <small class="mut">${{ mudou:'mudou de DRE', fundiu:'DRE fundida', sede:'nova sede' }[x.tipo]}</small></td><td>${fmtKm(x.kmA)} → <b>${fmtKm(x.kmN)}</b> <span class="rr-dl ${Math.abs(d) < 5 ? 'ig' : d > 0 ? 'ruim' : 'bom'}">${d > 0 ? '+' : d < 0 ? '−' : ''}${fmtKm(Math.abs(d))}</span></td><td><button class="btn btn-g btn-sm" onclick="rdMunicipio(${arg(x.m.k)})">mover</button></td></tr>`; }).join('')}</tbody></table></div>`
     : '<div class="vazio" style="padding:20px">Nenhum município mudou de DRE neste cenário.</div>';
-  const op = `<option value="">Estrutura atual (${g.nDre} DREs)</option>` + salvos.map(s => `<option value="${esc(s.id)}" ${c.id === s.id ? 'selected' : ''}>${esc(s.nome)} · ${Object.keys(s.dres || {}).length} DREs</option>`).join('');
+  const leit = rdLeitura(A, C), nAl = leit.filter(x => x[0] === 'alerta' || x[0] === 'atencao').length;
+  const op = `<option value="">Estrutura atual (${g.nDre} DREs)</option>` + salvos.map(x => `<option value="${esc(x.id)}" ${c.id === x.id ? 'selected' : ''}>${esc(x.nome)} · ${Object.keys(x.dres || {}).length} DREs</option>`).join('');
+  const ferr = [['fa-object-group', 'Fundir', rd.sel.size >= 2 ? `${rd.sel.size} DREs marcadas` : 'marque 2+ DREs na lista', 'rdFundir()', rd.sel.size >= 2],
+    ['fa-circle-plus', 'Criar DRE', 'nova sede e municípios próximos', 'rdCriar()'],
+    ['fa-circle-minus', 'Extinguir', rd.sel.size === 1 ? 'a DRE marcada' : 'marque 1 DRE ou use a lixeira', rd.sel.size === 1 ? `rdExtinguir(${arg([...rd.sel][0])})` : "toast('Marque uma DRE na lista para extinguir, ou use a lixeira no cartão dela.','aviso')"],
+    ['fa-arrow-right-arrow-left', 'Mover município', 'clique nele no mapa', "toast('Clique num município no mapa para escolher a nova DRE.')"],
+    ['fa-wand-magic-sparkles', 'Redistribuir', 'cada município na sede mais próxima', 'rdOtimizar()']];
   el.innerHTML = `
-    <div class="rr-barra cartao">
-      <div class="rr-cen"><span class="rot">Cenário</span><select class="campo" onchange="rdAbrir(this.value)">${op}</select>${c.alterado ? '<span class="rr-nsalvo"><i class="fa-solid fa-circle"></i>alterado, não salvo</span>' : c.id ? `<span class="rr-salvo"><i class="fa-solid fa-cloud"></i>salvo${c.atualizadoPor ? ' por ' + esc(c.atualizadoPor) : ''}</span>` : ''}
-        <span class="esp"></span>${ed ? `<button class="btn btn-p btn-sm" onclick="rdSalvar()"><i class="fa-solid fa-floppy-disk"></i>${c.id ? 'Salvar' : 'Salvar cenário'}</button>${c.id ? '<button class="btn btn-s btn-sm" onclick="rdSalvar(true)"><i class="fa-regular fa-copy"></i>Salvar como novo</button><button class="btn btn-s btn-sm btn-i" onclick="rdExcluir()" title="Excluir cenário"><i class="fa-solid fa-trash-can"></i></button>' : ''}` : ''}
-        <button class="btn btn-s btn-sm" onclick="rdParametros()"><i class="fa-solid fa-sliders"></i>Parâmetros</button><button class="btn btn-s btn-sm" onclick="rdExportar()"><i class="fa-solid fa-file-csv"></i>CSV</button></div>
-      <div class="rr-ops">
-        <button class="btn btn-sm ${rd.sel.size >= 2 ? 'btn-p' : 'btn-s'}" onclick="rdFundir()"><i class="fa-solid fa-object-group"></i>Fundir DREs${rd.sel.size ? ` <em>${rd.sel.size}</em>` : ''}</button>
-        <button class="btn btn-s btn-sm" onclick="rdCriar()"><i class="fa-solid fa-circle-plus"></i>Criar DRE</button>
-        <button class="btn btn-s btn-sm" onclick="${rd.sel.size === 1 ? `rdExtinguir(${arg([...rd.sel][0])})` : "toast('Marque uma DRE na lista para extinguir, ou use a lixeira no cartão dela.','aviso')"}"><i class="fa-solid fa-circle-minus"></i>Extinguir DRE</button>
-        <button class="btn btn-s btn-sm" onclick="rdOtimizar()"><i class="fa-solid fa-wand-magic-sparkles"></i>Redistribuir por proximidade</button>
+    <div class="rr-top cartao">
+      <div class="rr-cen"><span class="rr-cen-ic"><i class="fa-solid fa-layer-group"></i></span><div class="rr-cen-s"><small>Cenário em análise</small><select class="campo" onchange="rdAbrir(this.value)">${op}</select></div>
+        ${c.alterado ? '<span class="rr-nsalvo"><i class="fa-solid fa-circle"></i>alterado, não salvo</span>' : c.id ? `<span class="rr-salvo"><i class="fa-solid fa-cloud"></i>salvo${c.atualizadoPor ? ' por ' + esc(c.atualizadoPor) : ''}</span>` : '<span class="rr-salvo"><i class="fa-solid fa-circle-info"></i>comece por uma ferramenta abaixo</span>'}
         <span class="esp"></span>
-        <button class="btn btn-g btn-sm" onclick="rdDesfazer()" ${rd.hist.length ? '' : 'disabled'}><i class="fa-solid fa-rotate-left"></i>Desfazer</button>
-        <button class="btn btn-g btn-sm" onclick="rd.hist.push(rdCopia(rdGarantir()));rd.cen=Object.assign(rdAtual(),{id:rd.cen.id,nome:rd.cen.nome,alterado:true});rd.sel.clear();rd.foco='';renderRedre()"><i class="fa-solid fa-arrows-rotate"></i>Voltar ao atual</button>
-      </div>
+        <button class="btn btn-g btn-sm" onclick="rdDesfazer()" ${rd.hist.length ? '' : 'disabled'} title="Desfazer a última mudança"><i class="fa-solid fa-rotate-left"></i><span>Desfazer</span></button>
+        <button class="btn btn-g btn-sm" onclick="rd.hist.push(rdCopia(rdGarantir()));rd.cen=Object.assign(rdAtual(),{id:rd.cen.id,nome:rd.cen.nome,alterado:true});rd.sel.clear();rd.foco='';renderRedre()" title="Voltar à divisão atual das DREs"><i class="fa-solid fa-arrows-rotate"></i><span>Recomeçar</span></button>
+        <button class="btn btn-s btn-sm" onclick="rdParametros()"><i class="fa-solid fa-sliders"></i><span>Parâmetros</span></button><button class="btn btn-s btn-sm" onclick="rdExportar()"><i class="fa-solid fa-file-csv"></i><span>CSV</span></button>
+        ${ed ? `${c.id ? '<button class="btn btn-s btn-sm" onclick="rdSalvar(true)"><i class="fa-regular fa-copy"></i><span>Salvar como novo</span></button><button class="btn btn-s btn-sm btn-i" onclick="rdExcluir()" title="Excluir cenário"><i class="fa-solid fa-trash-can"></i></button>' : ''}<button class="btn btn-p btn-sm" onclick="rdSalvar()"><i class="fa-solid fa-floppy-disk"></i>${c.id ? 'Salvar' : 'Salvar cenário'}</button>` : ''}</div>
+      <div class="rr-ferr">${ferr.map(([ic, t, d, on, dest]) => `<button type="button" class="rr-f ${dest ? 'dest' : ''}" onclick="${on}"><i class="fa-solid ${ic}"></i><span><b>${t}</b><small>${d}</small></span></button>`).join('')}</div>
     </div>
-    <div class="rr-kpis">
-      ${kpi('fa-building-flag', '#1e3a8a', 'DREs', h.nDre, g.nDre, dl(g.nDre, h.nDre, true), h.custoFixo !== null ? `estrutura ${fmtRc(h.custoFixo)}/ano` : '')}
-      ${kpi('fa-route', '#0891b2', 'Distância média', fmtKm(h.kmMed), fmtKm(g.kmMed), dl(g.kmMed, h.kmMed, true, 'km'), '~' + fmtHoras(h.kmMed) + ' de viagem')}
-      ${kpi('fa-road-circle-exclamation', '#dc2626', 'Escolas a mais de 200 km', fmtN(h.n200), fmtN(g.n200), dl(g.n200, h.n200, true), h.n300 ? h.n300 + ' a mais de 300 km' : '')}
-      ${kpi('fa-feather', '#c2410c', 'Indígenas, quilombolas e campo > 200 km', fmtN(h.esp200), fmtN(g.esp200), dl(g.esp200, h.esp200, true))}
-      ${kpi('fa-scale-balanced', '#7c3aed', 'Desequilíbrio entre DREs', fmtP(h.cv * 100), fmtP(g.cv * 100), dl(g.cv, h.cv, true, 'p'), `de ${h.menor ? h.menor.n : 0} a ${h.maior ? h.maior.n : 0} escolas`)}
-      ${kpi('fa-car-side', '#0f766e', 'Deslocamento por ano', fmtRc(h.custoDesl), fmtRc(g.custoDesl), dl(g.custoDesl, h.custoDesl, true, 'rs'), fmtN(Math.round(h.horasDesl)) + ' h de estrada')}
-      ${h.custoFixo !== null ? kpi('fa-coins', '#b45309', 'Custo total estimado', fmtRc(h.custoTotal), fmtRc(g.custoTotal), dl(g.custoTotal, h.custoTotal, true, 'rs'), 'estrutura + deslocamento') : ''}
-    </div>
-    <div class="cartao rr-leit"><h3><i class="fa-solid fa-lightbulb"></i>Leitura do cenário${c.id ? ` · ${esc(c.nome)}` : c.alterado ? ' · em edição (comparado com a estrutura atual)' : ''}</h3>${rdLeitura(A, C).map(([t, txt]) => `<div class="in ${t}"><i class="fa-solid ${IC[t]}"></i><span>${txt}</span></div>`).join('')}</div>
+    <div class="rr-grupos">${grupos.join('')}</div>
+    <details class="cartao rr-leit" ${nAl || rd.leitAberta !== false ? 'open' : ''} ontoggle="rd.leitAberta=this.open"><summary><i class="fa-solid fa-lightbulb"></i><b>Leitura do cenário</b>${c.id ? `<span class="mut">· ${esc(c.nome)}</span>` : ''}<span class="rr-lc">${nAl ? `<em class="a">${nAl} ponto(s) de atenção</em>` : '<em class="o">sem alertas</em>'}</span><i class="fa-solid fa-chevron-down cv"></i></summary>
+      <div class="rr-lg">${leit.map(([t, txt]) => `<div class="in ${t}"><i class="fa-solid ${IC[t]}"></i><span>${txt}</span></div>`).join('')}</div></details>
     <div class="rr-grade">
       <div class="cartao rr-mapa" id="rr-mapa">
         <div class="rr-mt"><b><i class="fa-solid fa-map"></i>Mapa do cenário</b><span class="esp"></span>
           <label class="rr-tg"><input type="checkbox" ${rd.esc ? 'checked' : ''} onchange="rd.esc=this.checked;renderRedre()">Escolas</label><label class="rr-tg"><input type="checkbox" ${rd.nomes ? 'checked' : ''} onchange="rd.nomes=this.checked;renderRedre()">Nomes</label>
           ${rd.foco ? `<button class="btn btn-g btn-sm" onclick="rdFocar('')"><i class="fa-solid fa-xmark"></i>Tirar destaque</button>` : ''}</div>
-        <div class="rr-svgw">${rdMapaSVG(C)}<div class="rr-zm"><button onclick="rdZoom(1/1.4)" title="Aproximar">+</button><button onclick="rdZoom(1.4)" title="Afastar">−</button><button onclick="rdZoom(0)" title="Mato Grosso inteiro"><i class="fa-solid fa-expand"></i></button></div><div id="rr-tt" class="rr-tt" hidden></div></div>
-        <p class="rr-dica"><i class="fa-solid fa-hand-pointer"></i>Clique num município para movê-lo de DRE ou criar uma DRE com sede nele · clique numa sede para destacar a DRE · roda do mouse aproxima, arraste para mover. Municípios tracejados mudaram de DRE.</p>
+        <div class="rr-svgw">${rdMapaSVG(C)}<div class="rr-zm"><button onclick="rdZoom(1/1.4)" title="Aproximar">+</button><button onclick="rdZoom(1.4)" title="Afastar">−</button><button onclick="rdZoom(0)" title="Mato Grosso inteiro"><i class="fa-solid fa-expand"></i></button></div><div id="rr-tt" class="rr-tt" hidden></div>
+          <div class="rr-mleg">${C.A.slice().sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')).map(x => `<button type="button" class="${rd.foco === x.k ? 'on' : ''}" onclick="rdFocar(${arg(x.k)})" style="--c:${x.cor}"><i></i>${esc(x.nome)}</button>`).join('')}</div></div>
+        <p class="rr-dica"><i class="fa-solid fa-hand-pointer"></i>Clique num <b>município</b> para movê-lo de DRE · clique numa <b>sede</b> ou na legenda para destacar · roda do mouse aproxima, arraste para mover · tracejado = mudou de DRE.</p>
       </div>
       <div class="rr-lista">
-        <div class="rr-lh"><b>${C.A.length} DREs no cenário</b><span class="esp"></span><label class="rr-ord"><i class="fa-solid fa-arrow-down-wide-short"></i><select onchange="rd.ord=this.value;renderRedre()">${[['n', 'Mais escolas'], ['alunos', 'Mais alunos'], ['carga', 'Maior carga'], ['med', 'Mais distantes'], ['nome', 'Nome']].map(([k, n]) => `<option value="${k}" ${rd.ord === k ? 'selected' : ''}>${n}</option>`).join('')}</select></label></div>
-        <p class="rr-lsub">Marque duas ou mais para <b>fundir</b>. Clique no nome para destacar no mapa.</p>
-        ${C.L.slice().sort((a, b) => (b.n ? 1 : 0) - (a.n ? 1 : 0) || ord(a, b)).map(card).join('')}
+        <div class="rr-lh"><b>${C.A.length} DREs no cenário</b><span class="esp"></span><label class="rr-ord"><i class="fa-solid fa-arrow-down-wide-short"></i><select onchange="rd.ord=this.value;renderRedre()">${[['n', 'Mais escolas'], ['alunos', 'Mais alunos'], ['prof', 'Mais profissionais'], ['carga', 'Maior carga'], ['med', 'Mais distantes'], ['nome', 'Nome']].map(([k, n]) => `<option value="${k}" ${rd.ord === k ? 'selected' : ''}>${n}</option>`).join('')}</select></label></div>
+        <div class="rr-lcards">${C.L.slice().sort((a, b) => (b.n ? 1 : 0) - (a.n ? 1 : 0) || ord(a, b)).map(card).join('')}</div>
       </div>
     </div>
-    <div class="cartao">
-      <div class="adm-abas seg rr-abas">${[['dres', 'fa-table', 'Comparativo por DRE'], ['mun', 'fa-arrow-right-arrow-left', `Municípios que mudam (${mud.length})`], ['crit', 'fa-scale-balanced', 'Critérios considerados']].map(([k, ic, n]) => `<button class="${rd.aba === k ? 'on' : ''}" onclick="rd.aba='${k}';renderRedre()"><i class="fa-solid ${ic}"></i>${n}</button>`).join('')}</div>
-      ${rd.aba === 'mun' ? mudTab() : rd.aba === 'crit' ? rdCriterios() : tabela()}
+    <div class="cartao rr-baixo">
+      <div class="adm-abas seg rr-abas">${[['dres', 'fa-table', 'Comparativo por DRE'], ['dist', 'fa-chart-bar', 'Distribuição'], ['mun', 'fa-arrow-right-arrow-left', `Municípios que mudam (${mud.length})`], ['crit', 'fa-scale-balanced', 'Critérios']].map(([k, ic, n]) => `<button class="${rd.aba === k ? 'on' : ''}" onclick="rd.aba='${k}';renderRedre()"><i class="fa-solid ${ic}"></i>${n}</button>`).join('')}</div>
+      ${rd.aba === 'mun' ? mudTab() : rd.aba === 'crit' ? rdCriterios() : rd.aba === 'dist' ? distrib() : tabela()}
     </div>`;
   rdMapaEventos();
 }
@@ -9814,7 +9854,8 @@ function rdCriterios(){
     <div><b><i class="fa-solid fa-school"></i>Escolas e alunos</b><p>Base de unidades escolares do GABOrg (${fmtN(B.E.length)} escolas, ${fmtN(B.E.reduce((t, e) => t + num(e.alunos), 0))} alunos), com tipo (regular, cívico-militar, militar, campo, indígena, quilombola, integral, especializada), localização urbana ou rural, profissionais e educação inclusiva quando informados.</p></div>
     <div><b><i class="fa-solid fa-route"></i>Distância e tempo</b><p>Linha reta de cada escola até a sede da DRE, com estimativa por estrada (×${String(FATOR_ESTRADA).replace('.', ',')}) a ${VEL_MEDIA} km/h. A sede é o centro urbano do município sede.</p></div>
     <div><b><i class="fa-solid fa-people-group"></i>Carga de pessoas</b><p>Equipe atual de cada DRE (${fonte.length ? 'fonte: ' + fonte.join(', ') : 'ainda não informada — use Parâmetros'}). Ao mover escolas, cada uma leva a fração da equipe da DRE de origem; a equipe recomendada distribui o total pelo índice de carga.</p></div>
-    <div><b><i class="fa-solid fa-gauge-high"></i>Índice de carga</b><p>50% escolas + 30% alunos + 20% quilômetros rodados para visitar todas as escolas, em relação à média das DREs do cenário (1,0 = média; acima de 1,4 é sobrecarga).</p></div>
+    <div><b><i class="fa-solid fa-chalkboard-user"></i>Profissionais nas escolas</b><p>${B.temProf ? `${fmtN(B.profInf)} de ${fmtN(B.E.length)} escolas informaram o número de profissionais${B.profInf < B.E.length ? `; para as demais o GABOrg estima pela mediana de ${B.razao.toLocaleString('pt-BR', { maximumFractionDigits:1 })} alunos por profissional` : ''}.` : 'Ainda não informado na base de escolas. Preencha a coluna Profissionais (Mapa de MT › Editar escolas) para que entre na carga.'} Mais profissionais significam mais formação, lotação, frequência e atendimento a cargo da DRE.</p></div>
+    <div><b><i class="fa-solid fa-gauge-high"></i>Índice de carga</b><p>${B.temProf || B.razao ? '35% escolas + 25% alunos + 20% profissionais + 20% quilômetros rodados' : '50% escolas + 30% alunos + 20% quilômetros rodados'} para visitar todas as escolas, em relação à média das DREs do cenário (1,0 = média; acima de 1,4 é sobrecarga).</p></div>
     <div><b><i class="fa-solid fa-feather"></i>Atendimento específico</b><p>Escolas indígenas, quilombolas e do campo a mais de 200 km da sede recebem destaque, pois dependem de acompanhamento pedagógico próprio e visitas longas.</p></div>
     <div><b><i class="fa-solid fa-coins"></i>Custos</b><p>Deslocamento: circuito de ida e volta a cada escola × visitas por ano × custo por km. Estrutura: número de DREs × custo anual de uma DRE (informe em Parâmetros).</p></div>
     <div><b><i class="fa-solid fa-scale-balanced"></i>Equilíbrio</b><p>Variação (desvio padrão ÷ média) do número de escolas por DRE: quanto menor, mais parecida é a carga entre as regionais.</p></div>
